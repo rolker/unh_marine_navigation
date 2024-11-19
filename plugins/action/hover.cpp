@@ -83,7 +83,7 @@ BT::NodeStatus Hover::tick()
     if(current_range > maximum_distance.value())
       return BT::NodeStatus::FAILURE;
 
-    project11::AngleRadiansZeroCentered current_bearing = atan2(target_local.y, target_local.x);
+    project11::AngleRadiansZeroCentered current_bearing(atan2(target_local.y, target_local.x));
 
     auto current_target_speed = 0.0;
 

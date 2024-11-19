@@ -86,7 +86,7 @@ BT::NodeStatus UpdateCurrentSegment::tick()
       auto segment_dx = p2.pose.position.x - p1.pose.position.x;
       auto segment_dy = p2.pose.position.y - p1.pose.position.y;
 
-      project11::AngleRadians segment_azimuth = atan2(segment_dy, segment_dx);
+      project11::AngleRadians segment_azimuth(atan2(segment_dy, segment_dx));
       segment_length = sqrt(segment_dx*segment_dx+segment_dy*segment_dy);
 
       // vehicle distance and azimuth relative to the segment's start point
@@ -94,7 +94,7 @@ BT::NodeStatus UpdateCurrentSegment::tick()
       double dy = p1.pose.position.y - base_to_map.transform.translation.y;
       auto vehicle_distance = sqrt(dx*dx+dy*dy);
 
-      project11::AngleRadians vehicle_azimuth = atan2(-dy, -dx);
+      project11::AngleRadians vehicle_azimuth(atan2(-dy, -dx));
 
       auto error_azimuth = vehicle_azimuth - segment_azimuth;
       

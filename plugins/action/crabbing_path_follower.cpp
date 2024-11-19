@@ -115,7 +115,7 @@ BT::NodeStatus CrabbingPathFollower::onRunning()
   auto segment_dx = p2.pose.position.x - p1.pose.position.x;
   auto segment_dy = p2.pose.position.y - p1.pose.position.y;
 
-  project11::AngleRadians segment_azimuth = atan2(segment_dy, segment_dx);
+  project11::AngleRadians segment_azimuth(atan2(segment_dy, segment_dx));
   auto segment_distance = sqrt(segment_dx*segment_dx+segment_dy*segment_dy);
 
   // vehicle distance and azimuth relative to the segment's start point
@@ -123,7 +123,7 @@ BT::NodeStatus CrabbingPathFollower::onRunning()
   double dy = p1.pose.position.y - base_to_map.transform.translation.y;
   auto vehicle_distance = sqrt(dx*dx+dy*dy);
 
-  project11::AngleRadians vehicle_azimuth = atan2(-dy, -dx);
+  project11::AngleRadians vehicle_azimuth(atan2(-dy, -dx));
 
   auto error_azimuth = vehicle_azimuth - segment_azimuth;
      
@@ -135,7 +135,7 @@ BT::NodeStatus CrabbingPathFollower::onRunning()
 
   auto cross_track_error = vehicle_distance*sin_error_azimuth;
   auto crab_angle = project11::AngleDegrees(pid->update(cross_track_error, odom.value().header.stamp));
-  project11::AngleRadians heading = tf2::getYaw(base_to_map.transform.rotation);
+  project11::AngleRadians heading(tf2::getYaw(base_to_map.transform.rotation));
 
   std_msgs::msg::Float32 crab_angle_msg;
   crab_angle_msg.data = crab_angle.value();
