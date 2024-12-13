@@ -1,7 +1,7 @@
 #ifndef PROJECT11_NAVIGATION_TASKLIST_H
 #define PROJECT11_NAVIGATION_TASKLIST_H
 
-#include <project11_nav_msgs/TaskInformation.h>
+#include "project11_nav_msgs/msg/task_information.hpp"
 
 namespace project11_navigation
 {
@@ -22,25 +22,25 @@ public:
   /// Updates or add tasks from task_msgs. Removes existing tasks
   /// that are not in task_msgs. Tasks are reordered if necessary
   /// to reflect the order in task_msgs.
-  void update(const std::vector<project11_nav_msgs::TaskInformation>& task_msgs);
+  void update(const std::vector<project11_nav_msgs::msg::TaskInformation>& task_msgs);
 
   /// Return list of direct children tasks. 
   const std::vector<std::shared_ptr<Task> >& tasks() const;
 
   /// Returns a list of TaskInformation messages, recursing 
   /// down the children. 
-  std::vector<project11_nav_msgs::TaskInformation> taskMessages() const;
+  std::vector<project11_nav_msgs::msg::TaskInformation> taskMessages() const;
 
   /// Returns a list of direct children Tasks sorted by priority. 
   std::vector<std::shared_ptr<Task> > tasksByPriority(bool skip_done = false) const;
 
   /// Returns the first pose among direct children,
   /// optionally recursively searching (depth first).
-  bool getFirstPose(geometry_msgs::PoseStamped& pose, bool recursive= false) const;
+  bool getFirstPose(geometry_msgs::msg::PoseStamped& pose, bool recursive= false) const;
 
   /// Returns the last pose among direct children,
   /// optionally recursively searching (depth first).
-  bool getLastPose(geometry_msgs::PoseStamped& pose, bool recursive= false) const;
+  bool getLastPose(geometry_msgs::msg::PoseStamped& pose, bool recursive= false) const;
 
   /// Creates a new task and optionally inserts it before task.
   /// If task is not null and it is not found, no new task is created.

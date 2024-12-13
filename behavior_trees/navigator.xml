@@ -382,7 +382,8 @@
               <CCOMPlanner start_pose="{current_pose}"
                            goal_pose="{goal_pose}"
                            navigation_path="{transit_path}"
-                           robot_capabilities="{robot_capabilities}"
+                           speed="{robot_default_speed}"
+                           turn_radius="{robot_turn_radius}"
                            tf_buffer="{tf_buffer}"
                            context="{context}"
                            _skipIf="planner != &quot;ccom_planner&quot;"/>
@@ -487,8 +488,10 @@
                   default="{goal_pose}"/>
       <output_port name="navigation_path"
                    default="{navigation_path}"/>
-      <input_port name="robot_capabilities"
-                  default="{robot_capabilities}"/>
+      <input_port name="turn_radius"
+                  default="{robot_turn_radius}"/>
+      <input_port name="speed"
+                  default="{robot_default_speed}"/>
       <input_port name="tf_buffer"
                   default="{tf_buffer}"/>
       <input_port name="context"

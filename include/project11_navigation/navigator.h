@@ -1,10 +1,12 @@
 #ifndef PROJECT11_NAVIGATION_NAVIGATOR_H
 #define PROJECT11_NAVIGATION_NAVIGATOR_H
 
-#include <ros/ros.h>
-#include <project11_nav_msgs/TaskInformation.h>
-#include <actionlib/server/simple_action_server.h>
-#include <project11_navigation/RunTasksAction.h>
+#include "rclcpp/rclcpp.hpp"
+#include "project11_nav_msgs/msg/task_information.hpp"
+#include "rclcpp_action/rclcpp_action.hpp"
+#include "rclcpp_lifecycle/lifecycle_node.hpp"
+#include "project11_nav_msgs/action/run_tasks.hpp"
+#include "std_msgs/msg/string.hpp"
 
 #include <project11_navigation/context.h>
 #include <project11_navigation/task_list.h>
@@ -17,33 +19,55 @@
 
 namespace project11_navigation
 {
+  using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
 /// Action server that accepts tasks and executes them.
-class Navigator
+class Navigator: public rclcpp_lifecycle::LifecycleNode
 {
 public:
-  Navigator(std::string name = "navigator");
-  ~Navigator();
+  using RunTasks = project11_nav_msgs::action::RunTasks;
+  using GoalHandleRunTasks = rclcpp_action::ServerGoalHandle<RunTasks>;
+
+  Navigator(const std::string & node_name);
+
+  CallbackReturn on_configure(const rclcpp_lifecycle::State& state) override;
+  CallbackReturn on_activate(const rclcpp_lifecycle::State& state) override;
+  CallbackReturn on_deactivate(const rclcpp_lifecycle::State& state) override;
+  CallbackReturn on_cleanup(const rclcpp_lifecycle::State& state) override;
+  CallbackReturn on_shutdown(const rclcpp_lifecycle::State& state) override;
 
 private:
-  void goalCallback();
-  void preemptCallback();
+  rclcpp_action::GoalResponse handleGoal(const rclcpp_action::GoalUUID & uuid, std::shared_ptr<const RunTasks::Goal> goal);
+  rclcpp_action::CancelResponse handleCancel(const std::shared_ptr<GoalHandleRunTasks> goal);
+  void handleAccepted(const std::shared_ptr<GoalHandleRunTasks> goal_handle);
 
-  void odometryCallback(const nav_msgs::Odometry::ConstPtr& msg);
+  /// Creates a Result message for the action server.
+  std::shared_ptr<RunTasks::Result> generateResult();
+
+  /// Clears the current goal
+  void clearGoal();
+
+  /// Updates and publishes nav state if it changed
+  void updateNavigationState(std::string nav_state);
+
+
+  void odometryCallback(const nav_msgs::msg::Odometry::UniquePtr& msg);
 
   /// Builds and returns the Behavior Tree
   BT::Tree buildBehaviorTree();
 
-  ros::NodeHandle node_handle_;
+  BT::BehaviorTreeFactory factory_;
 
-  actionlib::SimpleActionServer<project11_navigation::RunTasksAction> action_server_;
 
-  std::shared_ptr<Context> context_;
+  rclcpp_action::Server<RunTasks>::SharedPtr action_server_;
+  std::shared_ptr<GoalHandleRunTasks> goal_handle_;
 
-  ros::Subscriber odom_sub_;
+  std::shared_ptr<Context> context_{nullptr};
 
-  ros::Publisher display_pub_;
-  ros::Publisher navigation_state_publisher_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+
+  rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>::SharedPtr  display_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<std_msgs::msg::String>::SharedPtr navigation_state_publisher_;
   std::string last_navigation_state_;
 
   BT::Tree tree_;

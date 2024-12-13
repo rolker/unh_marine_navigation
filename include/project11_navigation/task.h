@@ -1,9 +1,11 @@
 #ifndef PROJECT11_NAVIGATION_TASK_H
 #define PROJECT11_NAVIGATION_TASK_H
 
-#include <project11_navigation/task_list.h>
-#include <yaml-cpp/yaml.h>
-#include <visualization_msgs/MarkerArray.h>
+#include "rclcpp/rclcpp.hpp"
+#include "rclcpp/time.hpp"
+#include "project11_navigation/task_list.h"
+#include "yaml-cpp/yaml.h"
+#include "visualization_msgs/msg/marker_array.hpp"
 
 namespace project11_navigation
 {
@@ -17,27 +19,28 @@ using TaskConstPtr = std::shared_ptr<const Task>;
 class Task
 {
 public:
-  // \todo make this private without breaking the create() method.
-  Task();
   virtual ~Task() = default;
 
-  /// Creates a new Task or derived Task if a creator is set to do so.
-  static TaskPtr create(const project11_nav_msgs::TaskInformation& task_msg, TaskPtr parent);
+  /// Creates a new Task.
+  static TaskPtr create(const project11_nav_msgs::msg::TaskInformation& task_msg, TaskPtr parent);
+
+  static TaskPtr create(const project11_nav_msgs::msg::TaskInformation& task_msg, rclcpp::Node::SharedPtr node);
+
 
   /// Update or replace this task's TaskInformation.
   /// If check_id is true (default), only replaces the message
   /// if the new message has the same id as the existing message.
   /// Returns true if the message got replaced.
-  bool update(const project11_nav_msgs::TaskInformation& task_msg, bool check_id = true);
+  bool update(const project11_nav_msgs::msg::TaskInformation& task_msg, bool check_id = true);
 
   /// Updates TaskInformation messages for this task
   /// and children tasks. Existing children tasks may be updated
   /// and new children tasks may be added. Existing children tasks
   /// that are not in task_msgs are discarded.
-  void update(const std::vector<project11_nav_msgs::TaskInformation>& task_msgs);
+  void update(const std::vector<project11_nav_msgs::msg::TaskInformation>& task_msgs);
 
   /// Returns TaskInformation message associated with this task. 
-  const project11_nav_msgs::TaskInformation& message() const;
+  const project11_nav_msgs::msg::TaskInformation& message() const;
 
   /// Returns true if this task and optionally children tasks
   /// are all done. Children tasks are only checked if the
@@ -82,17 +85,17 @@ public:
   void setStatus(const YAML::Node &status);
 
   /// Returns time TaskInformation was last updated
-  ros::Time lastUpdateTime() const;
+  rclcpp::Time lastUpdateTime() const;
 
   /// Returns the first pose in this task's pose list. If
   /// this task's pose list is empty, optionally check
   /// the children recursively (depth first).
-  bool getFirstPose(geometry_msgs::PoseStamped& pose, bool recursive = false) const;
+  bool getFirstPose(geometry_msgs::msg::PoseStamped& pose, bool recursive = false) const;
 
   /// Returns the last pose in this task's pose list. If
   /// this task's pose list is empty, optionally check
   /// the children recursively (depth first).
-  bool getLastPose(geometry_msgs::PoseStamped& pose, bool recursive = false) const;
+  bool getLastPose(geometry_msgs::msg::PoseStamped& pose, bool recursive = false) const;
 
   /// Creates a new task and inserts it as a child before task
   /// if not null. If task argument is null, the
@@ -107,12 +110,16 @@ public:
   std::shared_ptr<Task> self();
 
 private:
+  // \todo make this private without breaking the create() method.
+  Task(rclcpp::Node::SharedPtr node);
+
   std::weak_ptr<Task> self_;
   std::weak_ptr<Task> parent_task_;
 
-  project11_nav_msgs::TaskInformation message_;
+  project11_nav_msgs::msg::TaskInformation message_;
   TaskList children_;
-  ros::Time last_update_time_;
+  rclcpp::Time last_update_time_;
+  rclcpp::Node::SharedPtr node_;
 };
 
 

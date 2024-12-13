@@ -1,10 +1,11 @@
 #ifndef PROJECT11_NAVIGATION_ENVIRONMENT_H
 #define PROJECT11_NAVIGATION_ENVIRONMENT_H
 
-#include <ros/ros.h>
-#include <grid_map_ros/grid_map_ros.hpp>
-#include <project11_nav_msgs/RobotState.h>
-#include <project11_navigation/occupancy_grid.h>
+#include "rclcpp/rclcpp.hpp"
+#include "rclcpp_lifecycle/lifecycle_node.hpp"
+#include "grid_map_ros/grid_map_ros.hpp"
+#include "project11_nav_msgs/msg/robot_state.hpp"
+#include "project11_navigation/occupancy_grid.h"
 
 namespace project11_navigation
 {
@@ -16,7 +17,7 @@ class Environment
 public:
   using Ptr = std::shared_ptr<Environment>;
 
-  Environment();
+  Environment(rclcpp_lifecycle::LifecycleNode::WeakPtr node);
 
   // Contains copies of grid maps for use where the maps shouldn't change
   // such as planners that expect a static map
@@ -27,7 +28,7 @@ public:
 
     std::map<std::string, grid_map::GridMap> dynamic_grids;
 
-    double getCost(const project11_nav_msgs::RobotState& from_state, const project11_nav_msgs::RobotState& to_state, double robot_comfort_radius);
+    double getCost(const project11_nav_msgs::msg::RobotState& from_state, const project11_nav_msgs::msg::RobotState& to_state, double robot_comfort_radius);
 
   };
 
@@ -39,22 +40,22 @@ public:
   std::shared_ptr<OccupancyGrid> localCostmap() const;
   
 private:
-  void occupancyGridCallback(const nav_msgs::OccupancyGrid::ConstPtr &data);
+  void occupancyGridCallback(const nav_msgs::msg::OccupancyGrid::UniquePtr &data);
 
   struct Grid
   {
-    void gridCallback(const grid_map_msgs::GridMap::ConstPtr &data);
-    void subscribe(std::string topic);
+    void gridCallback(const grid_map_msgs::msg::GridMap::UniquePtr& data);
+    void subscribe(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std::string topic);
 
     grid_map::GridMap grid_map;
-    ros::Subscriber subscriber;
+    rclcpp::Subscription<grid_map_msgs::msg::GridMap>::SharedPtr subscriber;
   };
 
   std::map<std::string, Grid> static_grids_;
   std::map<std::string, Grid> dynamic_grids_;
 
-  ros::Subscriber local_costmap_subscriber_;
-  nav_msgs::OccupancyGrid local_costmap_;
+  rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr local_costmap_subscriber_;
+  nav_msgs::msg::OccupancyGrid local_costmap_;
 };
 
 

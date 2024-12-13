@@ -1,23 +1,20 @@
-#include <project11_navigation/environment.h>
+#include "project11_navigation/environment.h"
 
 namespace project11_navigation
 {
 
-Environment::Environment()
+Environment::Environment(rclcpp_lifecycle::LifecycleNode::WeakPtr node_ptr)
 {
-  XmlRpc::XmlRpcValue static_grid_params;
-  if(ros::param::get("~/grids/static", static_grid_params))
+  auto node = node_ptr.lock();
+  std::vector<std::string> static_grid_topics;
+  node->declare_parameter("grids/static", static_grid_topics);
+  node->get_parameter("grids/static", static_grid_topics);
+  for(auto sg: static_grid_topics)
   {
-    for(auto sg: static_grid_params)
-    {
-      auto topic = static_cast<std::string>(sg.second);
-      ROS_INFO_STREAM("static grid: " << sg.first << " topic: " << topic);
-      static_grids_[sg.first].subscribe(topic);
-    }
+    static_grids_[sg].subscribe(node, sg);
   }
 
-  ros::NodeHandle nh;
-  local_costmap_subscriber_ = nh.subscribe("local_costmap", 1, &Environment::occupancyGridCallback, this);
+  local_costmap_subscriber_ = node->create_subscription<nav_msgs::msg::OccupancyGrid>("local_costmap", 1, std::bind(&Environment::occupancyGridCallback, this, std::placeholders::_1));
 }
 
 Environment::Snapshot Environment::snapshot(bool dynamic_only) const
@@ -44,7 +41,7 @@ std::string Environment::mapFrame() const
   return "";
 }
 
-void Environment::occupancyGridCallback(const nav_msgs::OccupancyGrid::ConstPtr &data)
+void Environment::occupancyGridCallback(const nav_msgs::msg::OccupancyGrid::UniquePtr &data)
 {
   local_costmap_ = *data;
 }
@@ -55,17 +52,21 @@ std::shared_ptr<OccupancyGrid> Environment::localCostmap() const
 }
 
 
-void Environment::Grid::subscribe(std::string topic)
+void Environment::Grid::subscribe(rclcpp_lifecycle::LifecycleNode::SharedPtr node, std::string topic)
 {
-  subscriber = ros::NodeHandle().subscribe(topic, 1, &Grid::gridCallback, this);
+  auto callback = [this](const grid_map_msgs::msg::GridMap::UniquePtr& msg)
+  {
+    this->gridCallback(msg);
+  };
+  subscriber = node->create_subscription<grid_map_msgs::msg::GridMap> (topic, 1, callback);
 }
 
-void Environment::Grid::gridCallback(const grid_map_msgs::GridMap::ConstPtr &data)
+void Environment::Grid::gridCallback(const grid_map_msgs::msg::GridMap::UniquePtr& data)
 {
   grid_map::GridMapRosConverter::fromMessage(*data, grid_map);
 }
 
-double Environment::Snapshot::getCost(const project11_nav_msgs::RobotState& from_state, const project11_nav_msgs::RobotState& to_state, double robot_comfort_radius)
+double Environment::Snapshot::getCost(const project11_nav_msgs::msg::RobotState& from_state, const project11_nav_msgs::msg::RobotState& to_state, double robot_comfort_radius)
 {
   grid_map::Position position(to_state.pose.position.x, to_state.pose.position.y);
   float dynamic_weight = 1.0;

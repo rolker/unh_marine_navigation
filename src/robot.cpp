@@ -4,18 +4,19 @@
 namespace project11_navigation
 {
 
-Robot::Robot()
+Robot::Robot(rclcpp_lifecycle::LifecycleNode::WeakPtr node_ptr):
+  Platform(node_ptr)
 {
-  ros::NodeHandle nh("~");
-  cmd_vel_pub_ = nh.advertise<geometry_msgs::TwistStamped>("cmd_vel", 1);
+  auto node = node_ptr.lock();
+  cmd_vel_pub_ = node->create_publisher<geometry_msgs::msg::TwistStamped>("~/cmd_vel", 1);
 
-  enable_sub_ = nh.subscribe<std_msgs::Bool>("enable", 10, &Robot::enableCallback, this);
+  enable_sub_ = node->create_subscription<std_msgs::msg::Bool>("~/enable", 10, [this](const std_msgs::msg::Bool::UniquePtr& msg){this->enableCallback(msg);});
 }
 
-void Robot::sendControls(const geometry_msgs::TwistStamped& cmd_vel) const
+void Robot::sendControls(const geometry_msgs::msg::TwistStamped& cmd_vel) const
 {
   if(enabled_)
-    cmd_vel_pub_.publish(cmd_vel);
+    cmd_vel_pub_->publish(cmd_vel);
 }
 
 bool Robot::enabled() const
@@ -23,20 +24,20 @@ bool Robot::enabled() const
   return enabled_;
 }
 
-void Robot::enableCallback(const std_msgs::BoolConstPtr& msg)
+void Robot::enableCallback(const std_msgs::msg::Bool::UniquePtr& msg)
 {
   enabled_ = msg->data;
 }
 
-void Robot::updateMarkers(visualization_msgs::MarkerArray& marker_array, const geometry_msgs::Polygon& footprint) const
+void Robot::updateMarkers(visualization_msgs::msg::MarkerArray& marker_array, const geometry_msgs::msg::Polygon& footprint) const
 {
-  visualization_msgs::Marker marker;
+  visualization_msgs::msg::Marker marker;
   marker.header.frame_id = odom_.header.frame_id;
   marker.header.stamp = odom_.header.stamp;
   marker.id = 0;
   marker.ns = odom_.header.frame_id;
-  marker.action = visualization_msgs::Marker::ADD;
-  marker.type = visualization_msgs::Marker::LINE_STRIP;
+  marker.action = visualization_msgs::msg::Marker::ADD;
+  marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
   marker.pose = odom_.pose.pose;
   marker.color.r = .75;
   marker.color.g = .75;
@@ -45,7 +46,7 @@ void Robot::updateMarkers(visualization_msgs::MarkerArray& marker_array, const g
   marker.scale.x = 0.2;
   for(auto p: footprint.points)
   {
-    geometry_msgs::Point marker_point;
+    geometry_msgs::msg::Point marker_point;
     marker_point.x = p.x;
     marker_point.y = p.y;
     marker_point.z = p.z;

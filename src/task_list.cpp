@@ -1,6 +1,6 @@
 #include "project11_navigation/task_list.h"
 #include "project11_navigation/task.h"
-#include <ros/ros.h>
+#include "rclcpp/rclcpp.hpp"
 
 namespace project11_navigation
 {
@@ -10,7 +10,7 @@ TaskList::TaskList(Task* parent):parent_task_(parent)
 
 }
 
-void TaskList::update(const std::vector<project11_nav_msgs::TaskInformation>& task_msgs)
+void TaskList::update(const std::vector<project11_nav_msgs::msg::TaskInformation>& task_msgs)
 {
   // Create a new vector adding tasks in order they appear.
   // Existing tasks may be copied from existing vector or new ones created if needed.
@@ -76,10 +76,10 @@ const std::vector<std::shared_ptr<Task> >& TaskList::tasks() const
   return tasks_;
 }
 
-std::vector<project11_nav_msgs::TaskInformation> TaskList::taskMessages() const
+std::vector<project11_nav_msgs::msg::TaskInformation> TaskList::taskMessages() const
 {
-  std::vector<project11_nav_msgs::TaskInformation> ret;
-  std::vector<project11_nav_msgs::TaskInformation> children_messages;
+  std::vector<project11_nav_msgs::msg::TaskInformation> ret;
+  std::vector<project11_nav_msgs::msg::TaskInformation> children_messages;
   for(auto t: tasks_)
   {
     ret.push_back(t->message());
@@ -105,7 +105,7 @@ std::vector<std::shared_ptr<Task> > TaskList::tasksByPriority(bool skip_done) co
   return ret;
 }
 
-bool TaskList::getFirstPose(geometry_msgs::PoseStamped& pose, bool recursive) const
+bool TaskList::getFirstPose(geometry_msgs::msg::PoseStamped& pose, bool recursive) const
 {
   for(auto tp: tasks_)
     if(tp && tp->getFirstPose(pose, recursive))
@@ -113,7 +113,7 @@ bool TaskList::getFirstPose(geometry_msgs::PoseStamped& pose, bool recursive) co
   return false;
 }
 
-bool TaskList::getLastPose(geometry_msgs::PoseStamped& pose, bool recursive) const
+bool TaskList::getLastPose(geometry_msgs::msg::PoseStamped& pose, bool recursive) const
 {
   for(auto t = tasks_.rbegin(); t != tasks_.rend(); t++)
     if(*t && (*t)->getLastPose(pose, recursive))
@@ -132,7 +132,7 @@ std::shared_ptr<Task> TaskList::createTaskBefore(std::shared_ptr<Task> task, std
   if(!task || task_iterator != tasks_.end())
   {
     // we found the target task
-    project11_nav_msgs::TaskInformation tm;
+    project11_nav_msgs::msg::TaskInformation tm;
     tm.type = type;
     if(task)
       tm.priority = task->message().priority;

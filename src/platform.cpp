@@ -3,12 +3,13 @@
 namespace project11_navigation
 {
 
-Platform::Platform()
+Platform::Platform(rclcpp_lifecycle::LifecycleNode::WeakPtr node_ptr)
 {
-  //odom_sub_ = nodeHandle_.subscribe("odom", 10, &Platform::odometryCallback, this);
+  auto node = node_ptr.lock();
+  odom_sub_ = node->create_subscription<nav_msgs::msg::Odometry>("odom", 10, [this](const nav_msgs::msg::Odometry::UniquePtr &msg){this->odometryCallback(msg);});
 }
 
-void Platform::odometryCallback(const nav_msgs::Odometry::ConstPtr& msg)
+void Platform::odometryCallback(const nav_msgs::msg::Odometry::UniquePtr& msg)
 {
   odom_ = *msg;
 }
@@ -18,7 +19,7 @@ std::string Platform::baseFrame() const
   return odom_.child_frame_id;
 }
 
-const nav_msgs::Odometry& Platform::odometry() const
+const nav_msgs::msg::Odometry& Platform::odometry() const
 {
   return odom_;
 }

@@ -1,8 +1,9 @@
 #ifndef PROJECT11_NAVIGATION_PLATFORM_H
 #define PROJECT11_NAVIGATION_PLATFORM_H
 
-#include <ros/ros.h>
-#include <nav_msgs/Odometry.h>
+#include "rclcpp/rclcpp.hpp"
+#include "rclcpp_lifecycle/lifecycle_node.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 
 namespace project11_navigation
 {
@@ -11,18 +12,17 @@ namespace project11_navigation
 class Platform
 {
 public:
-  Platform();
+  Platform(rclcpp_lifecycle::LifecycleNode::WeakPtr node);
   std::string baseFrame() const;
-  const nav_msgs::Odometry &odometry() const;
+  const nav_msgs::msg::Odometry &odometry() const;
 
-  void odometryCallback(const nav_msgs::Odometry::ConstPtr& msg);
+  void odometryCallback(const nav_msgs::msg::Odometry::UniquePtr& msg);
 
 protected:
-  ros::NodeHandle nodeHandle_;
-  nav_msgs::Odometry odom_;
+  nav_msgs::msg::Odometry odom_;
 
 private:
-  ros::Subscriber odom_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
 };
 
 } // namespace project11_navigation

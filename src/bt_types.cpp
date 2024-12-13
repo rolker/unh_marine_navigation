@@ -1,34 +1,48 @@
-#include <project11_navigation/bt_types.h>
-#include <tf2/utils.h>
+#include "project11_navigation/bt_types.h"
+
+#include "behaviortree_cpp/json_export.h"
+#include "geometry_msgs/msg/twist_stamped.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+#include "project11_navigation/task.h"
+#include "geometry_msgs/msg/accel.hpp"
+#include "geometry_msgs/msg/twist.hpp"
+#include "geometry_msgs/msg/point.hpp"
+#include "project11_navigation/plugins/action/multibeam_coverage_action.h"
+#include "project11/pid.h"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "tf2/utils.h"
 #include <cmath>
 #include <ctime>
 
-namespace project11_navigation
+
+namespace builtin_interfaces::msg
 {
 
-void registerJsonDefinitions()
+void to_json(nlohmann::json& dest, const Time& time)
 {
-  BT::RegisterJsonDefinition<std_msgs::ColorRGBA>(ColorRGBAToJson);
-  BT::RegisterJsonDefinition<std_msgs::Header>(HeaderToJson);
-  BT::RegisterJsonDefinition<ros::Time>(TimeToJson);
-
-  BT::RegisterJsonDefinition<geometry_msgs::Accel>(AccelToJson);
-  BT::RegisterJsonDefinition<geometry_msgs::Point>(PointToJson);
-  BT::RegisterJsonDefinition<geometry_msgs::Pose>(PoseToJson);
-  BT::RegisterJsonDefinition<geometry_msgs::PoseStamped>(PoseStampedToJson);
-  BT::RegisterJsonDefinition<geometry_msgs::Quaternion>(QuaternionToJson);
-  BT::RegisterJsonDefinition<geometry_msgs::Twist>(TwistToJson);
-  BT::RegisterJsonDefinition<geometry_msgs::TwistStamped>(TwistStampedToJson);
-  BT::RegisterJsonDefinition<geometry_msgs::Vector3>(Vector3ToJson);
-
-  BT::RegisterJsonDefinition<std::shared_ptr<Task> >(TaskPtrToJson);
-  BT::RegisterJsonDefinition<std::shared_ptr<MultibeamCoverageActionClient> >(MultibeamCoverageActionClientPtrToJson);
-  BT::RegisterJsonDefinition<std::shared_ptr<project11::PID> >(PidPtrToJson);
+  dest["seconds"] = time.sec;
+  dest["nanoseconds"] = time.nanosec;
+  std::time_t total_seconds = static_cast<time_t>(time.sec);
+  auto tm = std::gmtime(&total_seconds);
+  char timeString[std::size("yyyy-mm-ddThh:mm:ss")];
+  std::strftime(std::data(timeString), std::size(timeString), "%FT%T", tm);
+  std::stringstream datetime;
+  datetime << timeString << "." << std::setw(9) << std::setfill('0') << time.nanosec;
+  dest["datetime"] = datetime.str();
 }
 
-// std_msgs
+void from_json(const nlohmann::json& json, Time& time)
+{
+  json.at("seconds").get_to(time.sec);
+  json.at("nanoseconds").get_to(time.nanosec);
+}
 
-void ColorRGBAToJson(nlohmann::json& dest, const std_msgs::ColorRGBA& color)
+}
+
+namespace std_msgs::msg
+{
+
+void to_json(nlohmann::json& dest, const std_msgs::msg::ColorRGBA& color)
 {
   dest["r"] = color.r;
   dest["g"] = color.g;
@@ -36,51 +50,85 @@ void ColorRGBAToJson(nlohmann::json& dest, const std_msgs::ColorRGBA& color)
   dest["a"] = color.a;
 }
 
-void HeaderToJson(nlohmann::json& dest, const std_msgs::Header& header)
+void from_json(const nlohmann::json& json, std_msgs::msg::ColorRGBA& color)
+{
+  json.at("r").get_to(color.r);
+  json.at("g").get_to(color.g);
+  json.at("b").get_to(color.b);
+  json.at("a").get_to(color.a);
+}
+
+void to_json(nlohmann::json& dest, const std_msgs::msg::Header& header)
 {
   dest["frame_id"] = header.frame_id;
-  TimeToJson(dest["stamp"], header.stamp);
+  to_json(dest["stamp"], header.stamp);
 }
 
-void TimeToJson(nlohmann::json& dest, const ros::Time& time)
+void from_json(const nlohmann::json& json, std_msgs::msg::Header& header)
 {
-  dest["seconds"] = time.toSec();
-  std::time_t total_seconds = static_cast<time_t>(time.sec);
-  auto tm = std::gmtime(&total_seconds);
-  char timeString[std::size("yyyy-mm-ddThh:mm:ss")];
-  std::strftime(std::data(timeString), std::size(timeString), "%FT%T", tm);
-  std::stringstream datetime;
-  datetime << timeString << "." << std::setw(9) << std::setfill('0') << time.nsec;
-  dest["datetime"] = datetime.str();
+  json.at("frame_id").get_to(header.frame_id);
+  from_json(json.at("stamp"), header.stamp);
 }
 
-// geometry_msgs
 
-void AccelToJson(nlohmann::json& dest, const geometry_msgs::Accel& accel)
+}
+
+namespace geometry_msgs::msg
 {
-  Vector3ToJson(dest["linear"], accel.linear);
-  Vector3ToJson(dest["angular"], accel.angular);
+
+template<typename T>
+void XYZToJson(nlohmann::json& dest, const T& item)
+{
+  dest["x"] = item.x;
+  dest["y"] = item.y;
+  dest["z"] = item.z;
 }
 
-void PointToJson(nlohmann::json& dest, const geometry_msgs::Point& point)
+template<typename T>
+void XYZFromJson(const nlohmann::json& json, T& item)
+{
+  json.at("x").get_to(item.x);
+  json.at("y").get_to(item.y);
+  json.at("z").get_to(item.z);
+}
+
+void to_json(nlohmann::json& dest, const geometry_msgs::msg::Vector3& vector)
+{
+  XYZToJson(dest, vector);
+}
+
+void from_json(const nlohmann::json& json, geometry_msgs::msg::Vector3& vector)
+{
+  XYZFromJson(json, vector);
+}
+
+
+void to_json(nlohmann::json& dest, const geometry_msgs::msg::Accel& accel)
+{
+  to_json(dest["linear"], accel.linear);
+  to_json(dest["angular"], accel.angular);
+}
+
+void from_json(const nlohmann::json& json, geometry_msgs::msg::Accel& accel)
+{
+  json.at("linear").get_to(accel.linear);
+  json.at("angular").get_to(accel.angular);
+}
+
+void to_json(nlohmann::json& dest, const geometry_msgs::msg::Point& point)
 {
   XYZToJson(dest, point);
 }
 
-void PoseToJson(nlohmann::json& dest, const geometry_msgs::Pose& pose)
+void from_json(const nlohmann::json& json, geometry_msgs::msg::Point& point)
 {
-  PointToJson(dest["position"], pose.position);
-  QuaternionToJson(dest["orientation"], pose.orientation);
+  XYZFromJson(json, point);
 }
 
-void PoseStampedToJson(nlohmann::json& dest, const geometry_msgs::PoseStamped& pose)
+void to_json(nlohmann::json& dest, const geometry_msgs::msg::Quaternion& quaternion)
 {
-  StampedToJson(dest, pose);
-  PoseToJson(dest, pose.pose);
-}
-
-void QuaternionToJson(nlohmann::json& dest, const geometry_msgs::Quaternion& quaternion)
-{
+  XYZToJson(dest, quaternion);
+  dest["w"] = quaternion.w;
   double yaw, pitch, roll;
   tf2::getEulerYPR(quaternion, yaw, pitch, roll);
   dest["yaw"] = yaw;
@@ -88,27 +136,88 @@ void QuaternionToJson(nlohmann::json& dest, const geometry_msgs::Quaternion& qua
   dest["roll"] = roll;
 }
 
-void TwistToJson(nlohmann::json& dest, const geometry_msgs::Twist& twist)
+void from_json(const nlohmann::json& json, geometry_msgs::msg::Quaternion& quaternion)
 {
-  Vector3ToJson(dest["linear"], twist.linear);
-  Vector3ToJson(dest["angular"], twist.angular);
+  XYZFromJson(json, quaternion);
+  json.at("w").get_to(quaternion.w);
 }
 
-void TwistStampedToJson(nlohmann::json& dest, const geometry_msgs::TwistStamped& twist)
+void to_json(nlohmann::json& dest, const geometry_msgs::msg::Pose& pose)
 {
-  StampedToJson(dest, twist);
-  TwistToJson(dest, twist.twist);
+  to_json(dest["position"], pose.position);
+  to_json(dest["orientation"], pose.orientation);
 }
 
-void Vector3ToJson(nlohmann::json& dest, const geometry_msgs::Vector3& vector)
+void from_json(const nlohmann::json& json, geometry_msgs::msg::Pose& pose)
 {
-  XYZToJson(dest, vector);
+  json.at("position").get_to(pose.position);
+  json.at("orientation").get_to(pose.orientation);
 }
 
 
-// project11_navigation
+void to_json(nlohmann::json& dest, const geometry_msgs::msg::PoseStamped& pose)
+{
+  to_json(dest["header"], pose.header);
+  to_json(dest["pose"], pose.pose);
+}
 
-void TaskPtrToJson(nlohmann::json& dest, const std::shared_ptr<Task>& task)
+void from_json(const nlohmann::json& json, geometry_msgs::msg::PoseStamped& pose)
+{
+  json.at("header").get_to(pose.header);
+  json.at("pose").get_to(pose.header);
+}
+
+void to_json(nlohmann::json& dest, const geometry_msgs::msg::Twist& twist)
+{
+  to_json(dest["linear"], twist.linear);
+  to_json(dest["angular"], twist.angular);
+}
+
+void from_json(const nlohmann::json& json, geometry_msgs::msg::Twist& twist)
+{
+  json.at("linear").get_to(twist.linear);
+  json.at("angular").get_to(twist.angular);
+}
+
+void to_json(nlohmann::json& dest, const geometry_msgs::msg::TwistStamped& twist)
+{
+  to_json(dest["header"], twist.header);
+  to_json(dest["twist"], twist.twist);
+}
+
+void from_json(const nlohmann::json& json, geometry_msgs::msg::TwistStamped& twist)
+{
+  json.at("header").get_to(twist.header);
+  json.at("twist").get_to(twist.twist);
+}
+
+}
+
+namespace project11
+{
+
+void to_json(nlohmann::json& dest, const std::shared_ptr<PID>& pid)
+{
+  if(!pid)
+    dest["pid"] = "null";
+  else
+  {
+    dest["Kp"] = pid->Kp();
+    dest["Ki"] = pid->Ki();
+    dest["Kd"] = pid->Kd();
+  }
+}
+
+void from_json(const nlohmann::json& json, std::shared_ptr<PID>& pid)
+{
+}
+
+}
+
+namespace project11_navigation
+{
+
+void to_json(nlohmann::json& dest, const std::shared_ptr<Task>& task)
 {
   if(!task)
     dest["task"] = "null";
@@ -121,39 +230,54 @@ void TaskPtrToJson(nlohmann::json& dest, const std::shared_ptr<Task>& task)
   }
 }
 
-void MultibeamCoverageActionClientPtrToJson(nlohmann::json& dest, const std::shared_ptr<MultibeamCoverageActionClient>& client)
+void from_json(const nlohmann::json& json, std::shared_ptr<Task>& task)
 {
-  if(!client)
-    dest["action_client"] = "null";
-  else
-  {
-    dest["line_count"] = client->lineCount();
-    dest["last_line_number"] = client->lastLineNumber();
-    dest["done"] = client->done();
-    auto sac = client->actionClient();
-    if(sac)
-      dest["simple_action_client"] = "null";
-    else
-    {
-      dest["server_connected"] = sac->isServerConnected();
-      dest["simple_action_client_state"] = sac->getState().getText();
-    }
-  }
 }
 
-// project11
 
-void PidPtrToJson(nlohmann::json& dest, const std::shared_ptr<project11::PID>& pid)
+// void to_json(nlohmann::json& dest, const std::shared_ptr<MultibeamCoverageActionClient>& client)
+// {
+//   if(!client)
+//     dest["action_client"] = "null";
+//   else
+//   {
+//     dest["line_count"] = client->lineCount();
+//     dest["last_line_number"] = client->lastLineNumber();
+//     dest["done"] = client->done();
+//     auto sac = client->actionClient();
+//     if(sac)
+//       dest["simple_action_client"] = "null";
+//     else
+//     {
+//       dest["server_ready"] = sac->action_server_is_ready();
+//       //dest["simple_action_client_state"] = sac->getState().getText();
+//     }
+//   }
+// }
+
+// void from_json(const nlohmann::json& json, std::shared_ptr<MultibeamCoverageActionClient>& client)
+// {
+// }
+
+
+void registerJsonDefinitions()
 {
-  if(!pid)
-    dest["pid"] = "null";
-  else
-  {
-    dest["Kp"] = pid->Kp();
-    dest["Ki"] = pid->Ki();
-    dest["Kd"] = pid->Kd();
-  }
-}
+  BT::RegisterJsonDefinition<std_msgs::msg::ColorRGBA>();
+  BT::RegisterJsonDefinition<std_msgs::msg::Header>();
+  BT::RegisterJsonDefinition<builtin_interfaces::msg::Time>();
 
+  BT::RegisterJsonDefinition<geometry_msgs::msg::Accel>();
+  BT::RegisterJsonDefinition<geometry_msgs::msg::Point>();
+  BT::RegisterJsonDefinition<geometry_msgs::msg::Pose>();
+  BT::RegisterJsonDefinition<geometry_msgs::msg::PoseStamped>();
+  BT::RegisterJsonDefinition<geometry_msgs::msg::Quaternion>();
+  BT::RegisterJsonDefinition<geometry_msgs::msg::Twist>();
+  BT::RegisterJsonDefinition<geometry_msgs::msg::TwistStamped>();
+  BT::RegisterJsonDefinition<geometry_msgs::msg::Vector3>();
+
+  BT::RegisterJsonDefinition<std::shared_ptr<Task> >();
+  // BT::RegisterJsonDefinition<std::shared_ptr<MultibeamCoverageActionClient> >();
+  BT::RegisterJsonDefinition<std::shared_ptr<project11::PID> >();
+}
 
 } // namespace project11_navigation

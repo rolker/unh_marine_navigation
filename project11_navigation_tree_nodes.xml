@@ -1,0 +1,194 @@
+<root BTCPP_format="4">
+    <TreeNodesModel>
+        <Action ID="AdjustPath">
+            <output_port name="adjusted_cross_track_error" type="double" default="{adjusted_cross_track_error}">Cross-track error on adjusted segment</output_port>
+            <output_port name="adjusted_current_segment" type="int" default="{adjusted_current_segment}">Current segment of the adjusted path</output_port>
+            <output_port name="adjusted_segment_count" type="int" default="{adjusted_segment_count}">Number of segment in adjusted path</output_port>
+            <output_port name="adjusted_path" type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;" default="{adjusted_path}">Path modified to avoid obstacles</output_port>
+            <input_port name="local_costmap" type="std::shared_ptr&lt;project11_navigation::OccupancyGrid&gt;" default="{local_costmap}">Local costmap used to adjust trajectory</input_port>
+            <input_port name="odometry" type="nav_msgs::msg::Odometry_&lt;std::allocator&lt;void&gt; &gt;" default="{odometry}">Robot's current odometry state</input_port>
+            <input_port name="turn_radius" type="double" default="{turn_radius}">Robot's turn radius</input_port>
+            <input_port name="tf_buffer" type="std::shared_ptr&lt;tf2_ros::Buffer&gt;" default="{tf_buffer}">Transform buffer</input_port>
+            <input_port name="along_track_progress" type="double" default="{current_segment_along_track_progress}">How far along the current segment we are</input_port>
+            <input_port name="current_segment" type="int" default="{current_segment}">Current path segment being followed</input_port>
+            <output_port name="adjusted_along_track_progress" type="double" default="{adjusted_along_track_progress}">Progress along adjusted segment</output_port>
+            <input_port name="path" type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;" default="{path}">Path needing adjustment</input_port>
+        </Action>
+        <Condition ID="AllTasksDone">
+            <input_port name="task_list" type="std::shared_ptr&lt;project11_navigation::TaskList&gt;"/>
+        </Condition>
+        <Action ID="BaxevaniController">
+            <output_port name="command_velocity" type="geometry_msgs::msg::TwistStamped_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <input_port name="delta" type="double"/>
+            <input_port name="maximum_dt" type="double"/>
+            <input_port name="px_gain" type="double"/>
+            <input_port name="ricatti_parameter" type="double"/>
+            <input_port name="pw_gain" type="double"/>
+            <input_port name="target_speed" type="double"/>
+            <input_port name="tf_buffer" type="std::shared_ptr&lt;tf2_ros::Buffer&gt;"/>
+            <input_port name="current_navigation_segment" type="int"/>
+            <input_port name="odometry" type="nav_msgs::msg::Odometry_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <input_port name="navigation_path" type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;"/>
+        </Action>
+        <Action ID="ClearPath">
+            <output_port name="navigation_path" type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;"/>
+        </Action>
+        <Action ID="CrabbingPathFollower">
+            <inout_port name="pid" type="std::shared_ptr&lt;project11::PID&gt;"/>
+            <output_port name="command_velocity" type="geometry_msgs::msg::TwistStamped_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <input_port name="piloting_mode" type="std::string"/>
+            <input_port name="target_speed" type="double"/>
+            <input_port name="tf_buffer" type="std::shared_ptr&lt;tf2_ros::Buffer&gt;"/>
+            <input_port name="current_navigation_segment" type="int"/>
+            <input_port name="odometry" type="nav_msgs::msg::Odometry_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <input_port name="navigation_path" type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;"/>
+        </Action>
+        <Action ID="DebugBlackboard">
+            <input_port name="value" type="std::string"/>
+        </Action>
+        <Action ID="GeneratePlan">
+            <output_port name="navigation_trajectory" type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;"/>
+            <input_port name="lead_in_distance" type="double"/>
+            <output_port name="current_navigation_segment" type="int"/>
+            <input_port name="turn_radius" type="double"/>
+            <input_port name="planner" type="std::string"/>
+            <input_port name="goal_pose" type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <input_port name="start_pose" type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;"/>
+        </Action>
+        <Action ID="GetSubTasks">
+            <output_port name="sub_tasks" type="std::shared_ptr&lt;project11_navigation::TaskList&gt;"/>
+            <input_port name="task" type="std::shared_ptr&lt;project11_navigation::Task&gt;"/>
+        </Action>
+        <Action ID="GetTaskDataDouble">
+            <output_port name="value" type="double"/>
+            <input_port name="default_value" type="double"/>
+            <input_port name="key" type="std::string"/>
+            <input_port name="task" type="std::shared_ptr&lt;project11_navigation::Task&gt;"/>
+        </Action>
+        <Action ID="GetTaskDataString">
+            <output_port name="value" type="std::string"/>
+            <input_port name="default_value" type="std::string"/>
+            <input_port name="key" type="std::string"/>
+            <input_port name="task" type="std::shared_ptr&lt;project11_navigation::Task&gt;"/>
+        </Action>
+        <Condition ID="GoalReached">
+            <input_port name="heading_accuracy" type="double"/>
+            <input_port name="waypoint_reached_distance" type="double"/>
+            <input_port name="goal_pose" type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <input_port name="odometry" type="nav_msgs::msg::Odometry_&lt;std::allocator&lt;void&gt; &gt;"/>
+        </Condition>
+        <Action ID="Hover">
+            <input_port name="marker_array" type="std::shared_ptr&lt;visualization_msgs::msg::MarkerArray_&lt;std::allocator&lt;void&gt; &gt; &gt;"/>
+            <input_port name="goal_pose" type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <input_port name="tf_buffer" type="std::shared_ptr&lt;tf2_ros::Buffer&gt;"/>
+            <input_port name="maximum_speed" type="double"/>
+            <input_port name="maximum_distance" type="double"/>
+            <input_port name="minimum_distance" type="double"/>
+            <output_port name="command_velocity" type="geometry_msgs::msg::TwistStamped_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <input_port name="odometry" type="nav_msgs::msg::Odometry_&lt;std::allocator&lt;void&gt; &gt;"/>
+        </Action>
+        <Action ID="MultibeamCoverageActionCancel">
+            <input_port name="action_client" type="std::shared_ptr&lt;project11_navigation::MultibeamCoverageActionClient&gt;"/>
+        </Action>
+        <Condition ID="MultibeamCoverageActionDoneCondition">
+            <input_port name="action_client" type="std::shared_ptr&lt;project11_navigation::MultibeamCoverageActionClient&gt;"/>
+        </Condition>
+        <Action ID="MultibeamCoverageActionSetGoal">
+            <output_port name="action_client" type="std::shared_ptr&lt;project11_navigation::MultibeamCoverageActionClient&gt;"/>
+            <input_port name="ros_action" type="std::string"/>
+            <input_port name="task" type="std::shared_ptr&lt;project11_navigation::Task&gt;"/>
+        </Action>
+        <Action ID="MultibeamCoverageActionUpdateTask">
+            <input_port name="task" type="std::shared_ptr&lt;project11_navigation::Task&gt;"/>
+            <input_port name="action_client" type="std::shared_ptr&lt;project11_navigation::MultibeamCoverageActionClient&gt;"/>
+        </Action>
+        <Action ID="NavigatorSettingsLoader">
+            <output_port name="maximum_cross_track_error" type="double"/>
+            <output_port name="survey_lead_in_distance" type="double"/>
+            <output_port name="waypoint_reached_distance" type="double"/>
+        </Action>
+        <Condition ID="PlanNeeded">
+            <input_port name="maximum_cross_track_error" type="double"/>
+            <input_port name="cross_track_error" type="double"/>
+            <input_port name="navigation_trajectory" type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;"/>
+            <input_port name="goal_pose" type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;"/>
+        </Condition>
+        <Action ID="PredictStoppingPose">
+            <output_port name="pose" type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <input_port name="deceleration" type="geometry_msgs::msg::Accel_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <input_port name="odometry" type="nav_msgs::msg::Odometry_&lt;std::allocator&lt;void&gt; &gt;"/>
+        </Action>
+        <Action ID="RobotCapabilitiesLoader">
+            <output_port name="stopping_distance" type="double"/>
+            <output_port name="stopping_time" type="double"/>
+            <output_port name="default_deceleration" type="geometry_msgs::msg::Accel_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <output_port name="maximum_deceleration" type="geometry_msgs::msg::Accel_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <output_port name="default_acceleration" type="geometry_msgs::msg::Accel_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <output_port name="maximum_acceleration" type="geometry_msgs::msg::Accel_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <output_port name="default_velocity" type="geometry_msgs::msg::Twist_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <output_port name="default_speed" type="double"/>
+            <output_port name="minimum_velocity" type="geometry_msgs::msg::Twist_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <output_port name="maximum_velocity" type="geometry_msgs::msg::Twist_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <output_port name="radius" type="double"/>
+            <output_port name="footprint" type="geometry_msgs::msg::Polygon_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <output_port name="turn_radius" type="double"/>
+        </Action>
+        <Action ID="SetPoseFromTask">
+            <input_port name="pose_index" type="int"/>
+            <output_port name="pose" type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <input_port name="task" type="std::shared_ptr&lt;project11_navigation::Task&gt;"/>
+        </Action>
+        <Action ID="SetTaskDone">
+            <input_port name="task" type="std::shared_ptr&lt;project11_navigation::Task&gt;"/>
+        </Action>
+        <Action ID="SetTrajectoryFromTask">
+            <output_port name="current_segment" type="int"/>
+            <output_port name="trajectory" type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;"/>
+            <input_port name="task" type="std::shared_ptr&lt;project11_navigation::Task&gt;"/>
+        </Action>
+        <Action ID="TaskListUpdater">
+            <inout_port name="task_list" type="std::shared_ptr&lt;project11_navigation::TaskList&gt;"/>
+            <inout_port name="task_messages" type="std::shared_ptr&lt;std::vector&lt;project11_nav_msgs::msg::TaskInformation_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;project11_nav_msgs::msg::TaskInformation_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;"/>
+        </Action>
+        <Action ID="UpdateCurrentSegment">
+            <output_port name="segment_count" type="int"/>
+            <output_port name="cross_track_error" type="double"/>
+            <output_port name="segment_length" type="double"/>
+            <inout_port name="current_segment" type="int"/>
+            <output_port name="along_track_progress" type="double"/>
+            <input_port name="tf_buffer" type="std::shared_ptr&lt;tf2_ros::Buffer&gt;"/>
+            <input_port name="odometry" type="nav_msgs::msg::Odometry_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <input_port name="navigation_path" type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;"/>
+        </Action>
+        <Action ID="UpdateCurrentTask">
+            <output_port name="current_task_id" type="std::string"/>
+            <output_port name="current_task_type" type="std::string"/>
+            <output_port name="current_task" type="std::shared_ptr&lt;project11_navigation::Task&gt;"/>
+            <input_port name="task_list" type="std::shared_ptr&lt;project11_navigation::TaskList&gt;"/>
+        </Action>
+        <Action ID="UpdateState">
+            <output_port name="marker_array" type="std::shared_ptr&lt;visualization_msgs::msg::MarkerArray_&lt;std::allocator&lt;void&gt; &gt; &gt;"/>
+            <output_port name="tf_buffer" type="std::shared_ptr&lt;tf2_ros::Buffer&gt;"/>
+            <output_port name="command_velocity" type="geometry_msgs::msg::TwistStamped_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <output_port name="local_costmap" type="std::shared_ptr&lt;project11_navigation::OccupancyGrid&gt;"/>
+            <input_port name="robot_footprint" type="geometry_msgs::msg::Polygon_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <output_port name="odometry" type="nav_msgs::msg::Odometry_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <output_port name="base_frame" type="std::string"/>
+            <output_port name="piloting_mode" type="std::string"/>
+            <output_port name="current_pose" type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <input_port name="context" type="std::shared_ptr&lt;project11_navigation::Context&gt;"/>
+        </Action>
+        <Action ID="VisualizeTrajectory">
+            <input_port name="current_segment" type="int"/>
+            <input_port name="future_color" type="std_msgs::msg::ColorRGBA_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <input_port name="scale" type="double"/>
+            <input_port name="current_pose" type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <input_port name="current_color" type="std_msgs::msg::ColorRGBA_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <input_port name="namespace" type="std::string"/>
+            <input_port name="past_color" type="std_msgs::msg::ColorRGBA_&lt;std::allocator&lt;void&gt; &gt;"/>
+            <input_port name="marker_array" type="std::shared_ptr&lt;visualization_msgs::msg::MarkerArray_&lt;std::allocator&lt;void&gt; &gt; &gt;"/>
+            <input_port name="trajectory" type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;"/>
+        </Action>
+    </TreeNodesModel>
+</root>
+

@@ -1,24 +1,22 @@
 #include "project11_navigation/task.h"
-#include <project11_navigation/utilities.h>
-#include <ros/ros.h>
+#include "project11_navigation/utilities.h"
+#include "rclcpp/rclcpp.hpp"
 
-#include <project11_navigation/context.h>
+#include "project11_navigation/context.h"
 
 
 namespace project11_navigation
 {
-Task::Task():
+Task::Task(rclcpp::Node::SharedPtr node):
   children_(this),
-  last_update_time_(ros::Time::now())
+  last_update_time_(node->get_clock()->now()),
+  node_(node)
 {
 }
 
-std::shared_ptr<Task> Task::create(const project11_nav_msgs::TaskInformation& task_msg, TaskPtr parent_task)
+std::shared_ptr<Task> Task::create(const project11_nav_msgs::msg::TaskInformation& task_msg, TaskPtr parent_task)
 {
-  std::shared_ptr<Task> new_task;
-
-  if(!new_task)
-    new_task = std::make_shared<Task>();
+  auto new_task = std::shared_ptr<Task>(new Task(parent_task->node_));
   
   new_task->message_ = task_msg;
   new_task->self_ = new_task;
@@ -26,31 +24,41 @@ std::shared_ptr<Task> Task::create(const project11_nav_msgs::TaskInformation& ta
   return new_task;
 }
 
+std::shared_ptr<Task> Task::create(const project11_nav_msgs::msg::TaskInformation& task_msg, rclcpp::Node::SharedPtr node)
+{
+  auto new_task = std::shared_ptr<Task>(new Task(node));
+  
+  new_task->message_ = task_msg;
+  new_task->self_ = new_task;
+  return new_task;
+}
+
+
 std::shared_ptr<Task> Task::self()
 {
   return self_.lock();
 }
 
-bool Task::update(const project11_nav_msgs::TaskInformation& task_msg, bool check_id)
+bool Task::update(const project11_nav_msgs::msg::TaskInformation& task_msg, bool check_id)
 {
   if(!check_id || message_.id == task_msg.id)
   {
     if(message_ != task_msg)
-      last_update_time_ = ros::Time::now();
+      last_update_time_ = node_->get_clock()->now();
     message_= task_msg;
     return true;
   }
   return false;
 }
 
-void Task::update(const std::vector<project11_nav_msgs::TaskInformation>& task_msgs)
+void Task::update(const std::vector<project11_nav_msgs::msg::TaskInformation>& task_msgs)
 {
   for(auto task_msg: task_msgs)
     update(task_msg);
   children_.update(task_msgs);
 }
 
-const project11_nav_msgs::TaskInformation & Task::message() const
+const project11_nav_msgs::msg::TaskInformation & Task::message() const
 {
   return message_;
 }
@@ -58,7 +66,7 @@ const project11_nav_msgs::TaskInformation & Task::message() const
 void Task::setDone()
 {
   message_.done = true;
-  last_update_time_ = ros::Time::now();
+  last_update_time_ = node_->get_clock()->now();
 }
 
 YAML::Node Task::data() const
@@ -71,7 +79,7 @@ void Task::setData(const YAML::Node& data)
   std::stringstream ss;
   ss << data;
   message_.data = ss.str();
-  last_update_time_ = ros::Time::now();
+  last_update_time_ = node_->get_clock()->now();
 }
 
 YAML::Node Task::dataItem(std::string key, bool recurse_up) const
@@ -94,13 +102,13 @@ void Task::setStatus(const YAML::Node& status)
   std::stringstream ss;
   ss << status;
   message_.status = ss.str();
-  last_update_time_ = ros::Time::now();
+  last_update_time_ = node_->get_clock()->now();
 }
 
 void Task::setID(std::string id)
 {
   message_.id = id;
-  last_update_time_ = ros::Time::now();
+  last_update_time_ = node_->get_clock()->now();
 }
 
 void Task::setChildID(std::shared_ptr<Task> task, std::string id)
@@ -120,12 +128,12 @@ const TaskList& Task::children() const
   return children_;
 }
 
-ros::Time Task::lastUpdateTime() const
+rclcpp::Time Task::lastUpdateTime() const
 {
   return last_update_time_;  
 }
 
-bool Task::getFirstPose(geometry_msgs::PoseStamped& pose, bool recursive) const
+bool Task::getFirstPose(geometry_msgs::msg::PoseStamped& pose, bool recursive) const
 {
   if(!message_.poses.empty())
   {
@@ -137,7 +145,7 @@ bool Task::getFirstPose(geometry_msgs::PoseStamped& pose, bool recursive) const
   return false;
 }
 
-bool Task::getLastPose(geometry_msgs::PoseStamped& pose, bool recursive) const
+bool Task::getLastPose(geometry_msgs::msg::PoseStamped& pose, bool recursive) const
 {
   if(!message_.poses.empty())
   {
