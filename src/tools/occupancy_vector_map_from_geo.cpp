@@ -1,63 +1,78 @@
-#include <ros/ros.h>
+#include "rclcpp/rclcpp.hpp"
 
-#include <project11_nav_msgs/GeoOccupancyVectorMap.h>
-#include <project11_nav_msgs/OccupancyVectorMap.h>
+#include "project11_nav_msgs/msg/geo_occupancy_vector_map.hpp"
+#include "project11_nav_msgs/msg/occupancy_vector_map.hpp"
 
-#include <project11/tf2_utils.h>
+#include "project11/tf2_utils.h"
 
-ros::Publisher output_publisher;
 
-std::shared_ptr<project11::Transformations> transformations;
-std::string frame_id = "map";
-
-void callback(const project11_nav_msgs::GeoOccupancyVectorMapConstPtr& message)
+class OccupancyVectorMapFromGeo : public rclcpp::Node
 {
-  if(transformations->canTransform(frame_id, message->header.stamp))
+public:
+  OccupancyVectorMapFromGeo()
+  : Node("occupancy_vector_map_from_geo")
   {
-    project11_nav_msgs::OccupancyVectorMap output;
-    output.header.frame_id = frame_id;
-    output.header.seq = message->header.seq;
-    output.header.stamp = message->header.stamp;
+    output_publisher_ = create_publisher<project11_nav_msgs::msg::OccupancyVectorMap>("output", 1);
 
-    output.default_occupancy_probability = message->default_occupancy_probability;
+    input_subscription_ = create_subscription<project11_nav_msgs::msg::GeoOccupancyVectorMap>("input", 1, std::bind(&OccupancyVectorMapFromGeo::callback, this, std::placeholders::_1));
 
-    output.bounds.min_pt = transformations->wgs84_to_map(message->bounds.min_pt, frame_id, message->header.stamp);
-    output.bounds.max_pt = transformations->wgs84_to_map(message->bounds.max_pt, frame_id, message->header.stamp);
-
-    for(const auto& geo_polygon: message->polygons)
-    {
-      project11_nav_msgs::OccupancyPolygon polygon;
-      polygon.occupancy_probability = geo_polygon.occupancy_probability;
-      for(const auto& gp: geo_polygon.polygon.points)
-      { 
-        auto p = transformations->wgs84_to_map(gp, frame_id, message->header.stamp);
-        geometry_msgs::Point32 p32;
-        p32.x = p.x;
-        p32.y = p.y;
-        p32.z = p.z;
-        polygon.polygon.points.push_back(p32);
-      }
-      output.polygons.push_back(polygon);
-    }
-
-    output_publisher.publish(output);
+    declare_parameter("frame_id", frame_id_);
   }
-}
+
+private:
+
+  void callback(const project11_nav_msgs::msg::GeoOccupancyVectorMap::UniquePtr& message)
+  {
+    frame_id_ = get_parameter("frame_id").as_string();
+
+    if(!transformations_)
+      transformations_ = std::make_shared<project11::Transformations>(this->shared_from_this());
+  
+
+    if(transformations_->canTransform(frame_id_, message->header.stamp))
+    {
+      project11_nav_msgs::msg::OccupancyVectorMap output;
+      output.header.frame_id = frame_id_;
+      output.header.stamp = message->header.stamp;
+
+      output.default_occupancy_probability = message->default_occupancy_probability;
+
+      output.bounds.min_pt = transformations_->wgs84_to_map(message->bounds.min_pt, frame_id_, message->header.stamp);
+      output.bounds.max_pt = transformations_->wgs84_to_map(message->bounds.max_pt, frame_id_, message->header.stamp);
+
+      for(const auto& geo_polygon: message->polygons)
+      {
+        project11_nav_msgs::msg::OccupancyPolygon polygon;
+        polygon.occupancy_probability = geo_polygon.occupancy_probability;
+        for(const auto& gp: geo_polygon.polygon.points)
+        { 
+          auto p = transformations_->wgs84_to_map(gp, frame_id_, message->header.stamp);
+          geometry_msgs::msg::Point32 p32;
+          p32.x = p.x;
+          p32.y = p.y;
+          p32.z = p.z;
+          polygon.polygon.points.push_back(p32);
+        }
+        output.polygons.push_back(polygon);
+      }
+
+      output_publisher_->publish(output);
+    }
+  }
+
+  rclcpp::Publisher<project11_nav_msgs::msg::OccupancyVectorMap>::SharedPtr output_publisher_;
+  rclcpp::Subscription<project11_nav_msgs::msg::GeoOccupancyVectorMap>::SharedPtr input_subscription_;
+
+  std::shared_ptr<project11::Transformations> transformations_;
+  std::string frame_id_ = "map";
+};
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "occupancy_vector_map_from_geo");
-  ros::NodeHandle nh("~");
-
-  frame_id = nh.param("frame_id", frame_id);
-  
-  transformations = std::make_shared<project11::Transformations>();
-
-  output_publisher = nh.advertise<project11_nav_msgs::OccupancyVectorMap>("output", 1, true);
-
-  auto input_subscriber = nh.subscribe("input", 1, &callback);
-
-  ros::spin();
-
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<OccupancyVectorMapFromGeo>());
+  rclcpp::shutdown();
   return 0;
 }
+
+

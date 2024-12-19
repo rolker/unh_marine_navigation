@@ -194,17 +194,24 @@ ament_target_dependencies(navigator
 
 
 
-# add_executable(occupancy_vector_map_from_geo src/tools/occupancy_vector_map_from_geo.cpp)
-# target_link_libraries(occupancy_vector_map_from_geo ${catkin_LIBRARIES})
-# add_dependencies(occupancy_vector_map_from_geo ${catkin_EXPORTED_TARGETS})
+add_executable(occupancy_vector_map_from_geo src/tools/occupancy_vector_map_from_geo.cpp)
+target_link_libraries(occupancy_vector_map_from_geo
+  project11::project11
+  ${project11_nav_msgs_TARGETS}
+  rclcpp::rclcpp
+)
 
-# add_executable(occupancy_grid_from_vector_map src/tools/occupancy_grid_from_vector_map.cpp)
-# target_link_libraries(occupancy_grid_from_vector_map ${catkin_LIBRARIES})
-# add_dependencies(occupancy_grid_from_vector_map ${catkin_EXPORTED_TARGETS})
+add_executable(occupancy_grid_from_vector_map src/tools/occupancy_grid_from_vector_map.cpp)
+target_include_directories(occupancy_grid_from_vector_map PRIVATE ${grid_map_ros_INCLUDE_DIRS})
+target_link_libraries(occupancy_grid_from_vector_map
+  ${grid_map_ros_LIBRARIES}
+  project11::project11
+  ${project11_nav_msgs_TARGETS}
+  rclcpp::rclcpp
+)
 
 
-
-install(TARGETS navigator
+install(TARGETS navigator occupancy_vector_map_from_geo occupancy_grid_from_vector_map
   DESTINATION lib/${PROJECT_NAME})
 
 install(
