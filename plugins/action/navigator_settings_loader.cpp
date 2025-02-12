@@ -19,9 +19,9 @@ NavigatorSettingsLoader::NavigatorSettingsLoader(const std::string& name, const 
 BT::PortsList NavigatorSettingsLoader::providedPorts()
 {
   return {
-    BT::OutputPort<double>("waypoint_reached_distance"),
-    BT::OutputPort<double>("survey_lead_in_distance"),
-    BT::OutputPort<double>("maximum_cross_track_error"),
+    BT::OutputPort<double>("waypoint_reached_distance", "{waypoint_reached_distance}", "Distance in meters to consider the waypoint reached"),
+    BT::OutputPort<double>("survey_lead_in_distance", "{survey_lead_in_distance}", "Distance in meters to lead into lines"),
+    BT::OutputPort<double>("maximum_cross_track_error", "{maximum_cross_track_error}", "Maximum cross track error in meters beyond which the robot may be considered off course"),
   };
 }
 

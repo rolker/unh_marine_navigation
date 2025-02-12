@@ -14,9 +14,9 @@ SetPoseFromTask::SetPoseFromTask(const std::string& name, const BT::NodeConfig& 
 BT::PortsList SetPoseFromTask::providedPorts()
 {
   return {
-    BT::InputPort<TaskPtr>("task"),
-    BT::InputPort<int>("pose_index"),
-    BT::OutputPort<geometry_msgs::msg::PoseStamped>("pose")
+    BT::InputPort<TaskPtr>("task", "{current_task}", "Task to get pose from"),
+    BT::InputPort<int>("pose_index", "0", "Index of the pose to set as output pose"),
+    BT::OutputPort<geometry_msgs::msg::PoseStamped>("pose", "{goal_pose}", "Pose to set")
   };
 }
 

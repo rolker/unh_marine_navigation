@@ -2,6 +2,7 @@
 #define PROJECT11_NAVIGATION_ACTIONS_TASK_LIST_UPDATER_H
 
 #include <behaviortree_cpp/bt_factory.h>
+#include "rclcpp/rclcpp.hpp"
 
 namespace project11_navigation
 {
@@ -14,6 +15,9 @@ public:
   static BT::PortsList providedPorts();
 
   BT::NodeStatus tick() override;
+
+private:
+  rclcpp::Node::SharedPtr node_;
 };
 
 } // namespace project11_navigation

@@ -14,7 +14,7 @@ GetTaskDataString::GetTaskDataString(const std::string& name, const BT::NodeConf
 BT::PortsList GetTaskDataString::providedPorts()
 {
   return {
-    BT::InputPort<std::shared_ptr<Task> >("task"),
+    BT::InputPort<std::shared_ptr<Task> >("task", "{task}", "Task to get data from"),
     BT::InputPort<std::string>("key"),
     BT::InputPort<std::string>("default_value"),
     BT::OutputPort<std::string>("value")

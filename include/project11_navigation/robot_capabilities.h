@@ -2,6 +2,7 @@
 #define PROJECT11_NAVIGATION_ROBOT_CAPABILITIES_H
 
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp_lifecycle/lifecycle_node.hpp"
 #include "geometry_msgs/msg/accel.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "geometry_msgs/msg/polygon.hpp"
@@ -12,7 +13,7 @@ namespace project11_navigation
 /// Motion limits of a robot
 struct RobotCapabilities
 {
-  RobotCapabilities(rclcpp::Node::SharedPtr node);
+  RobotCapabilities(rclcpp_lifecycle::LifecycleNode::WeakPtr node);
 
   geometry_msgs::msg::Twist min_velocity;
   geometry_msgs::msg::Twist max_velocity;
@@ -46,7 +47,7 @@ struct RobotCapabilities
   geometry_msgs::msg::Polygon footprint;
 
   /// Radius used for collision checking
-  double radius;
+  double radius = 0.0;
 };
 
 }

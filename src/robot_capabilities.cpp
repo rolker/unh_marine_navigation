@@ -1,11 +1,12 @@
 #include "project11_navigation/robot_capabilities.h"
 #include "project11_navigation/utilities.h"
 #include "rclcpp/rclcpp.hpp"
+#include "nav2_util/array_parser.hpp"
 
 namespace project11_navigation
 {
 
-RobotCapabilities::RobotCapabilities(rclcpp::Node::SharedPtr node)
+RobotCapabilities::RobotCapabilities(rclcpp_lifecycle::LifecycleNode::WeakPtr node_ptr)
 {
   // XmlRpc::XmlRpcValue value;
   // if(nh.getParam("robot/turn_radius", value))
@@ -16,33 +17,51 @@ RobotCapabilities::RobotCapabilities(rclcpp::Node::SharedPtr node)
   //   else
   //     nh.getParam("robot/turn_radius", turn_radius_map[0.0]);
   // }
-  node->declare_parameter("robot/turn_radius", turn_radius);
+  auto node = node_ptr.lock();
+  node->declare_parameter("robot.turn_radius", turn_radius);
+  node->get_parameter("robot.turn_radius", turn_radius);
 
-  declareLinearAngularParameters(node, "robot/max_velocity", max_velocity, max_velocity);
-  declareLinearAngularParameters(node, "robot/min_velocity", min_velocity, min_velocity);
-  declareLinearAngularParameters(node, "robot/default_velocity", default_velocity, default_velocity);
+  declareLinearAngularParameters(node, "robot.max_velocity", max_velocity, max_velocity);
+  declareLinearAngularParameters(node, "robot.min_velocity", min_velocity, min_velocity);
+  declareLinearAngularParameters(node, "robot.default_velocity", default_velocity, default_velocity);
 
-  declareLinearAngularParameters(node, "robot/max_acceleration", max_acceleration, max_acceleration);
-  declareLinearAngularParameters(node, "robot/default_acceleration", default_acceleration, default_acceleration);
+  declareLinearAngularParameters(node, "robot.max_acceleration", max_acceleration, max_acceleration);
+  declareLinearAngularParameters(node, "robot.default_acceleration", default_acceleration, default_acceleration);
 
-  declareLinearAngularParameters(node, "robot/max_deceleration", max_deceleration, max_deceleration);
-  declareLinearAngularParameters(node, "robot/default_deceleration", default_deceleration, default_deceleration);
+  declareLinearAngularParameters(node, "robot.max_deceleration", max_deceleration, max_deceleration);
+  declareLinearAngularParameters(node, "robot.default_deceleration", default_deceleration, default_deceleration);
 
-  std::vector<double> footprint_vector;
-  node->declare_parameter("robot/footprint", footprint_vector);
-  for(size_t i = 0; i < footprint_vector.size()-1; i += 2)
+  std::string footprint_string = "[[1.0, 0.0], [0.0, 1.0], [-1.0, 1.0], [-1.0, -1.0], [0.0, -1.0], [1.0, 0.0]]";
+  node->declare_parameter("robot.footprint", footprint_string);
+  node->get_parameter("robot.footprint", footprint_string);
+
+  std::string error_string;
+  auto footprint_vector = nav2_util::parseVVF(footprint_string, error_string);
+  if(!error_string.empty())
   {
-    geometry_msgs::msg::Point32 p;
-    p.x = footprint_vector[i];
-    p.y = footprint_vector[i+1];
-    footprint.points.push_back(p);
+    RCLCPP_ERROR_STREAM(node->get_logger(), "Invalid footprint: " << error_string);
+    return;
+  } 
+  else
+  {
+    for(auto &point_vector: footprint_vector)
+    {
+      if(point_vector.size() != 2)
+      {
+        RCLCPP_ERROR_STREAM(node->get_logger(), "Invalid footprint: " << footprint_string);
+        continue;
+      }
+      geometry_msgs::msg::Point32 p;
+      p.x = point_vector[0];
+      p.y = point_vector[1];
+      footprint.points.push_back(p);
+    }
   }
   for(auto p: footprint.points)
     radius = std::max(radius, sqrt(p.x*p.x + p.y*p.y));
 
-  node->declare_parameter("robot/radius", radius);
-  node->get_parameter("robot/radius", radius);
-
+  node->declare_parameter("robot.radius", radius);
+  node->get_parameter("robot.radius", radius);
 }
 
 double RobotCapabilities::getTurnRadiusAtSpeed(double speed) const

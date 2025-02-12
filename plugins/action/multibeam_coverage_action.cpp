@@ -92,9 +92,9 @@ MultibeamCoverageActionSetGoal::MultibeamCoverageActionSetGoal(const std::string
 BT::PortsList MultibeamCoverageActionSetGoal::providedPorts()
 {
   return {
-    BT::InputPort<std::shared_ptr<Task> >("task"),
+    BT::InputPort<std::shared_ptr<Task> >("task", "{task}", "Survey area Task describing area to survey"),
     BT::InputPort<std::string>("ros_action"),
-    BT::OutputPort<std::shared_ptr<MultibeamCoverageActionClient> >("action_client")
+    BT::OutputPort<std::shared_ptr<MultibeamCoverageActionClient> >("action_client", "{multibeam_coverage_action_client}", "Multibeam coverage action client")
   };
 }
 
@@ -131,8 +131,8 @@ MultibeamCoverageActionUpdateTask::MultibeamCoverageActionUpdateTask(const std::
 BT::PortsList MultibeamCoverageActionUpdateTask::providedPorts()
 {
   return {
-    BT::InputPort<std::shared_ptr<MultibeamCoverageActionClient> >("action_client"),
-    BT::InputPort<std::shared_ptr<Task> >("task"),
+    BT::InputPort<std::shared_ptr<MultibeamCoverageActionClient> >("action_client", "{multibeam_coverage_action_client}", "Multibeam coverage action client"),
+    BT::InputPort<std::shared_ptr<Task> >("task", "{task}", "Survey area Task describing area to survey"),
   };
 }
 
@@ -182,7 +182,7 @@ MultibeamCoverageActionCancel::MultibeamCoverageActionCancel(const std::string& 
 BT::PortsList MultibeamCoverageActionCancel::providedPorts()
 {
   return {
-    BT::InputPort<std::shared_ptr<MultibeamCoverageActionClient> >("action_client")
+    BT::InputPort<std::shared_ptr<MultibeamCoverageActionClient> >("action_client", "{multibeam_coverage_action_client}", "Multibeam coverage action client")
   };
 }
 
@@ -209,7 +209,7 @@ MultibeamCoverageActionDoneCondition::MultibeamCoverageActionDoneCondition(const
 BT::PortsList MultibeamCoverageActionDoneCondition::providedPorts()
 {
   return {
-    BT::InputPort<std::shared_ptr<MultibeamCoverageActionClient> >("action_client")
+    BT::InputPort<std::shared_ptr<MultibeamCoverageActionClient> >("action_client", "{multibeam_coverage_action_client}", "Multibeam coverage action client")
   };
 }
 

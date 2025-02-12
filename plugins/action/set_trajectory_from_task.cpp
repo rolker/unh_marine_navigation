@@ -15,9 +15,9 @@ SetTrajectoryFromTask::SetTrajectoryFromTask(const std::string& name, const BT::
 BT::PortsList SetTrajectoryFromTask::providedPorts()
 {
   return {
-    BT::InputPort<TaskPtr>("task"),
-    BT::OutputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("trajectory"),
-    BT::OutputPort<int>("current_segment")
+    BT::InputPort<TaskPtr>("task", "{current_task}", "Task to get trajectory from"),
+    BT::OutputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("trajectory", "{current_navigation_trajectory}", "Trajectory to set"),
+    BT::OutputPort<int>("current_segment", "{current_segment}", "Index of the current segment of the trajectory"),
   };
 }
 

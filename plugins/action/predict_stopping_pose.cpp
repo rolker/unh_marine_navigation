@@ -17,9 +17,9 @@ PredictStoppingPose::PredictStoppingPose(const std::string& name, const BT::Node
 BT::PortsList PredictStoppingPose::providedPorts()
 {
   return {
-    BT::InputPort<nav_msgs::msg::Odometry>("odometry"),
-    BT::InputPort<geometry_msgs::msg::Accel>("deceleration"),
-    BT::OutputPort<geometry_msgs::msg::PoseStamped>("pose")
+    BT::InputPort<nav_msgs::msg::Odometry>("odometry", "{odometry}", "Robot's current odometry state"),
+    BT::InputPort<geometry_msgs::msg::Accel>("deceleration", "{robot_default_deceleration}", "Deceleration to use to predict stopping pose"),
+    BT::OutputPort<geometry_msgs::msg::PoseStamped>("pose", "{pose}", "Predicted stopping pose")
   };
 }
 

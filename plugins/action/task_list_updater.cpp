@@ -7,14 +7,14 @@ namespace project11_navigation
 TaskListUpdater::TaskListUpdater(const std::string& name, const BT::NodeConfig& config):
   BT::SyncActionNode(name, config)
 {
-
+  node_ = config.blackboard->template get<rclcpp::Node::SharedPtr>("node");
 }
 
 BT::PortsList TaskListUpdater::providedPorts()
 {
   return {
-    BT::BidirectionalPort<std::shared_ptr<std::vector<project11_nav_msgs::msg::TaskInformation> > >("task_messages"),
-    BT::BidirectionalPort<std::shared_ptr<TaskList> >("task_list")
+    BT::BidirectionalPort<std::shared_ptr<std::vector<project11_nav_msgs::msg::TaskInformation> > >("task_messages", "{task_messages}", "Pointer to a vector of new TaskInformation messages"),
+    BT::BidirectionalPort<std::shared_ptr<TaskList> >("task_list", "{task_list}", "Pointer to the task list to update")
   };
 }
 
@@ -37,7 +37,7 @@ BT::NodeStatus TaskListUpdater::tick()
         task_list = std::make_shared<TaskList>();
         setOutput("task_list", task_list);
       }
-      task_list->update(*task_messages.value());
+      task_list->update(*task_messages.value(), node_);
       return BT::NodeStatus::SUCCESS;
     }
   }

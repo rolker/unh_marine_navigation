@@ -15,8 +15,6 @@ public:
   static BT::PortsList providedPorts();
 
   BT::NodeStatus tick() override;
-private:
-  rclcpp::Node::SharedPtr node_;
 };
 
 } // namespace project11_navigation

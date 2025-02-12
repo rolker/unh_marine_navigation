@@ -14,10 +14,10 @@ GoalReached::GoalReached(const std::string& name, const BT::NodeConfig& config):
 BT::PortsList GoalReached::providedPorts()
 {
   return {
-    BT::InputPort<nav_msgs::msg::Odometry>("odometry"),
-    BT::InputPort<geometry_msgs::msg::PoseStamped>("goal_pose"),
-    BT::InputPort<double>("waypoint_reached_distance"),
-    BT::InputPort<double>("heading_accuracy")
+    BT::InputPort<nav_msgs::msg::Odometry>("odometry", "{odometry}", "Robot's current odometry state"),
+    BT::InputPort<geometry_msgs::msg::PoseStamped>("goal_pose", "{goal_pose}", "Pose to compare current state with"),
+    BT::InputPort<double>("waypoint_reached_distance", "{waypoint_reached_distance}", "Distance in meters to consider the waypoint reached"),
+    BT::InputPort<double>("heading_accuracy", "180", "How much can the heading can vary in degrees. 180 means it doesn't matter.")
   };
 }
 

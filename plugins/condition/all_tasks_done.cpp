@@ -14,7 +14,7 @@ AllTasksDone::AllTasksDone(const std::string& name, const BT::NodeConfig& config
 BT::PortsList AllTasksDone::providedPorts()
 {
   return {
-    BT::InputPort<TaskListPtr>("task_list")
+    BT::InputPort<TaskListPtr>("task_list", "{task_list}", "List of tasks to check")
   };
 }
 

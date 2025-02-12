@@ -14,10 +14,10 @@ UpdateCurrentTask::UpdateCurrentTask(const std::string& name, const BT::NodeConf
 BT::PortsList UpdateCurrentTask::providedPorts()
 {
   return {
-    BT::InputPort<std::shared_ptr<TaskList> >("task_list"),
-    BT::OutputPort<std::shared_ptr<Task> >("current_task"),
-    BT::OutputPort<std::string>("current_task_type"),
-    BT::OutputPort<std::string>("current_task_id"),
+    BT::InputPort<std::shared_ptr<TaskList> >("task_list", "{task_list}", "List of tasks to check"),
+    BT::OutputPort<std::shared_ptr<Task> >("current_task", "{current_task}", "Pointer to update with current task"),
+    BT::OutputPort<std::string>("current_task_type", "{current_task_type}", "Type of the current task"),
+    BT::OutputPort<std::string>("current_task_id", "{current_task_id}", "ID of the current task"),
   };
 }
 

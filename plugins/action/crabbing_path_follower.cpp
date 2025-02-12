@@ -21,14 +21,14 @@ CrabbingPathFollower::CrabbingPathFollower(const std::string& name, const BT::No
 BT::PortsList CrabbingPathFollower::providedPorts()
 {
   return {
-    BT::InputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_path"),
-    BT::InputPort<int>("current_navigation_segment"),
-    BT::InputPort<nav_msgs::msg::Odometry>("odometry"),
-    BT::InputPort<std::shared_ptr<tf2_ros::Buffer> >("tf_buffer"),
-    BT::InputPort<double>("target_speed"),
-    BT::InputPort<std::string>("piloting_mode"),
-    BT::OutputPort<geometry_msgs::msg::TwistStamped>("command_velocity"),
-    BT::BidirectionalPort<std::shared_ptr<project11::PID> >("pid"),
+    BT::InputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_path", "{navigation_path}", "Path to follow"),
+    BT::InputPort<int>("current_navigation_segment", "{current_navigation_segment}", "Current segment of the path"),
+    BT::InputPort<nav_msgs::msg::Odometry>("odometry", "{odometry}", "Robot's current odometry state"),
+    BT::InputPort<std::shared_ptr<tf2_ros::Buffer> >("tf_buffer", "{tf_buffer}", "Transform buffer"),
+    BT::InputPort<double>("target_speed", "{target_speed}", "Target speed"),
+    BT::InputPort<std::string>("piloting_mode", "{piloting_mode}", "Piloting mode"),
+    BT::OutputPort<geometry_msgs::msg::TwistStamped>("command_velocity", "{command_velocity}", "Output commanded velocity"),
+    BT::BidirectionalPort<std::shared_ptr<project11::PID> >("pid", "{path_follower_pid}", "PID controller for crabbing"),
   };
 }
 

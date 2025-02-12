@@ -7,7 +7,7 @@
 #include "tf2_ros/buffer.h"
 #include "project11_navigation/environment.h"
 #include "project11_navigation/robot.h"
-
+#include "project11_navigation/robot_capabilities.h"
 #include <mutex>
 
 namespace project11_navigation
@@ -25,6 +25,7 @@ public:
   const Environment& environment() const;
   const Robot& robot() const;
   Robot& robot();
+  const RobotCapabilities& robot_capabilities() const;
 
   std::shared_ptr<tf2_ros::Buffer> tfBuffer() const;
   geometry_msgs::msg::PoseStamped getPoseInFrame(std::string frame_id);
@@ -33,6 +34,7 @@ public:
 private:
   Environment environment_;
   Robot robot_;
+  RobotCapabilities robot_capabilities_;
 
   rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;

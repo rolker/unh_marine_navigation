@@ -13,7 +13,7 @@ ClearPath::ClearPath(const std::string& name, const BT::NodeConfig& config):
 BT::PortsList ClearPath::providedPorts()
 {
   return {
-    BT::OutputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_path")
+    BT::OutputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_path", "{navigation_path}", "Empty shared pointer to a path to follow")
   };
 }
 

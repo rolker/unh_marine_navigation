@@ -1,3 +1,4 @@
+#include "project11_navigation/context.h"
 #include "project11_navigation/plugins/action/robot_capabilities_loader.h"
 #include <project11_navigation/robot_capabilities.h>
 #include <project11_navigation/utilities.h>
@@ -8,12 +9,12 @@ namespace project11_navigation
 RobotCapabilitiesLoader::RobotCapabilitiesLoader(const std::string& name, const BT::NodeConfig& config):
   BT::SyncActionNode(name, config)
 {
-  node_ = config.blackboard->template get<rclcpp::Node::SharedPtr>("node");
 }
 
 BT::PortsList RobotCapabilitiesLoader::providedPorts()
 {
   return {
+    BT::InputPort<std::shared_ptr<Context> >("context", "{context}", "Navigation context"),
     BT::OutputPort<double>("turn_radius", "{robot_turn_radius}", "Default turn radius"),
     BT::OutputPort<geometry_msgs::msg::Twist>("maximum_velocity", "{robot_maximum_velocity}", ""),
     BT::OutputPort<geometry_msgs::msg::Twist>("minimum_velocity", "{robot_minimum_velocity}", ""),
@@ -33,7 +34,13 @@ BT::PortsList RobotCapabilitiesLoader::providedPorts()
 
 BT::NodeStatus RobotCapabilitiesLoader::tick()
 {
-  RobotCapabilities rc(node_);
+  auto context = getInput<std::shared_ptr<Context> >("context");
+  if(!context)
+  {
+    throw BT::RuntimeError(name(), " missing required input [path]: ", context.error() );
+  }
+
+  const auto& rc = context.value()->robot_capabilities();
   setOutput("turn_radius", rc.getTurnRadiusAtSpeed(rc.default_velocity.linear.x));
   setOutput("maximum_velocity", rc.max_velocity);
   setOutput("minimum_velocity", rc.min_velocity);

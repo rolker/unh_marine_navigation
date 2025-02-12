@@ -14,7 +14,7 @@ SetTaskDone::SetTaskDone(const std::string& name, const BT::NodeConfig& config):
 BT::PortsList SetTaskDone::providedPorts()
 {
   return {
-    BT::InputPort<TaskPtr>("task"),
+    BT::InputPort<TaskPtr>("task", "{task}", "Task to set as done"),
   };
 }
 

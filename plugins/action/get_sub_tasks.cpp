@@ -14,8 +14,8 @@ GetSubTasks::GetSubTasks(const std::string& name, const BT::NodeConfig& config):
 BT::PortsList GetSubTasks::providedPorts()
 {
   return {
-    BT::InputPort<std::shared_ptr<Task> >("task"),
-    BT::OutputPort<std::shared_ptr<TaskList> >("sub_tasks"),
+    BT::InputPort<std::shared_ptr<Task> >("task", "{current_task}", "Task to get sub tasks from"),
+    BT::OutputPort<std::shared_ptr<TaskList> >("sub_tasks", "{current_sub_tasks}", "Sub tasks of the input task"),
   };
 }
 

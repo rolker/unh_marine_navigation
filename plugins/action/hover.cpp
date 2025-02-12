@@ -21,15 +21,14 @@ Hover::Hover(const std::string& name, const BT::NodeConfig& config):
 BT::PortsList Hover::providedPorts()
 {
   return {
-    BT::InputPort<nav_msgs::msg::Odometry>("odometry"),
-    BT::OutputPort<geometry_msgs::msg::TwistStamped>("command_velocity"),
-    BT::InputPort<double>("minimum_distance"),
-    BT::InputPort<double>("maximum_distance"),
-    BT::InputPort<double>("maximum_speed"),
-    BT::InputPort<std::shared_ptr<tf2_ros::Buffer> >("tf_buffer"),
-    BT::InputPort<geometry_msgs::msg::PoseStamped>("goal_pose"),
-    BT::InputPort<std::shared_ptr<visualization_msgs::msg::MarkerArray> >("marker_array"),
-
+    BT::InputPort<nav_msgs::msg::Odometry>("odometry", "{odometry}", "Robot's current odometry state"),
+    BT::OutputPort<geometry_msgs::msg::TwistStamped>("command_velocity", "{command_velocity}", "Output commanded velocity"),
+    BT::InputPort<double>("minimum_distance", "{hover_minimum_distance}", "Distance within which robot is deemed at the target"),
+    BT::InputPort<double>("maximum_distance", "{hover_maximum_distance}", "Distance at which robot uses maximum speed to get to the target"),
+    BT::InputPort<double>("maximum_speed", "{hover_maximum_speed}", "Maximum speed to use to get to the target"),
+    BT::InputPort<std::shared_ptr<tf2_ros::Buffer> >("tf_buffer", "{tf_buffer}", "Transform buffer"),
+    BT::InputPort<geometry_msgs::msg::PoseStamped>("goal_pose", "{goal_pose}", "Goal pose for the robot"),
+    BT::InputPort<std::shared_ptr<visualization_msgs::msg::MarkerArray> >("marker_array", "{marker_array}", "Marker array to add visualization markers to"),
   };
 }
 

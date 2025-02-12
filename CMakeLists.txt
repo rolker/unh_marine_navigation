@@ -63,6 +63,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
 target_link_libraries(${PROJECT_NAME} PRIVATE
   dubins_curves::dubins_curves
   ${grid_map_ros_LIBRARIES}
+  nav2_util::nav2_util_core
   rclcpp_action::rclcpp_action
   tf2_ros::tf2_ros
   rclcpp::rclcpp
@@ -221,6 +222,8 @@ install(
   RUNTIME DESTINATION bin)
 
 install(DIRECTORY behavior_trees DESTINATION share/${PROJECT_NAME})
+
+install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
 

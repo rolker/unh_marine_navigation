@@ -16,15 +16,15 @@ VisualizeTrajectory::VisualizeTrajectory(const std::string& name, const BT::Node
 BT::PortsList VisualizeTrajectory::providedPorts()
 {
   return {
-    BT::InputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("trajectory"),
-    BT::InputPort<std::shared_ptr<visualization_msgs::msg::MarkerArray> >("marker_array"),
-    BT::InputPort<std::string>("namespace"),
-    BT::InputPort<geometry_msgs::msg::PoseStamped>("current_pose"),
-    BT::InputPort<double>("scale"),
-    BT::InputPort<std_msgs::msg::ColorRGBA>("past_color"),
-    BT::InputPort<std_msgs::msg::ColorRGBA>("current_color"),
-    BT::InputPort<std_msgs::msg::ColorRGBA>("future_color"),
-    BT::InputPort<int>("current_segment"),
+    BT::InputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("trajectory", "{navigation_trajectory}", "Trajectory to visualize"),
+    BT::InputPort<std::shared_ptr<visualization_msgs::msg::MarkerArray> >("marker_array", "{marker_array}", "Pointer to MarkerArray to add visualization markers to"),
+    BT::InputPort<std::string>("namespace", "trajectory", "Used in ns field of Markers"),
+    BT::InputPort<geometry_msgs::msg::PoseStamped>("current_pose", "{current_pose}", "Current pose of the robot"),
+    BT::InputPort<double>("scale", "1.0", "Display size"),
+    BT::InputPort<std_msgs::msg::ColorRGBA>("past_color", "0.25, 0.25, 0.25, 0.5", "Color for past segments"),
+    BT::InputPort<std_msgs::msg::ColorRGBA>("current_color", "0.35, 0.35, 0.5, 0.75", "Color for current segment"),
+    BT::InputPort<std_msgs::msg::ColorRGBA>("future_color", ".25, .25, .4, .5", "Color for future segments"),
+    BT::InputPort<int>("current_segment", "{current_navigation_segment}", "Index of the current segment of the trajectory"),
   };
 }
 

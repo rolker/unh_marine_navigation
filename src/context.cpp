@@ -7,6 +7,7 @@ namespace project11_navigation
 Context::Context(rclcpp_lifecycle::LifecycleNode::WeakPtr node_ptr):
   environment_(node_ptr),
   robot_(node_ptr),
+  robot_capabilities_(node_ptr),
   node_(node_ptr)
 {
   auto node = node_.lock();
@@ -28,6 +29,12 @@ Robot& Context::robot()
 {
   return robot_;
 }
+
+const RobotCapabilities& Context::robot_capabilities() const
+{
+  return robot_capabilities_;
+}
+
 
 rclcpp_lifecycle::LifecycleNode::WeakPtr Context::node() const
 {

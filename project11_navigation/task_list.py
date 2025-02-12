@@ -7,6 +7,7 @@ from project11_navigation.task import Task, parentID
 from project11_nav_msgs.msg import TaskInformation
 
 import copy
+import rclpy
 
 def isTopLevel(task_id: str) -> bool:
   '''
@@ -20,7 +21,8 @@ class TaskList:
   Keeps track of tasks and helps with relationships
   '''
 
-  def __init__(self) -> None:
+  def __init__(self, node: rclpy.node.Node) -> None:
+    self.node = node
     self.tasks: Dict[str, Task] = {}
     self.task_order_ids: List[str] = []
 
@@ -66,7 +68,7 @@ class TaskList:
       self.task_order_ids.insert(0, task_information.id)
     else:
       self.task_order_ids.append(task_information.id)
-    return Task(task_information, self)
+    return Task(task_information, self, self.node)
 
   def listMessages(self) -> List[TaskInformation]:
     '''

@@ -14,7 +14,7 @@ GetTaskDataDouble::GetTaskDataDouble(const std::string& name, const BT::NodeConf
 BT::PortsList GetTaskDataDouble::providedPorts()
 {
   return {
-    BT::InputPort<std::shared_ptr<Task> >("task"),
+    BT::InputPort<std::shared_ptr<Task> >("task", "{task}", "Task to get data from"),
     BT::InputPort<std::string>("key"),
     BT::InputPort<double>("default_value"),
     BT::OutputPort<double>("value")

@@ -4,67 +4,67 @@
   <BehaviorTree ID="FollowPath">
     <ReactiveSequence>
       <Script code="debug := false"/>
-      <UpdateCurrentSegment navigation_path="{navigation_path}"
-                            odometry="{odometry}"
-                            tf_buffer="{tf_buffer}"
-                            current_segment="{current_navigation_segment}"
-                            segment_length="{current_segment_length}"
+      <UpdateCurrentSegment segment_count="{navigation_path_segment_count}"
                             cross_track_error="{current_segment_cross_track_error}"
+                            segment_length="{current_segment_length}"
+                            current_segment="{current_navigation_segment}"
                             along_track_progress="{current_segment_along_track_progress}"
-                            segment_count="{navigation_path_segment_count}"/>
-      <VisualizeTrajectory trajectory="{navigation_path}"
-                           marker_array="{marker_array}"
-                           namespace="transit"
-                           scale="1.0"
-                           past_color=".25, .25, .25, .5"
-                           current_color=".35, .35, .5, .75"
+                            tf_buffer="{tf_buffer}"
+                            odometry="{odometry}"
+                            navigation_path="{navigation_path}"/>
+      <VisualizeTrajectory current_segment="{current_navigation_segment}"
                            future_color=".25, .25, .4, .5"
-                           current_segment="{current_navigation_segment}"
-                           current_pose="{current_pose}"/>
-      <AdjustPath path="{navigation_path}"
-                  local_costmap="{local_costmap}"
-                  turn_radius="{robot_turn_radius}"
-                  adjusted_path="{adjusted_path}"
-                  current_segment="{current_navigation_segment}"
-                  odometry="{odometry}"
-                  tf_buffer="{tf_buffer}"
-                  adjusted_current_segment="{adjusted_current_segment}"
-                  adjusted_cross_track_error="{adjusted_cross_track_error}"
-                  adjusted_along_track_progress="{adjusted_along_track_progress}"
-                  adjusted_segment_count="{adjusted_segment_count}"
-                  along_track_progress="{current_segment_along_track_progress}"/>
-      <VisualizeTrajectory name="VisualizeAdjustedTrajectory"
-                           trajectory="{adjusted_path}"
-                           marker_array="{marker_array}"
-                           namespace="adjusted_transit"
-                           scale="2.0"
-                           past_color=".35, .25, .15, .5"
-                           current_color=".25, .55, .5, .75"
-                           future_color=".15, .45, .2, .5"
-                           current_segment="{adjusted_current_segment}"
+                           scale="1.0"
                            current_pose="{current_pose}"
+                           current_color=".35, .35, .5, .75"
+                           namespace="transit"
+                           past_color=".25, .25, .25, .5"
+                           marker_array="{marker_array}"
+                           trajectory="{navigation_path}"/>
+      <AdjustPath adjusted_cross_track_error="{adjusted_cross_track_error}"
+                  adjusted_current_segment="{adjusted_current_segment}"
+                  adjusted_segment_count="{adjusted_segment_count}"
+                  adjusted_path="{adjusted_path}"
+                  local_costmap="{local_costmap}"
+                  odometry="{odometry}"
+                  turn_radius="{robot_turn_radius}"
+                  tf_buffer="{tf_buffer}"
+                  along_track_progress="{current_segment_along_track_progress}"
+                  current_segment="{current_navigation_segment}"
+                  adjusted_along_track_progress="{adjusted_along_track_progress}"
+                  path="{navigation_path}"/>
+      <VisualizeTrajectory name="VisualizeAdjustedTrajectory"
+                           current_segment="{adjusted_current_segment}"
+                           future_color=".15, .45, .2, .5"
+                           scale="2.0"
+                           current_pose="{current_pose}"
+                           current_color=".25, .55, .5, .75"
+                           namespace="adjusted_transit"
+                           past_color=".35, .25, .15, .5"
+                           marker_array="{marker_array}"
+                           trajectory="{adjusted_path}"
                            _skipIf="debug != true"/>
       <ReactiveFallback>
-        <BaxevaniController navigation_path="{navigation_path}"
-                            current_navigation_segment="{current_navigation_segment}"
-                            odometry="{odometry}"
-                            tf_buffer="{tf_buffer}"
-                            target_speed="{target_speed}"
-                            ricatti_parameter="0.1"
-                            px_gain="0.1"
-                            pw_gain="0.025"
+        <BaxevaniController command_velocity="{command_velocity}"
                             delta="0.1"
                             maximum_dt="0.5"
-                            command_velocity="{command_velocity}"
+                            px_gain="0.1"
+                            ricatti_parameter="0.1"
+                            pw_gain="0.025"
+                            target_speed="{target_speed}"
+                            tf_buffer="{tf_buffer}"
+                            current_navigation_segment="{current_navigation_segment}"
+                            odometry="{odometry}"
+                            navigation_path="{navigation_path}"
                             _failureIf="controller != &apos;baxevani&apos;"/>
-        <CrabbingPathFollower command_velocity="{command_velocity}"
-                              navigation_path="{navigation_path}"
-                              tf_buffer="{tf_buffer}"
-                              pid="{path_follower_pid}"
-                              odometry="{odometry}"
-                              current_navigation_segment="{current_navigation_segment}"
-                              target_speed="{target_speed}"
+        <CrabbingPathFollower pid="{path_follower_pid}"
+                              command_velocity="{command_velocity}"
                               piloting_mode="{piloting_mode}"
+                              target_speed="{target_speed}"
+                              tf_buffer="{tf_buffer}"
+                              current_navigation_segment="{current_navigation_segment}"
+                              odometry="{odometry}"
+                              navigation_path="{navigation_path}"
                               _failureIf="controller != &apos;crabbing_path_follower&apos;"/>
         <AlwaysFailure/>
       </ReactiveFallback>
@@ -73,9 +73,9 @@
 
   <BehaviorTree ID="GotoTask">
     <ReactiveSequence>
-      <SetPoseFromTask task="{current_task}"
-                       pose_index="0"
-                       pose="{goal_pose}"/>
+      <SetPoseFromTask pose_index="0"
+                       pose="{goal_pose}"
+                       task="{current_task}"/>
       <Fallback>
         <Inverter>
           <SubTree ID="TransitTo"
@@ -90,12 +90,12 @@
     <Sequence>
       <Fallback name="SetHoverGoalFallback">
         <SetPoseFromTask name="SetGoalPoseFromHoverTask"
-                         task="{current_task}"
                          pose_index="0"
-                         pose="{goal_pose}"/>
-        <PredictStoppingPose odometry="{odometry}"
+                         pose="{goal_pose}"
+                         task="{current_task}"/>
+        <PredictStoppingPose pose="{goal_pose}"
                              deceleration="{robot_default_deceleration}"
-                             pose="{goal_pose}"/>
+                             odometry="{odometry}"/>
       </Fallback>
       <Script name="SetHoverParametersScript"
               code="hover_minimum_distance := robot_radius*1.25; hover_maximum_distance := robot_radius*1.25+robot_stopping_distance*1.25; hover_maximum_speed := robot_default_speed*0.75"/>
@@ -104,14 +104,14 @@
           <ForceFailure>
             <Script code="navigation_state := &quot;hover&quot;"/>
           </ForceFailure>
-          <Hover goal_pose="{goal_pose}"
+          <Hover marker_array="{marker_array}"
+                 goal_pose="{goal_pose}"
                  tf_buffer="{tf_buffer}"
-                 minimum_distance="{hover_minimum_distance}"
-                 maximum_distance="{hover_maximum_distance}"
                  maximum_speed="{hover_maximum_speed}"
+                 maximum_distance="{hover_maximum_distance}"
+                 minimum_distance="{hover_minimum_distance}"
                  command_velocity="{command_velocity}"
-                 odometry="{odometry}"
-                 marker_array="{marker_array}"/>
+                 odometry="{odometry}"/>
           <SubTree ID="TransitTo"
                    name="TransitToHover"
                    waypoint_reached_distance="{hover_maximum_distance}"
@@ -123,41 +123,42 @@
 
   <BehaviorTree ID="NavigatorSequence">
     <Sequence name="InitializeAndRunSequence">
-      <TaskListUpdater task_messages="{task_messages}"
-                       task_list="{task_list}"
+      <TaskListUpdater task_list="{task_list}"
+                       task_messages="{task_messages}"
                        _description="If task_messages is not empty, updates or creates a TaskList from a list of TaskInformation messages then clears task_messages and returns Success.&#10;Returns Failure if task_messages is empty."/>
-      <NavigatorSettingsLoader waypoint_reached_distance="{waypoint_reached_distance}"
+      <NavigatorSettingsLoader maximum_cross_track_error="{maximum_cross_track_error}"
                                survey_lead_in_distance="{survey_lead_in_distance}"
-                               maximum_cross_track_error="{maximum_cross_track_error}"
+                               waypoint_reached_distance="{waypoint_reached_distance}"
                                _onSuccess="default_controller := &quot;crabbing_path_follower&quot;; default_planner := &quot;dubins&quot;"/>
-      <RobotCapabilitiesLoader turn_radius="{robot_turn_radius}"
+      <RobotCapabilitiesLoader stopping_distance="{robot_stopping_distance}"
+                               context="{context}"
+                               turn_radius="{robot_turn_radius}"
+                               footprint="{robot_footprint}"
+                               radius="{robot_radius}"
                                maximum_velocity="{robot_maximum_velocity}"
                                minimum_velocity="{robot_minimum_velocity}"
+                               default_speed="{robot_default_speed}"
                                default_velocity="{robot_default_velocity}"
                                maximum_acceleration="{robot_maximum_acceleration}"
                                default_acceleration="{robot_default_acceleration}"
                                maximum_deceleration="{robot_maximum_deceleration}"
                                default_deceleration="{robot_default_deceleration}"
-                               default_speed="{robot_default_speed}"
-                               stopping_time="{robot_stopping_time}"
-                               stopping_distance="{robot_stopping_distance}"
-                               footprint="{robot_footprint}"
-                               radius="{robot_radius}"/>
+                               stopping_time="{robot_stopping_time}"/>
       <WhileDoElse>
         <AllTasksDoneCondition task_list="{task_list}"/>
         <AlwaysSuccess/>
         <KeepRunningUntilFailure>
           <ReactiveSequence name="MainRunSequence">
-            <UpdateState piloting_mode="{piloting_mode}"
-                         base_frame="{base_frame}"
-                         odometry="{odometry}"
-                         current_pose="{current_pose}"
-                         command_velocity="{command_velocity}"
+            <UpdateState marker_array="{marker_array}"
                          tf_buffer="{tf_buffer}"
-                         marker_array="{marker_array}"
+                         command_velocity="{command_velocity}"
+                         local_costmap="{local_costmap}"
                          robot_footprint="{robot_footprint}"
-                         context="{context}"
-                         local_costmap="{local_costmap}"/>
+                         odometry="{odometry}"
+                         base_frame="{base_frame}"
+                         piloting_mode="{piloting_mode}"
+                         current_pose="{current_pose}"
+                         context="{context}"/>
             <Script code="navigation_state := piloting_mode"/>
             <SubTree ID="UpdateCurrentTaskData"
                      _autoremap="true"/>
@@ -194,23 +195,23 @@
 
   <BehaviorTree ID="SurveyAreaTask">
     <Sequence>
-      <GetTaskDataString task="{survey_area_task}"
-                         key="coverage_generator"
+      <GetTaskDataString value="{coverage_generator}"
                          default_value="none"
-                         value="{coverage_generator}"/>
+                         key="coverage_generator"
+                         task="{survey_area_task}"/>
       <Sequence>
         <IfThenElse>
           <ScriptCondition code="coverage_generator == &apos;manda&apos;"/>
           <Sequence>
             <MultibeamCoverageActionSetGoal name="MandaMultibeamCoverageAction"
-                                            task="{survey_area_task}"
+                                            action_client="{multibeam_coverage_action_client}"
                                             ros_action="survey_area_action"
-                                            action_client="{multibeam_coverage_action_client}"/>
+                                            task="{survey_area_task}"/>
             <ReactiveSequence>
-              <MultibeamCoverageActionUpdateTask action_client="{multibeam_coverage_action_client}"
-                                                 task="{survey_area_task}"/>
-              <GetSubTasks task="{survey_area_task}"
-                           sub_tasks="{survey_area_tasks}"/>
+              <MultibeamCoverageActionUpdateTask task="{survey_area_task}"
+                                                 action_client="{multibeam_coverage_action_client}"/>
+              <GetSubTasks sub_tasks="{survey_area_tasks}"
+                           task="{survey_area_task}"/>
               <WhileDoElse>
                 <ReactiveSequence>
                   <MultibeamCoverageActionDoneCondition action_client="{multibeam_coverage_action_client}"/>
@@ -239,8 +240,8 @@
             </ReactiveSequence>
           </Sequence>
           <ReactiveSequence>
-            <GetSubTasks task="{survey_area_task}"
-                         sub_tasks="{survey_area_tasks}"/>
+            <GetSubTasks sub_tasks="{survey_area_tasks}"
+                         task="{survey_area_task}"/>
             <WhileDoElse>
               <AllTasksDoneCondition task_list="{survey_area_tasks}"/>
               <SetTaskDone task="{survey_area_task}"/>
@@ -279,10 +280,10 @@
     <Sequence>
       <WhileDoElse>
         <Inverter>
-          <GoalReachedCondition odometry="{odometry}"
-                                goal_pose="{start_pose}"
+          <GoalReachedCondition heading_accuracy="180"
                                 waypoint_reached_distance="{waypoint_reached_distance}"
-                                heading_accuracy="180"/>
+                                goal_pose="{start_pose}"
+                                odometry="{odometry}"/>
         </Inverter>
         <SubTree ID="TransitTo"
                  name="TransitToStartOfSurveyLine"
@@ -303,8 +304,8 @@
 
   <BehaviorTree ID="SurveyLineSetTask">
     <ReactiveSequence>
-      <GetSubTasks task="{survey_line_set_task}"
-                   sub_tasks="{survey_line_set_sub_tasks}"/>
+      <GetSubTasks sub_tasks="{survey_line_set_sub_tasks}"
+                   task="{survey_line_set_task}"/>
       <WhileDoElse>
         <AllTasksDoneCondition task_list="{survey_line_set_sub_tasks}"/>
         <SetTaskDone task="{survey_line_set_task}"/>
@@ -332,12 +333,12 @@
 
   <BehaviorTree ID="SurveyLineTask">
     <Sequence>
-      <SetPoseFromTask task="{survey_line_task}"
-                       pose_index="0"
-                       pose="{start_pose}"/>
-      <SetTrajectoryFromTask task="{survey_line_task}"
+      <SetPoseFromTask pose_index="0"
+                       pose="{start_pose}"
+                       task="{survey_line_task}"/>
+      <SetTrajectoryFromTask current_segment="{current_survey_path_segment}"
                              trajectory="{survey_path}"
-                             current_segment="{current_survey_path_segment}"/>
+                             task="{survey_line_task}"/>
       <SubTree ID="SurveyLine"
                _autoremap="true"/>
       <SetTaskDone task="{survey_line_task}"/>
@@ -349,22 +350,22 @@
       <ClearPath navigation_path="{transit_path}"/>
       <ReactiveFallback>
         <GoalReachedCondition name="TransitGoalReachedCondition"
-                              odometry="{odometry}"
-                              goal_pose="{goal_pose}"
+                              heading_accuracy="180"
                               waypoint_reached_distance="{waypoint_reached_distance}"
-                              heading_accuracy="180"/>
+                              goal_pose="{goal_pose}"
+                              odometry="{odometry}"/>
         <ReactiveSequence>
           <Script code="navigation_state := &quot;transit&quot;"/>
           <IfThenElse>
             <ReactiveSequence name="PlanIsValidReactiveSequence">
-              <UpdateCurrentSegment navigation_path="{transit_path}"
-                                    odometry="{odometry}"
-                                    tf_buffer="{tf_buffer}"
-                                    current_segment="{current_transit_segment}"
-                                    segment_length="{current_transit_segment_length}"
+              <UpdateCurrentSegment segment_count="{transit_path_segment_count}"
                                     cross_track_error="{current_transit_segment_cross_track_error}"
+                                    segment_length="{current_transit_segment_length}"
+                                    current_segment="{current_transit_segment}"
                                     along_track_progress="{current_transit_segment_along_track_progress}"
-                                    segment_count="{transit_path_segment_count}"/>
+                                    tf_buffer="{tf_buffer}"
+                                    odometry="{odometry}"
+                                    navigation_path="{transit_path}"/>
               <AlwaysSuccess name="CrossTrackErrorCheck"
                              _failureIf="current_transit_segment_cross_track_error &gt; maximum_cross_track_error"/>
               <AlwaysSuccess name="PastLastSegmentCheck"
@@ -372,20 +373,20 @@
             </ReactiveSequence>
             <AlwaysSuccess/>
             <Fallback>
-              <GeneratePlan start_pose="{current_pose}"
-                            goal_pose="{goal_pose}"
-                            planner="{default_planner}"
+              <GeneratePlan navigation_trajectory="{transit_path}"
                             lead_in_distance="{lead_in_distance}"
-                            navigation_trajectory="{transit_path}"
+                            current_navigation_segment="{current_transit_segment}"
                             turn_radius="{robot_turn_radius}"
-                            current_navigation_segment="{current_transit_segment}"/>
+                            planner="{default_planner}"
+                            goal_pose="{goal_pose}"
+                            start_pose="{current_pose}"/>
               <CCOMPlanner start_pose="{current_pose}"
                            goal_pose="{goal_pose}"
                            navigation_path="{transit_path}"
-                           speed="{robot_default_speed}"
                            turn_radius="{robot_turn_radius}"
                            tf_buffer="{tf_buffer}"
                            context="{context}"
+                           speed="{robot_default_speed}"
                            _skipIf="planner != &quot;ccom_planner&quot;"/>
             </Fallback>
           </IfThenElse>
@@ -401,84 +402,105 @@
 
   <BehaviorTree ID="UpdateCurrentTaskData">
     <Sequence>
-      <UpdateCurrentTask task_list="{task_list}"
-                         current_task="{current_task}"
+      <UpdateCurrentTask current_task_id="{current_task_id}"
                          current_task_type="{current_task_type}"
-                         current_task_id="{current_task_id}"
+                         current_task="{current_task}"
+                         task_list="{task_list}"
                          _onSuccess="active_task_id := current_task_id"/>
-      <GetTaskDataDouble task="{current_task}"
-                         key="speed"
+      <GetTaskDataDouble value="{target_speed}"
                          default_value="{robot_default_speed}"
-                         value="{target_speed}"/>
-      <GetTaskDataString task="{current_task}"
-                         key="controller"
+                         key="speed"
+                         task="{current_task}"/>
+      <GetTaskDataString value="{controller}"
                          default_value="{default_controller}"
-                         value="{controller}"/>
-      <GetTaskDataString task="{current_task}"
-                         key="planner"
+                         key="controller"
+                         task="{current_task}"/>
+      <GetTaskDataString value="{planner}"
                          default_value="{default_planner}"
-                         value="{planner}"/>
+                         key="planner"
+                         task="{current_task}"/>
     </Sequence>
   </BehaviorTree>
 
   <!-- Description of Node Models (used by Groot) -->
   <TreeNodesModel>
-    <Action ID="AdjustPath"
-            editable="true">
-      <input_port name="path"
-                  default="{path}"/>
-      <input_port name="local_costmap"
-                  default="{local_costmap}"/>
-      <input_port name="turn_radius"
-                  default="{turn_radius}"/>
-      <output_port name="adjusted_path"
-                   default="{adjusted_path}"/>
-      <input_port name="current_segment"
-                  default="{current_segment}"/>
-      <input_port name="odometry"
-                  default="{odometry}"/>
-      <input_port name="tf_buffer"
-                  default="{tf_buffer}"/>
-      <output_port name="adjusted_current_segment"
-                   default="{adjusted_current_segment}"/>
+    <Action ID="AdjustPath">
       <output_port name="adjusted_cross_track_error"
-                   default="{adjusted_cross_track_error}"/>
-      <output_port name="adjusted_along_track_progress"
-                   default="{adjusted_along_track_progress}"/>
+                   default="{adjusted_cross_track_error}"
+                   type="double">Cross-track error on adjusted segment</output_port>
+      <output_port name="adjusted_current_segment"
+                   default="{adjusted_current_segment}"
+                   type="int">Current segment of the adjusted path</output_port>
       <output_port name="adjusted_segment_count"
-                   default="{adjusted_segment_count}"/>
-      <input_port name="along_track_progress"
-                  default="{current_segment_along_track_progress}"/>
-    </Action>
-    <Condition ID="AllTasksDoneCondition"
-               editable="true">
-      <input_port name="task_list"
-                  default="{task_list}"/>
-    </Condition>
-    <Action ID="BaxevaniController"
-            editable="true">
-      <input_port name="navigation_path"
-                  default="{navigation_path}"/>
-      <input_port name="current_navigation_segment"
-                  default="{current_navigation_segment}"/>
+                   default="{adjusted_segment_count}"
+                   type="int">Number of segment in adjusted path</output_port>
+      <output_port name="adjusted_path"
+                   default="{adjusted_path}"
+                   type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;">Path modified to avoid obstacles</output_port>
+      <input_port name="local_costmap"
+                  default="{local_costmap}"
+                  type="std::shared_ptr&lt;project11_navigation::OccupancyGrid&gt;">Local costmap used to adjust trajectory</input_port>
       <input_port name="odometry"
-                  default="{odometry}"/>
+                  default="{odometry}"
+                  type="nav_msgs::msg::Odometry_&lt;std::allocator&lt;void&gt; &gt;">Robot's current odometry state</input_port>
+      <input_port name="turn_radius"
+                  default="{turn_radius}"
+                  type="double">Robot's turn radius</input_port>
       <input_port name="tf_buffer"
-                  default="{tf_buffer}"/>
-      <input_port name="target_speed"
-                  default="{target_speed}"/>
-      <input_port name="ricatti_parameter"
-                  default="1.8752285"/>
-      <input_port name="px_gain"
-                  default="100.78"/>
-      <input_port name="pw_gain"
-                  default="20.055"/>
-      <input_port name="delta"
-                  default="0.1">Distance of the (sonar) sensor from the center of mass/position of imu</input_port>
-      <input_port name="maximum_dt"
-                  default="0.5"/>
+                  default="{tf_buffer}"
+                  type="std::shared_ptr&lt;tf2_ros::Buffer&gt;">Transform buffer</input_port>
+      <input_port name="along_track_progress"
+                  default="{current_segment_along_track_progress}"
+                  type="double">How far along the current segment we are</input_port>
+      <input_port name="current_segment"
+                  default="{current_segment}"
+                  type="int">Current path segment being followed</input_port>
+      <output_port name="adjusted_along_track_progress"
+                   default="{adjusted_along_track_progress}"
+                   type="double">Progress along adjusted segment</output_port>
+      <input_port name="path"
+                  default="{path}"
+                  type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;">Path needing adjustment</input_port>
+    </Action>
+    <Condition ID="AllTasksDoneCondition">
+      <input_port name="task_list"
+                  default="{task_list}"
+                  type="std::shared_ptr&lt;project11_navigation::TaskList&gt;">List of tasks to check</input_port>
+    </Condition>
+    <Action ID="BaxevaniController">
       <output_port name="command_velocity"
-                   default="{command_velocity}"/>
+                   default="{command_velocity}"
+                   type="geometry_msgs::msg::TwistStamped_&lt;std::allocator&lt;void&gt; &gt;">Output commanded velocity</output_port>
+      <input_port name="delta"
+                  default="0.1"
+                  type="double">Distance of the (sonar) sensor from the center of mass/position of imu</input_port>
+      <input_port name="maximum_dt"
+                  default="0.5"
+                  type="double">Maximum time step</input_port>
+      <input_port name="px_gain"
+                  default="100.78"
+                  type="double">Proportional gain for the x axis</input_port>
+      <input_port name="ricatti_parameter"
+                  default="1.8752285"
+                  type="double">Ricatti parameter</input_port>
+      <input_port name="pw_gain"
+                  default="20.055"
+                  type="double">Proportional gain for the w axis</input_port>
+      <input_port name="target_speed"
+                  default="{target_speed}"
+                  type="double">Target speed</input_port>
+      <input_port name="tf_buffer"
+                  default="{tf_buffer}"
+                  type="std::shared_ptr&lt;tf2_ros::Buffer&gt;">Transform buffer</input_port>
+      <input_port name="current_navigation_segment"
+                  default="{current_navigation_segment}"
+                  type="int">Current segment of the path to follow</input_port>
+      <input_port name="odometry"
+                  default="{odometry}"
+                  type="nav_msgs::msg::Odometry_&lt;std::allocator&lt;void&gt; &gt;">Robot's current odometry state</input_port>
+      <input_port name="navigation_path"
+                  default="{navigation_path}"
+                  type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;">Path to follow</input_port>
     </Action>
     <Action ID="CCOMPlanner"
             editable="true">
@@ -490,277 +512,361 @@
                    default="{navigation_path}"/>
       <input_port name="turn_radius"
                   default="{robot_turn_radius}"/>
+      <input_port name="tf_buffer"
+                  default="{tf_buffer}"/>
+      <input_port name="context"
+                  default="{context}"/>
       <input_port name="speed"
                   default="{robot_default_speed}"/>
-      <input_port name="tf_buffer"
-                  default="{tf_buffer}"/>
-      <input_port name="context"
-                  default="{context}"/>
     </Action>
-    <Action ID="ClearPath"
-            editable="true">
+    <Action ID="ClearPath">
       <output_port name="navigation_path"
-                   default="{navigation_path}"/>
+                   default="{navigation_path}"
+                   type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;">Empty shared pointer to a path to follow</output_port>
     </Action>
-    <Action ID="CrabbingPathFollower"
-            editable="true">
-      <output_port name="command_velocity"
-                   default="{command_velocity}"/>
-      <input_port name="navigation_path"
-                  default="{navigation_path}"/>
-      <input_port name="tf_buffer"
-                  default="{tf_buffer}"/>
+    <Action ID="CrabbingPathFollower">
       <inout_port name="pid"
-                  default="{path_follower_pid}"/>
-      <input_port name="odometry"
-                  default="{odometry}"/>
-      <input_port name="current_navigation_segment"
-                  default="{current_navigation_segment}"/>
-      <input_port name="target_speed"
-                  default="{target_speed}"/>
+                  default="{path_follower_pid}"
+                  type="std::shared_ptr&lt;project11::PID&gt;">PID controller for crabbing</inout_port>
+      <output_port name="command_velocity"
+                   default="{command_velocity}"
+                   type="geometry_msgs::msg::TwistStamped_&lt;std::allocator&lt;void&gt; &gt;">Output commanded velocity</output_port>
       <input_port name="piloting_mode"
-                  default="{piloting_mode}"/>
-    </Action>
-    <Action ID="GeneratePlan"
-            editable="true">
-      <input_port name="start_pose"
-                  default="{current_pose}"/>
-      <input_port name="goal_pose"
-                  default="{goal_pose}"/>
-      <input_port name="planner"
-                  default="{default_planner}"/>
-      <input_port name="lead_in_distance"
-                  default="{lead_in_distance}"/>
-      <output_port name="navigation_trajectory"
-                   default="{navigation_trajectory}"/>
-      <input_port name="turn_radius"
-                  default="{robot_turn_radius}"/>
-      <output_port name="current_navigation_segment"
-                   default="{current_navigation_segment}">Index of the current segment of the navigation trajectory</output_port>
-    </Action>
-    <Action ID="GetSubTasks"
-            editable="true">
-      <input_port name="task"
-                  default="{current_task}"/>
-      <output_port name="sub_tasks"
-                   default="{current_sub_tasks}"/>
-    </Action>
-    <Action ID="GetTaskDataDouble"
-            editable="true">
-      <input_port name="task"
-                  default="{task}"/>
-      <input_port name="key"/>
-      <input_port name="default_value"/>
-      <output_port name="value"/>
-    </Action>
-    <Action ID="GetTaskDataString"
-            editable="true">
-      <input_port name="task"
-                  default="{task}"/>
-      <input_port name="key"/>
-      <input_port name="default_value"/>
-      <output_port name="value"/>
-    </Action>
-    <Condition ID="GoalReachedCondition"
-               editable="true">
-      <input_port name="odometry"
-                  default="{odometry}"/>
-      <input_port name="goal_pose"
-                  default="{goal_pose}"/>
-      <input_port name="waypoint_reached_distance"
-                  default="{waypoint_reached_distance}"/>
-      <input_port name="heading_accuracy"
-                  default="180">How much can the heading can vary. 180 means it doesn't matter.</input_port>
-    </Condition>
-    <Action ID="Hover"
-            editable="true">
-      <input_port name="goal_pose"
-                  default="{goal_pose}"/>
+                  default="{piloting_mode}"
+                  type="std::string">Piloting mode</input_port>
+      <input_port name="target_speed"
+                  default="{target_speed}"
+                  type="double">Target speed</input_port>
       <input_port name="tf_buffer"
-                  default="{tf_buffer}"/>
-      <input_port name="minimum_distance"
-                  default="{hover_minimum_disrance}"/>
-      <input_port name="maximum_distance"
-                  default="{hover_maximum_distance}"/>
-      <input_port name="maximum_speed"
-                  default="{hover_maximum_speed}"/>
-      <output_port name="command_velocity"
-                   default="{command_velocity}"/>
+                  default="{tf_buffer}"
+                  type="std::shared_ptr&lt;tf2_ros::Buffer&gt;">Transform buffer</input_port>
+      <input_port name="current_navigation_segment"
+                  default="{current_navigation_segment}"
+                  type="int">Current segment of the path</input_port>
       <input_port name="odometry"
-                  default="{odometry}"/>
-      <input_port name="marker_array"
-                  default="{marker_array}"/>
-    </Action>
-    <Condition ID="MultibeamCoverageActionDoneCondition"
-               editable="true">
-      <input_port name="action_client"
-                  default="{multibeam_coverage_action_client}"/>
-    </Condition>
-    <Action ID="MultibeamCoverageActionSetGoal"
-            editable="true">
-      <input_port name="task"
-                  default="{task}"/>
-      <input_port name="ros_action"/>
-      <output_port name="action_client"
-                   default="{multibeam_coverage_action_client}"/>
-    </Action>
-    <Action ID="MultibeamCoverageActionUpdateTask"
-            editable="true">
-      <input_port name="action_client"
-                  default="{multibeam_coverage_action_client}"/>
-      <input_port name="task"
-                  default="{task}"/>
-    </Action>
-    <Action ID="NavigatorSettingsLoader"
-            editable="true">
-      <output_port name="waypoint_reached_distance"
-                   default="{waypoint_reached_distance}">Distance in meters within which a waypoint is deemed reached</output_port>
-      <output_port name="survey_lead_in_distance"
-                   default="{survey_lead_in_distance}">Distance in meters to extend the start of a survey line to allow heading to settle</output_port>
-      <output_port name="maximum_cross_track_error"
-                   default="{maximum_cross_track_error}"/>
-    </Action>
-    <Action ID="PredictStoppingPose"
-            editable="true">
-      <input_port name="odometry"
-                  default="{odometry}"/>
-      <input_port name="deceleration"
-                  default="{robot_default_deceleration}"/>
-      <output_port name="pose"
-                   default="{pose}"/>
-    </Action>
-    <Action ID="RobotCapabilitiesLoader"
-            editable="true">
-      <output_port name="turn_radius"
-                   default="{robot_turn_radius}">Default turn radius</output_port>
-      <output_port name="maximum_velocity"
-                   default="{robot_maximum_velocity}"/>
-      <output_port name="minimum_velocity"
-                   default="{robot_minimum_velocity}"/>
-      <output_port name="default_velocity"
-                   default="{robot_default_velocity}">Default cruise speed</output_port>
-      <output_port name="maximum_acceleration"
-                   default="{robot_maximum_acceleration}">Maximum available acceleration</output_port>
-      <output_port name="default_acceleration"
-                   default="{robot_default_acceleration}">Default acceleration that should be used for normal operations</output_port>
-      <output_port name="maximum_deceleration"
-                   default="{robot_maximum_deceleration}">Powered deceleration</output_port>
-      <output_port name="default_deceleration"
-                   default="{robot_default_deceleration}">Drifting deceleration</output_port>
-      <output_port name="default_speed"
-                   default="{robot_default_speed}"/>
-      <output_port name="stopping_time"
-                   default="{robot_stopping_time}"/>
-      <output_port name="stopping_distance"
-                   default="{robot_stopping_distance}"/>
-      <output_port name="footprint"
-                   default="{robot_footprint}"/>
-      <output_port name="radius"
-                   default="{robot_radius}"/>
-    </Action>
-    <Action ID="SetPoseFromTask"
-            editable="true">
-      <input_port name="task"
-                  default="{current_task}"/>
-      <input_port name="pose_index"
-                  default="0">Index of the pose to set as output pose</input_port>
-      <output_port name="pose"
-                   default="{goal_pose}"/>
-    </Action>
-    <Action ID="SetTaskDone"
-            editable="true">
-      <input_port name="task"
-                  default="{task}"/>
-    </Action>
-    <Action ID="SetTrajectoryFromTask"
-            editable="true">
-      <input_port name="task"
-                  default="{current_task}"/>
-      <output_port name="trajectory"
-                   default="{current_navigation_trajectory}"/>
-      <output_port name="current_segment"
-                   default="{current_segment}"/>
-    </Action>
-    <Action ID="TaskListUpdater"
-            editable="true">
-      <inout_port name="task_messages"
-                  default="{task_messages}">Pointer to a vector of new TaskInformation messages</inout_port>
-      <inout_port name="task_list"
-                  default="{task_list}">Pointer to the TaskList</inout_port>
-    </Action>
-    <Action ID="UpdateCurrentSegment"
-            editable="true">
+                  default="{odometry}"
+                  type="nav_msgs::msg::Odometry_&lt;std::allocator&lt;void&gt; &gt;">Robot's current odometry state</input_port>
       <input_port name="navigation_path"
-                  default="{navigation_path}"/>
+                  default="{navigation_path}"
+                  type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;">Path to follow</input_port>
+    </Action>
+    <Action ID="GeneratePlan">
+      <output_port name="navigation_trajectory"
+                   default="{navigation_trajectory}"
+                   type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;">Planned path to follow</output_port>
+      <input_port name="lead_in_distance"
+                  default="{lead_in_distance}"
+                  type="double">Distance in meters to lead into lines</input_port>
+      <output_port name="current_navigation_segment"
+                   default="{current_navigation_segment}"
+                   type="int">Index of the current segment of the navigation trajectory</output_port>
+      <input_port name="turn_radius"
+                  default="{robot_turn_radius}"
+                  type="double">Turn radius for the robot</input_port>
+      <input_port name="planner"
+                  default="{default_planner}"
+                  type="std::string">Planner to use</input_port>
+      <input_port name="goal_pose"
+                  default="{goal_pose}"
+                  type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;">Goal pose for the plan</input_port>
+      <input_port name="start_pose"
+                  default="{current_pose}"
+                  type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;">Starting pose for the plan</input_port>
+    </Action>
+    <Action ID="GetSubTasks">
+      <output_port name="sub_tasks"
+                   default="{current_sub_tasks}"
+                   type="std::shared_ptr&lt;project11_navigation::TaskList&gt;">Sub tasks of the input task</output_port>
+      <input_port name="task"
+                  default="{current_task}"
+                  type="std::shared_ptr&lt;project11_navigation::Task&gt;">Task to get sub tasks from</input_port>
+    </Action>
+    <Action ID="GetTaskDataDouble">
+      <output_port name="value"
+                   type="double"/>
+      <input_port name="default_value"
+                  type="double"/>
+      <input_port name="key"
+                  type="std::string"/>
+      <input_port name="task"
+                  default="{task}"
+                  type="std::shared_ptr&lt;project11_navigation::Task&gt;">Task to get data from</input_port>
+    </Action>
+    <Action ID="GetTaskDataString">
+      <output_port name="value"
+                   type="std::string"/>
+      <input_port name="default_value"
+                  type="std::string"/>
+      <input_port name="key"
+                  type="std::string"/>
+      <input_port name="task"
+                  default="{task}"
+                  type="std::shared_ptr&lt;project11_navigation::Task&gt;">Task to get data from</input_port>
+    </Action>
+    <Condition ID="GoalReachedCondition">
+      <input_port name="heading_accuracy"
+                  default="180"
+                  type="double">How much can the heading can vary in degrees. 180 means it doesn't matter.</input_port>
+      <input_port name="waypoint_reached_distance"
+                  default="{waypoint_reached_distance}"
+                  type="double">Distance in meters to consider the waypoint reached</input_port>
+      <input_port name="goal_pose"
+                  default="{goal_pose}"
+                  type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;">Pose to compare current state with</input_port>
       <input_port name="odometry"
-                  default="{odometry}"/>
+                  default="{odometry}"
+                  type="nav_msgs::msg::Odometry_&lt;std::allocator&lt;void&gt; &gt;">Robot's current odometry state</input_port>
+    </Condition>
+    <Action ID="Hover">
+      <input_port name="marker_array"
+                  default="{marker_array}"
+                  type="std::shared_ptr&lt;visualization_msgs::msg::MarkerArray_&lt;std::allocator&lt;void&gt; &gt; &gt;">Marker array to add visualization markers to</input_port>
+      <input_port name="goal_pose"
+                  default="{goal_pose}"
+                  type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;">Goal pose for the robot</input_port>
       <input_port name="tf_buffer"
-                  default="{tf_buffer}"/>
-      <inout_port name="current_segment"
-                  default="{current_navigation_segment}"/>
-      <output_port name="segment_length"
-                   default="{current_segment_length}"/>
-      <output_port name="cross_track_error"
-                   default="{current_segment_cross_track_error}"/>
-      <output_port name="along_track_progress"
-                   default="{current_segment_along_track_progress}"/>
-      <output_port name="segment_count"
-                   default="{navigation_path_segment_count}"/>
-    </Action>
-    <Action ID="UpdateCurrentTask"
-            editable="true">
-      <input_port name="task_list"
-                  default="{task_list}"/>
-      <output_port name="current_task"
-                   default="{current_task}"/>
-      <output_port name="current_task_type"
-                   default="{current_task_type}"/>
-      <output_port name="current_task_id"
-                   default="{current_task_id}"/>
-    </Action>
-    <Action ID="UpdateState"
-            editable="true">
-      <output_port name="piloting_mode"
-                   default="{piloting_mode}">Current Project11 piloting mode</output_port>
-      <output_port name="base_frame"
-                   default="{base_frame}">Robot's base frame_id for use with cmd_vel</output_port>
-      <output_port name="odometry"
-                   default="{odometry}">Robot's latest position and attitude</output_port>
-      <output_port name="current_pose"
-                   default="{current_pose}">Robot's latest pose</output_port>
+                  default="{tf_buffer}"
+                  type="std::shared_ptr&lt;tf2_ros::Buffer&gt;">Transform buffer</input_port>
+      <input_port name="maximum_speed"
+                  default="{hover_maximum_speed}"
+                  type="double">Maximum speed to use to get to the target</input_port>
+      <input_port name="maximum_distance"
+                  default="{hover_maximum_distance}"
+                  type="double">Distance at which robot uses maximum speed to get to the target</input_port>
+      <input_port name="minimum_distance"
+                  default="{hover_minimum_distance}"
+                  type="double">Distance within which robot is deemed at the target</input_port>
       <output_port name="command_velocity"
-                   default="{command_velocity}">Initial command set to 0</output_port>
-      <output_port name="tf_buffer"
-                   default="{tf_buffer}">tf2 Transformation Buffer</output_port>
-      <output_port name="marker_array"
-                   default="{marker_array}">Pointer to a visualization marker array</output_port>
-      <input_port name="robot_footprint"
-                  default="{robot_footprint}"/>
-      <input_port name="context"
-                  default="{context}"/>
-      <output_port name="local_costmap"
-                   default="{local_costmap}"/>
+                   default="{command_velocity}"
+                   type="geometry_msgs::msg::TwistStamped_&lt;std::allocator&lt;void&gt; &gt;">Output commanded velocity</output_port>
+      <input_port name="odometry"
+                  default="{odometry}"
+                  type="nav_msgs::msg::Odometry_&lt;std::allocator&lt;void&gt; &gt;">Robot's current odometry state</input_port>
     </Action>
-    <Action ID="VisualizeTrajectory"
-            editable="true">
-      <input_port name="trajectory"
-                  default="{navigation_trajectory}">Pointer to a vector of PoseStamped</input_port>
-      <inout_port name="marker_array"
-                  default="{marker_array}">Pointer to a MarkerArray</inout_port>
-      <input_port name="namespace"
-                  default="trajectory">Used in ns field of Markers</input_port>
-      <input_port name="scale"
-                  default="1.0">Display size</input_port>
-      <input_port name="past_color"
-                  default=".25, .25, .25, .5">Color for past segments</input_port>
-      <input_port name="current_color"
-                  default=".35, .35, .5, .75">Color for current segment</input_port>
-      <input_port name="future_color"
-                  default=".25, .25, .4, .5">Color for future segments</input_port>
+    <Condition ID="MultibeamCoverageActionDoneCondition">
+      <input_port name="action_client"
+                  default="{multibeam_coverage_action_client}"
+                  type="std::shared_ptr&lt;project11_navigation::MultibeamCoverageActionClient&gt;">Multibeam coverage action client</input_port>
+    </Condition>
+    <Action ID="MultibeamCoverageActionSetGoal">
+      <output_port name="action_client"
+                   default="{multibeam_coverage_action_client}"
+                   type="std::shared_ptr&lt;project11_navigation::MultibeamCoverageActionClient&gt;">Multibeam coverage action client</output_port>
+      <input_port name="ros_action"
+                  type="std::string"/>
+      <input_port name="task"
+                  default="{task}"
+                  type="std::shared_ptr&lt;project11_navigation::Task&gt;">Survey area Task describing area to survey</input_port>
+    </Action>
+    <Action ID="MultibeamCoverageActionUpdateTask">
+      <input_port name="task"
+                  default="{task}"
+                  type="std::shared_ptr&lt;project11_navigation::Task&gt;">Survey area Task describing area to survey</input_port>
+      <input_port name="action_client"
+                  default="{multibeam_coverage_action_client}"
+                  type="std::shared_ptr&lt;project11_navigation::MultibeamCoverageActionClient&gt;">Multibeam coverage action client</input_port>
+    </Action>
+    <Action ID="NavigatorSettingsLoader">
+      <output_port name="maximum_cross_track_error"
+                   default="{maximum_cross_track_error}"
+                   type="double">Maximum cross track error in meters beyond which the robot may be considered off course</output_port>
+      <output_port name="survey_lead_in_distance"
+                   default="{survey_lead_in_distance}"
+                   type="double">Distance in meters to lead into lines</output_port>
+      <output_port name="waypoint_reached_distance"
+                   default="{waypoint_reached_distance}"
+                   type="double">Distance in meters to consider the waypoint reached</output_port>
+    </Action>
+    <Action ID="PredictStoppingPose">
+      <output_port name="pose"
+                   default="{pose}"
+                   type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;">Predicted stopping pose</output_port>
+      <input_port name="deceleration"
+                  default="{robot_default_deceleration}"
+                  type="geometry_msgs::msg::Accel_&lt;std::allocator&lt;void&gt; &gt;">Deceleration to use to predict stopping pose</input_port>
+      <input_port name="odometry"
+                  default="{odometry}"
+                  type="nav_msgs::msg::Odometry_&lt;std::allocator&lt;void&gt; &gt;">Robot's current odometry state</input_port>
+    </Action>
+    <Action ID="RobotCapabilitiesLoader">
+      <output_port name="stopping_distance"
+                   default="{robot_stopping_distance}"
+                   type="double"/>
+      <input_port name="context"
+                  default="{context}"
+                  type="std::shared_ptr&lt;project11_navigation::Context&gt;">Navigation context</input_port>
+      <output_port name="turn_radius"
+                   default="{robot_turn_radius}"
+                   type="double">Default turn radius</output_port>
+      <output_port name="footprint"
+                   default="{robot_footprint}"
+                   type="geometry_msgs::msg::Polygon_&lt;std::allocator&lt;void&gt; &gt;"/>
+      <output_port name="radius"
+                   default="{robot_radius}"
+                   type="double"/>
+      <output_port name="maximum_velocity"
+                   default="{robot_maximum_velocity}"
+                   type="geometry_msgs::msg::Twist_&lt;std::allocator&lt;void&gt; &gt;"/>
+      <output_port name="minimum_velocity"
+                   default="{robot_minimum_velocity}"
+                   type="geometry_msgs::msg::Twist_&lt;std::allocator&lt;void&gt; &gt;"/>
+      <output_port name="default_speed"
+                   default="{robot_default_speed}"
+                   type="double"/>
+      <output_port name="default_velocity"
+                   default="{robot_default_velocity}"
+                   type="geometry_msgs::msg::Twist_&lt;std::allocator&lt;void&gt; &gt;">Default cruise speed</output_port>
+      <output_port name="maximum_acceleration"
+                   default="{robot_maximum_acceleration}"
+                   type="geometry_msgs::msg::Accel_&lt;std::allocator&lt;void&gt; &gt;">Maximum available acceleration</output_port>
+      <output_port name="default_acceleration"
+                   default="{robot_default_acceleration}"
+                   type="geometry_msgs::msg::Accel_&lt;std::allocator&lt;void&gt; &gt;">Default acceleration that should be used for normal operations</output_port>
+      <output_port name="maximum_deceleration"
+                   default="{robot_maximum_deceleration}"
+                   type="geometry_msgs::msg::Accel_&lt;std::allocator&lt;void&gt; &gt;">Powered deceleration</output_port>
+      <output_port name="default_deceleration"
+                   default="{robot_default_deceleration}"
+                   type="geometry_msgs::msg::Accel_&lt;std::allocator&lt;void&gt; &gt;">Drifting deceleration</output_port>
+      <output_port name="stopping_time"
+                   default="{robot_stopping_time}"
+                   type="double"/>
+    </Action>
+    <Action ID="SetPoseFromTask">
+      <input_port name="pose_index"
+                  default="0"
+                  type="int">Index of the pose to set as output pose</input_port>
+      <output_port name="pose"
+                   default="{goal_pose}"
+                   type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;">Pose to set</output_port>
+      <input_port name="task"
+                  default="{current_task}"
+                  type="std::shared_ptr&lt;project11_navigation::Task&gt;">Task to get pose from</input_port>
+    </Action>
+    <Action ID="SetTaskDone">
+      <input_port name="task"
+                  default="{task}"
+                  type="std::shared_ptr&lt;project11_navigation::Task&gt;">Task to set as done</input_port>
+    </Action>
+    <Action ID="SetTrajectoryFromTask">
+      <output_port name="current_segment"
+                   default="{current_segment}"
+                   type="int">Index of the current segment of the trajectory</output_port>
+      <output_port name="trajectory"
+                   default="{current_navigation_trajectory}"
+                   type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;">Trajectory to set</output_port>
+      <input_port name="task"
+                  default="{current_task}"
+                  type="std::shared_ptr&lt;project11_navigation::Task&gt;">Task to get trajectory from</input_port>
+    </Action>
+    <Action ID="TaskListUpdater">
+      <inout_port name="task_list"
+                  default="{task_list}"
+                  type="std::shared_ptr&lt;project11_navigation::TaskList&gt;">Pointer to the task list to update</inout_port>
+      <inout_port name="task_messages"
+                  default="{task_messages}"
+                  type="std::shared_ptr&lt;std::vector&lt;project11_nav_msgs::msg::TaskInformation_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;project11_nav_msgs::msg::TaskInformation_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;">Pointer to a vector of new TaskInformation messages</inout_port>
+    </Action>
+    <Action ID="UpdateCurrentSegment">
+      <output_port name="segment_count"
+                   default="{navigation_path_segment_count}"
+                   type="int">Number of segments in the path</output_port>
+      <output_port name="cross_track_error"
+                   default="{current_segment_cross_track_error}"
+                   type="double">Cross track error in meters</output_port>
+      <output_port name="segment_length"
+                   default="{current_segment_length}"
+                   type="double">Length of the current segment</output_port>
+      <inout_port name="current_segment"
+                  default="{current_navigation_segment}"
+                  type="int">Current segment of the path</inout_port>
+      <output_port name="along_track_progress"
+                   default="{current_segment_along_track_progress}"
+                   type="double">Distance along the current segment</output_port>
+      <input_port name="tf_buffer"
+                  default="{tf_buffer}"
+                  type="std::shared_ptr&lt;tf2_ros::Buffer&gt;">Transform buffer</input_port>
+      <input_port name="odometry"
+                  default="{odometry}"
+                  type="nav_msgs::msg::Odometry_&lt;std::allocator&lt;void&gt; &gt;">Robot's current odometry state</input_port>
+      <input_port name="navigation_path"
+                  default="{navigation_path}"
+                  type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;">Path to follow</input_port>
+    </Action>
+    <Action ID="UpdateCurrentTask">
+      <output_port name="current_task_id"
+                   default="{current_task_id}"
+                   type="std::string">ID of the current task</output_port>
+      <output_port name="current_task_type"
+                   default="{current_task_type}"
+                   type="std::string">Type of the current task</output_port>
+      <output_port name="current_task"
+                   default="{current_task}"
+                   type="std::shared_ptr&lt;project11_navigation::Task&gt;">Pointer to update with current task</output_port>
+      <input_port name="task_list"
+                  default="{task_list}"
+                  type="std::shared_ptr&lt;project11_navigation::TaskList&gt;">List of tasks to check</input_port>
+    </Action>
+    <Action ID="UpdateState">
+      <output_port name="marker_array"
+                   default="{marker_array}"
+                   type="std::shared_ptr&lt;visualization_msgs::msg::MarkerArray_&lt;std::allocator&lt;void&gt; &gt; &gt;">Marker array to add visualization markers to</output_port>
+      <output_port name="tf_buffer"
+                   default="{tf_buffer}"
+                   type="std::shared_ptr&lt;tf2_ros::Buffer&gt;">Transform buffer</output_port>
+      <output_port name="command_velocity"
+                   default="{command_velocity}"
+                   type="geometry_msgs::msg::TwistStamped_&lt;std::allocator&lt;void&gt; &gt;">Initial command set to 0</output_port>
+      <output_port name="local_costmap"
+                   default="{local_costmap}"
+                   type="std::shared_ptr&lt;project11_navigation::OccupancyGrid&gt;">Local costmap</output_port>
+      <input_port name="robot_footprint"
+                  default="{robot_footprint}"
+                  type="geometry_msgs::msg::Polygon_&lt;std::allocator&lt;void&gt; &gt;">Footprint of the robot</input_port>
+      <output_port name="odometry"
+                   default="{odometry}"
+                   type="nav_msgs::msg::Odometry_&lt;std::allocator&lt;void&gt; &gt;">Robot's current odometry state</output_port>
+      <output_port name="base_frame"
+                   default="{base_frame}"
+                   type="std::string">Base frame_id for the robot for use with cmd_vel</output_port>
+      <output_port name="piloting_mode"
+                   default="{piloting_mode}"
+                   type="std::string">Current Project11 piloting mode</output_port>
+      <output_port name="current_pose"
+                   default="{current_pose}"
+                   type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;">Robot's current pose</output_port>
+      <input_port name="context"
+                  default="{context}"
+                  type="std::shared_ptr&lt;project11_navigation::Context&gt;">Navigation context</input_port>
+    </Action>
+    <Action ID="VisualizeTrajectory">
       <input_port name="current_segment"
-                  default="{current_navigation_segment}">Index of the current segment</input_port>
+                  default="{current_navigation_segment}"
+                  type="int">Index of the current segment of the trajectory</input_port>
+      <input_port name="future_color"
+                  default=".25, .25, .4, .5"
+                  type="std_msgs::msg::ColorRGBA_&lt;std::allocator&lt;void&gt; &gt;">Color for future segments</input_port>
+      <input_port name="scale"
+                  default="1.0"
+                  type="double">Display size</input_port>
       <input_port name="current_pose"
-                  default="{current_pose}"/>
+                  default="{current_pose}"
+                  type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;">Current pose of the robot</input_port>
+      <input_port name="current_color"
+                  default="0.35, 0.35, 0.5, 0.75"
+                  type="std_msgs::msg::ColorRGBA_&lt;std::allocator&lt;void&gt; &gt;">Color for current segment</input_port>
+      <input_port name="namespace"
+                  default="trajectory"
+                  type="std::string">Used in ns field of Markers</input_port>
+      <input_port name="past_color"
+                  default="0.25, 0.25, 0.25, 0.5"
+                  type="std_msgs::msg::ColorRGBA_&lt;std::allocator&lt;void&gt; &gt;">Color for past segments</input_port>
+      <input_port name="marker_array"
+                  default="{marker_array}"
+                  type="std::shared_ptr&lt;visualization_msgs::msg::MarkerArray_&lt;std::allocator&lt;void&gt; &gt; &gt;">Pointer to MarkerArray to add visualization markers to</input_port>
+      <input_port name="trajectory"
+                  default="{navigation_trajectory}"
+                  type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;">Trajectory to visualize</input_port>
     </Action>
   </TreeNodesModel>
 

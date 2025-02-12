@@ -18,14 +18,14 @@ UpdateCurrentSegment::UpdateCurrentSegment(const std::string& name, const BT::No
 BT::PortsList UpdateCurrentSegment::providedPorts()
 {
   return {
-    BT::InputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_path"),
-    BT::InputPort<nav_msgs::msg::Odometry>("odometry"),
-    BT::InputPort<std::shared_ptr<tf2_ros::Buffer> >("tf_buffer"),
-    BT::BidirectionalPort<int>("current_segment"),
-    BT::OutputPort<double>("segment_length"),
-    BT::OutputPort<double>("cross_track_error"),
-    BT::OutputPort<double>("along_track_progress"),
-    BT::OutputPort<int>("segment_count")
+    BT::InputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_path", "{navigation_path}", "Path to follow"),
+    BT::InputPort<nav_msgs::msg::Odometry>("odometry", "{odometry}", "Robot's current odometry state"),
+    BT::InputPort<std::shared_ptr<tf2_ros::Buffer> >("tf_buffer", "{tf_buffer}", "Transform buffer"),
+    BT::BidirectionalPort<int>("current_segment", "{current_navigation_segment}", "Current segment of the path"),
+    BT::OutputPort<double>("segment_length", "{current_segment_length}", "Length of the current segment"),
+    BT::OutputPort<double>("cross_track_error", "{current_segment_cross_track_error}", "Cross track error in meters"),
+    BT::OutputPort<double>("along_track_progress", "{current_segment_along_track_progress}", "Distance along the current segment"),
+    BT::OutputPort<int>("segment_count", "{navigation_path_segment_count}", "Number of segments in the path"),
   };
 }
 

@@ -25,17 +25,17 @@ BaxevaniController::BaxevaniController(const std::string& name, const BT::NodeCo
 BT::PortsList BaxevaniController::providedPorts()
 {
   return {
-    BT::InputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_path"),
-    BT::InputPort<int>("current_navigation_segment"),
-    BT::InputPort<nav_msgs::msg::Odometry>("odometry"),
-    BT::InputPort<std::shared_ptr<tf2_ros::Buffer> >("tf_buffer"),
-    BT::InputPort<double>("target_speed"),
-    BT::InputPort<double>("ricatti_parameter"),
-    BT::InputPort<double>("px_gain"),
-    BT::InputPort<double>("pw_gain"),
-    BT::InputPort<double>("delta"),
-    BT::InputPort<double>("maximum_dt"),
-    BT::OutputPort<geometry_msgs::msg::TwistStamped>("command_velocity"),
+    BT::InputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_path", "{navigation_path}", "Path to follow"),
+    BT::InputPort<int>("current_navigation_segment", "{current_navigation_segment}", "Current segment of the path to follow"),
+    BT::InputPort<nav_msgs::msg::Odometry>("odometry", "{odometry}", "Robot's current odometry state"),
+    BT::InputPort<std::shared_ptr<tf2_ros::Buffer> >("tf_buffer", "{tf_buffer}", "Transform buffer"),
+    BT::InputPort<double>("target_speed", "{target_speed}", "Target speed"),
+    BT::InputPort<double>("ricatti_parameter", "1.8752285", "Ricatti parameter"),
+    BT::InputPort<double>("px_gain", "100.78", "Proportional gain for the x axis"),
+    BT::InputPort<double>("pw_gain", "20.055", "Proportional gain for the w axis"),
+    BT::InputPort<double>("delta", "0.1", "Distance of the (sonar) sensor from the center of mass/position of imu"),
+    BT::InputPort<double>("maximum_dt", "0.5", "Maximum time step"),
+    BT::OutputPort<geometry_msgs::msg::TwistStamped>("command_velocity", "{command_velocity}", "Output commanded velocity"),
   };
 }
 

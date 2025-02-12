@@ -2,7 +2,7 @@
 
 from typing import Iterable, Any, List, Tuple, Dict
 
-import rospy
+import rclpy
 from project11_nav_msgs.msg import TaskInformation
 
 import io
@@ -18,13 +18,14 @@ def parentID(task_id: str) -> str:
 class Task:
   '''Help manage TaskInformation messages'''
 
-  def __init__(self, task_information: TaskInformation, task_list: 'TaskList') -> None:
+  def __init__(self, task_information: TaskInformation, task_list: 'TaskList', node: rclpy.node.Node) -> None:
     '''
     Initializes a Task, adding or updating entries in task_list.
     '''
     self.task_information = copy.deepcopy(task_information)
     self.task_list = task_list
-    self.last_update_time = rospy.Time.now()
+    self.node = node
+    self.last_update_time = node.get_clock().now()
     task_list.tasks[task_information.id] = self
     if not task_information.id in task_list.task_order_ids:
       task_list.task_order_ids.append(task_information.id)
@@ -52,7 +53,7 @@ class Task:
     if self.task_information.id != task_info.id:
       raise KeyError("Trying to update a task with a different id")
     self.task_information = copy.deepcopy(task_info)
-    self.last_update_time = rospy.Time.now()
+    self.last_update_time = self.node.get_clock().now()
     
   def sameMessage(self, task_information: TaskInformation) -> bool:
     '''Checks if the incoming TaskInformation message is identical
@@ -91,7 +92,7 @@ class Task:
   def setDone(self) -> None:
     '''Set the message's done flag to True'''
     self.task_information.done = True
-    self.last_update_time = rospy.Time.now()
+    self.last_update_time = self.node.get_clock().now()
 
   def getFullChildID(self, child_local_id: str) -> None:
     '''Generates a full id for a child task of this task.
@@ -106,7 +107,7 @@ class Task:
   def setData(self, data: Any) -> None:
     '''YAML encodes data and sets it'''
     self.task_information.data = yaml.safe_dump(data)
-    self.last_update_time = rospy.Time.now()
+    self.last_update_time = self.node.get_clock().now()
 
   def dataItem(self, key: str, recurse_up: bool = True) -> Any:
     '''
@@ -127,7 +128,7 @@ class Task:
   def setStatus(self, status: Any) -> None:
     '''YAML encodes status and sets it'''
     self.task_information.status = yaml.safe_dump(status)
-    self.last_update_time = rospy.Time.now()
+    self.last_update_time = self.node.get_clock().now()
 
 # this is to make type hints work
 from project11_navigation.task_list import TaskList

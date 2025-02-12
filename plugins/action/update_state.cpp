@@ -16,16 +16,16 @@ UpdateState::UpdateState(const std::string& name, const BT::NodeConfig& config):
 BT::PortsList UpdateState::providedPorts()
 {
   return {
-    BT::InputPort<std::shared_ptr<Context> >("context"),
-    BT::OutputPort<std::string>("piloting_mode"),
-    BT::OutputPort<std::string>("base_frame"),
-    BT::OutputPort<nav_msgs::msg::Odometry>("odometry"),
-    BT::OutputPort<geometry_msgs::msg::PoseStamped>("current_pose"),
-    BT::OutputPort<geometry_msgs::msg::TwistStamped>("command_velocity"),
-    BT::OutputPort<std::shared_ptr<tf2_ros::Buffer> >("tf_buffer"),
-    BT::OutputPort<std::shared_ptr<visualization_msgs::msg::MarkerArray> >("marker_array"),
-    BT::InputPort<geometry_msgs::msg::Polygon>("robot_footprint"),
-    BT::OutputPort<std::shared_ptr<OccupancyGrid> >("local_costmap")
+    BT::InputPort<std::shared_ptr<Context> >("context", "{context}", "Navigation context"),
+    BT::OutputPort<std::string>("piloting_mode", "{piloting_mode}", "Current Project11 piloting mode"),
+    BT::OutputPort<std::string>("base_frame", "{base_frame}", "Base frame_id for the robot for use with cmd_vel"),
+    BT::OutputPort<nav_msgs::msg::Odometry>("odometry", "{odometry}", "Robot's current odometry state"),
+    BT::OutputPort<geometry_msgs::msg::PoseStamped>("current_pose", "{current_pose}", "Robot's current pose"),
+    BT::OutputPort<geometry_msgs::msg::TwistStamped>("command_velocity", "{command_velocity}", "Initial command set to 0"),
+    BT::OutputPort<std::shared_ptr<tf2_ros::Buffer> >("tf_buffer", "{tf_buffer}", "Transform buffer"),
+    BT::OutputPort<std::shared_ptr<visualization_msgs::msg::MarkerArray> >("marker_array", "{marker_array}", "Marker array to add visualization markers to"),
+    BT::InputPort<geometry_msgs::msg::Polygon>("robot_footprint", "{robot_footprint}", "Footprint of the robot"),
+    BT::OutputPort<std::shared_ptr<OccupancyGrid> >("local_costmap", "{local_costmap}", "Local costmap")
   };
 }
 

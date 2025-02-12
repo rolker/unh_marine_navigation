@@ -81,9 +81,7 @@ CallbackReturn Navigator::on_activate(const rclcpp_lifecycle::State& state)
   LifecycleNode::on_activate(state);
 
   tree_ = buildBehaviorTree();
-  
-  BT::printTreeRecursively(tree_.rootNode());
-
+    
   groot_ = std::make_shared<BT::Groot2Publisher>(tree_);
 
   std::string log_file;
@@ -313,7 +311,8 @@ void Navigator::odometryCallback(const nav_msgs::msg::Odometry::UniquePtr& msg)
         if(task_list)
           feedback->feedback.tasks = task_list->taskMessages();
       }
-      goal_handle_->publish_feedback(feedback);
+      if(goal_handle_)
+        goal_handle_->publish_feedback(feedback);
     }
   }
 

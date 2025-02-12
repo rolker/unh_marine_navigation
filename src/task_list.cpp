@@ -10,7 +10,7 @@ TaskList::TaskList(Task* parent):parent_task_(parent)
 
 }
 
-void TaskList::update(const std::vector<project11_nav_msgs::msg::TaskInformation>& task_msgs)
+void TaskList::update(const std::vector<project11_nav_msgs::msg::TaskInformation>& task_msgs, rclcpp::Node::SharedPtr node)
 {
   // Create a new vector adding tasks in order they appear.
   // Existing tasks may be copied from existing vector or new ones created if needed.
@@ -33,10 +33,15 @@ void TaskList::update(const std::vector<project11_nav_msgs::msg::TaskInformation
       }
       if(!task)
       {
-        TaskPtr parent;
         if(parent_task_)
-          parent = parent_task_->self();
-        task = Task::create(task_msg, parent);
+        {
+          TaskPtr parent = parent_task_->self();
+          task = Task::create(task_msg, parent);
+        }
+        else
+        {
+          task = Task::create(task_msg, node);
+        }
       }
       task->update(task_msgs);
       new_task_list.push_back(task);

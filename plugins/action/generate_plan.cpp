@@ -20,13 +20,13 @@ GeneratePlan::GeneratePlan(const std::string& name, const BT::NodeConfig& config
 BT::PortsList GeneratePlan::providedPorts()
 {
   return {
-    BT::InputPort<geometry_msgs::msg::PoseStamped>("start_pose"),
-    BT::InputPort<geometry_msgs::msg::PoseStamped>("goal_pose"),
-    BT::InputPort<std::string>("planner"),
-    BT::InputPort<double>("turn_radius"),
-    BT::InputPort<double>("lead_in_distance"),
-    BT::OutputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_trajectory"),
-    BT::OutputPort<int>("current_navigation_segment")
+    BT::InputPort<geometry_msgs::msg::PoseStamped>("start_pose", "{current_pose}", "Starting pose for the plan"),
+    BT::InputPort<geometry_msgs::msg::PoseStamped>("goal_pose", "{goal_pose}", "Goal pose for the plan"),
+    BT::InputPort<std::string>("planner", "{default_planner}", "Planner to use"),
+    BT::InputPort<double>("turn_radius", "{robot_turn_radius}", "Turn radius for the robot"),
+    BT::InputPort<double>("lead_in_distance", "{lead_in_distance}", "Distance in meters to lead into lines"),
+    BT::OutputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_trajectory", "{navigation_trajectory}", "Planned path to follow"),
+    BT::OutputPort<int>("current_navigation_segment", "{current_navigation_segment}", "Index of the current segment of the navigation trajectory"),
   };
 }
 
