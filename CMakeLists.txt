@@ -13,7 +13,11 @@ find_package(ament_index_cpp REQUIRED)
 find_package(behaviortree_cpp 4 REQUIRED)
 find_package(dubins_curves REQUIRED)
 find_package(grid_map_ros REQUIRED)
+find_package(nav2_behavior_tree REQUIRED)
+find_package(nav2_behaviors REQUIRED)
+find_package(nav2_core REQUIRED)
 find_package(nav2_util REQUIRED)
+find_package(pluginlib REQUIRED)
 find_package(project11 REQUIRED)
 find_package(project11_nav_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -30,6 +34,7 @@ ament_python_install_package(${PROJECT_NAME})
 add_library(${PROJECT_NAME} SHARED
   src/context.cpp
   src/environment.cpp
+  src/navigator_settings.cpp
   src/occupancy_grid.cpp
   src/platform.cpp
   src/robot.cpp
@@ -70,10 +75,21 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
   yaml-cpp::yaml-cpp
 )
 
+install(
+  DIRECTORY include/
+  DESTINATION include/${PROJECT_NAME}
+)
+
+install(
+  TARGETS project11_navigation
+  EXPORT export_${PROJECT_NAME}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin)
+
 
 # behavior tree plugins
 set(BT_PLUGIN_ACTIONS
-  adjust_path
   baxevani_controller
   clear_path
   crabbing_path_follower
@@ -82,18 +98,16 @@ set(BT_PLUGIN_ACTIONS
   get_task_data_double
   get_task_data_string
   get_sub_tasks
-  hover
+  hover_action
+  hover_cancel_node
   multibeam_coverage_action
-  navigator_settings_loader
   predict_stopping_pose
-  robot_capabilities_loader
   set_pose_from_task
   set_task_done
   set_trajectory_from_task
   task_list_updater
   update_current_segment
   update_current_task
-  update_state
   visualize_trajectory
 )
 
@@ -128,9 +142,12 @@ foreach(bt_plugin ${plugin_libs})
     dubins_curves
     grid_map_ros
     nav_msgs
+    nav2_behavior_tree
+    nav2_util
     project11_msgs
     project11_nav_msgs
     rclcpp
+    rclcpp_action
     rclcpp_lifecycle
     tf2_geometry_msgs
     tf2_ros
@@ -154,21 +171,51 @@ ament_target_dependencies(generate_project11_navigation_tree_nodes_xml
 target_include_directories(generate_project11_navigation_tree_nodes_xml PRIVATE ${GENERATED_DIR})
 install(TARGETS generate_project11_navigation_tree_nodes_xml DESTINATION lib/${PROJECT_NAME})
 
-install(
-  DIRECTORY include/
-  DESTINATION include/${PROJECT_NAME}
-)
 
 install(FILES project11_navigation_tree_nodes.xml DESTINATION share/${PROJECT_NAME})
 install(FILES ${GENERATED_DIR}/plugins_list.hpp DESTINATION include/${PROJECT_NAME}/${PROJECT_NAME})
 
-install(
-  TARGETS project11_navigation
-  EXPORT export_${PROJECT_NAME}
+
+
+# behaviors
+
+set(hover_plugin project11_navigation_hover_behavior_plugin)
+
+add_library(${hover_plugin} SHARED
+  plugins/behaviors/hover.cpp
+)
+
+target_include_directories(${hover_plugin}
+  PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    "$<INSTALL_INTERFACE:include/${PROJECT_NAME}>")
+
+
+target_compile_definitions(${hover_plugin} PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
+
+ament_target_dependencies(${hover_plugin}
+  nav2_behaviors
+  pluginlib
+  project11_nav_msgs
+  rclcpp
+  rclcpp_lifecycle
+  visualization_msgs
+)
+
+pluginlib_export_plugin_description_file(nav2_core behavior_plugin.xml)
+
+install(TARGETS ${hover_plugin}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
-  RUNTIME DESTINATION bin)
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
 
+install(FILES behavior_plugin.xml
+  DESTINATION share/${PROJECT_NAME}
+)
+
+
+# navigator
 
 add_executable(navigator
   src/bt_types.cpp
@@ -194,6 +241,43 @@ ament_target_dependencies(navigator
 )
 
 
+# task navigator
+
+add_library(task_navigator SHARED
+  src/bt_types.cpp
+  src/task_navigator.cpp
+)
+
+target_include_directories(task_navigator
+  PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    "$<INSTALL_INTERFACE:include/${PROJECT_NAME}>"
+)
+
+target_include_directories(task_navigator
+  PUBLIC
+  ${nav2_core_INCLUDE_DIRS}
+)
+
+target_link_libraries(task_navigator PUBLIC
+  ${nav2_core_LIBRARIES}
+  project11::project11
+  ${project11_nav_msgs_TARGETS}
+  
+)
+
+
+pluginlib_export_plugin_description_file(nav2_core navigator_plugin.xml)
+
+install(
+  TARGETS ${plugin_libs} task_navigator
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin)
+
+install(DIRECTORY behavior_trees DESTINATION share/${PROJECT_NAME})
+
+
 
 add_executable(occupancy_vector_map_from_geo src/tools/occupancy_vector_map_from_geo.cpp)
 target_link_libraries(occupancy_vector_map_from_geo
@@ -215,13 +299,6 @@ target_link_libraries(occupancy_grid_from_vector_map
 install(TARGETS navigator occupancy_vector_map_from_geo occupancy_grid_from_vector_map
   DESTINATION lib/${PROJECT_NAME})
 
-install(
-  TARGETS ${plugin_libs}
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION bin)
-
-install(DIRECTORY behavior_trees DESTINATION share/${PROJECT_NAME})
 
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 

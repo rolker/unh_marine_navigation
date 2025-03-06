@@ -3,6 +3,7 @@
 
 #include "project11_nav_msgs/msg/task_information.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp_lifecycle/lifecycle_node.hpp"
 
 namespace project11_navigation
 {
@@ -23,7 +24,7 @@ public:
   /// Updates or add tasks from task_msgs. Removes existing tasks
   /// that are not in task_msgs. Tasks are reordered if necessary
   /// to reflect the order in task_msgs.
-  void update(const std::vector<project11_nav_msgs::msg::TaskInformation>& task_msgs, rclcpp::Node::SharedPtr node = {});
+  void update(const std::vector<project11_nav_msgs::msg::TaskInformation>& task_msgs, rclcpp::Clock::SharedPtr clock = {});
 
   /// Return list of direct children tasks. 
   const std::vector<std::shared_ptr<Task> >& tasks() const;

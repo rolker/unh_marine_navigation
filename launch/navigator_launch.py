@@ -25,7 +25,9 @@ def generate_launch_description():
             namespace='',
             remappings=[
                 ('cmd_vel', 'piloting_mode/autonomous/cmd_vel'),
-                ('enable', 'piloting_mode/autonomous/active')
+                ('enable', 'piloting_mode/autonomous/active'),
+                ('/tf', 'tf'),
+                ('/tf_static', 'tf_static')
             ],
             respawn=True,
             respawn_delay=5,

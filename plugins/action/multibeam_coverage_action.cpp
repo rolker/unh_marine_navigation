@@ -1,17 +1,19 @@
 #include <project11_navigation/plugins/action/multibeam_coverage_action.h>
 #include <project11_navigation/utilities.h>
+#include "project11_navigation/context.h"
 
 namespace project11_navigation
 {
 
-MultibeamCoverageActionClient::MultibeamCoverageActionClient(std::shared_ptr<Task> task, const std::string& action_service, rclcpp::Node::SharedPtr node):
+MultibeamCoverageActionClient::MultibeamCoverageActionClient(std::shared_ptr<Task> task, const std::string& action_service, rclcpp_lifecycle::LifecycleNode::WeakPtr node):
   node_(node)
 {
-  RCLCPP_INFO_STREAM(node_->get_logger(), "Creating a client for " << action_service);
-  action_client_ = rclcpp_action::create_client<MultibeamCoverage>(node_, action_service);
+  auto node_ptr = node.lock();
+  RCLCPP_INFO_STREAM(node_ptr->get_logger(), "Creating a client for " << action_service);
+  action_client_ = rclcpp_action::create_client<MultibeamCoverage>(node_ptr, action_service);
 
   if(!action_client_->wait_for_action_server())
-    RCLCPP_INFO_STREAM(node_->get_logger(), "Timeout waiting for action server: " << action_service);
+    RCLCPP_INFO_STREAM(node_ptr->get_logger(), "Timeout waiting for action server: " << action_service);
 
   auto goal = MultibeamCoverage::Goal();
   for(auto vertex: task->message().poses)
@@ -43,9 +45,9 @@ void MultibeamCoverageActionClient::actionResultCallback(const GoalHandleMultibe
 void MultibeamCoverageActionClient::actionResponseCallback(const GoalHandleMultibeamCoverage::SharedPtr & goal)
 {
   if(!goal)
-    RCLCPP_ERROR_STREAM(node_->get_logger(), "Multibeam coverage goal was rejected by the server");
+    RCLCPP_ERROR_STREAM(node_.lock()->get_logger(), "Multibeam coverage goal was rejected by the server");
   else
-    RCLCPP_INFO_STREAM(node_->get_logger(), "Multibeam Coverage Action active");
+    RCLCPP_INFO_STREAM(node_.lock()->get_logger(), "Multibeam Coverage Action active");
 }
 
 void MultibeamCoverageActionClient::actionFeedbackCallback(GoalHandleMultibeamCoverage::SharedPtr, const std::shared_ptr<const MultibeamCoverage::Feedback> feedback)
@@ -86,12 +88,12 @@ MultibeamCoverageActionClient::ClientPtr MultibeamCoverageActionClient::actionCl
 MultibeamCoverageActionSetGoal::MultibeamCoverageActionSetGoal(const std::string& name, const BT::NodeConfig& config):
   BT::SyncActionNode(name, config)
 {
-  node_ = config.blackboard->template get<rclcpp::Node::SharedPtr>("node");
 }
 
 BT::PortsList MultibeamCoverageActionSetGoal::providedPorts()
 {
   return {
+    BT::InputPort<Context::Ptr>("context", "{@context}", "Navigation context"),
     BT::InputPort<std::shared_ptr<Task> >("task", "{task}", "Survey area Task describing area to survey"),
     BT::InputPort<std::string>("ros_action"),
     BT::OutputPort<std::shared_ptr<MultibeamCoverageActionClient> >("action_client", "{multibeam_coverage_action_client}", "Multibeam coverage action client")
@@ -100,12 +102,19 @@ BT::PortsList MultibeamCoverageActionSetGoal::providedPorts()
 
 BT::NodeStatus MultibeamCoverageActionSetGoal::tick()
 {
+  auto context = getInput<Context::Ptr>("context");
+  if(!context)
+  {
+    throw BT::RuntimeError("MultibeamCoverageAction node named ",name(), " missing required input [context]: ", context.error() );
+  }
+
   auto task_bb = getInput<std::shared_ptr<Task> >("task");
   if(!task_bb)
   {
     throw BT::RuntimeError("MultibeamCoverageAction node named ",name(), " missing required input [task]: ", task_bb.error() );
   }
   auto task = task_bb.value();
+
   if(task)
   {
     auto ros_action = getInput<std::string>("ros_action");
@@ -114,7 +123,7 @@ BT::NodeStatus MultibeamCoverageActionSetGoal::tick()
       throw BT::RuntimeError("MultibeamCoverageAction node named ",name(), " missing required input [ros_action]: ", ros_action.error() );
     }
 
-    setOutput("action_client", std::make_shared<MultibeamCoverageActionClient>(task, ros_action.value(), node_));
+    setOutput("action_client", std::make_shared<MultibeamCoverageActionClient>(task, ros_action.value(), context.value()->node()));
     return BT::NodeStatus::SUCCESS;
   }
   return BT::NodeStatus::FAILURE;
@@ -125,12 +134,12 @@ BT::NodeStatus MultibeamCoverageActionSetGoal::tick()
 MultibeamCoverageActionUpdateTask::MultibeamCoverageActionUpdateTask(const std::string& name, const BT::NodeConfig& config):
   BT::SyncActionNode(name, config)
 {
-  node_ = config.blackboard->template get<rclcpp::Node::SharedPtr>("node");
 }
 
 BT::PortsList MultibeamCoverageActionUpdateTask::providedPorts()
 {
   return {
+    BT::InputPort<Context::Ptr>("context", "{@context}", "Navigation context"),
     BT::InputPort<std::shared_ptr<MultibeamCoverageActionClient> >("action_client", "{multibeam_coverage_action_client}", "Multibeam coverage action client"),
     BT::InputPort<std::shared_ptr<Task> >("task", "{task}", "Survey area Task describing area to survey"),
   };
@@ -138,6 +147,12 @@ BT::PortsList MultibeamCoverageActionUpdateTask::providedPorts()
 
 BT::NodeStatus MultibeamCoverageActionUpdateTask::tick()
 {
+  auto context = getInput<Context::Ptr>("context");
+  if(!context)
+  {
+    throw BT::RuntimeError("MultibeamCoverageActionUpdateTask node named ",name(), " missing required input [context]: ", context.error() );
+  }
+
   auto action_client_bb = getInput<std::shared_ptr<MultibeamCoverageActionClient> >("action_client");
   if(!action_client_bb)
   {
@@ -164,7 +179,7 @@ BT::NodeStatus MultibeamCoverageActionUpdateTask::tick()
       info.type = "survey_line";
       info.poses = action_client->survey_lines_[line_index].poses;
       new_child_task->update(info);
-      RCLCPP_INFO_STREAM(node_->get_logger(), "New task: " <<  project11_nav_msgs::msg::to_yaml(new_child_task->message()));
+      RCLCPP_INFO_STREAM(context.value()->node().lock()->get_logger(), "New task: " <<  project11_nav_msgs::msg::to_yaml(new_child_task->message()));
     }
     return BT::NodeStatus::SUCCESS;
   }

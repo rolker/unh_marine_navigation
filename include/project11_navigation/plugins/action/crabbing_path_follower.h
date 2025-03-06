@@ -20,7 +20,6 @@ public:
   void onHalted() override;
 
 private:
-  rclcpp::Node::SharedPtr node_;
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr crab_angle_publisher_;
 };
 

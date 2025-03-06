@@ -18,7 +18,6 @@ public:
   BT::NodeStatus tick() override;
 
 private:
-  rclcpp::Node::SharedPtr node_;
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr cross_track_error_publisher_;
 };
 

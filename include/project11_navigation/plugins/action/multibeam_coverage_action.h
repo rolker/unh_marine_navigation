@@ -3,6 +3,7 @@
 
 #include <behaviortree_cpp/bt_factory.h>
 #include <rclcpp_action/rclcpp_action.hpp>
+#include "rclcpp_lifecycle/lifecycle_node.hpp"
 #include <project11_nav_msgs/action/multibeam_coverage.hpp>
 #include <project11_navigation/task.h>
 
@@ -18,8 +19,6 @@ public:
   static BT::PortsList providedPorts();
 
   BT::NodeStatus tick() override;
-private:
-  rclcpp::Node::SharedPtr node_;
 };
 
 class MultibeamCoverageActionUpdateTask: public BT::SyncActionNode
@@ -30,9 +29,6 @@ public:
   static BT::PortsList providedPorts();
 
   BT::NodeStatus tick() override;
-private:
-  rclcpp::Node::SharedPtr node_;
-
 };
 
 class MultibeamCoverageActionCancel: public BT::SyncActionNode
@@ -63,7 +59,7 @@ class MultibeamCoverageActionClient
   using GoalHandleMultibeamCoverage = rclcpp_action::ClientGoalHandle<MultibeamCoverage>;
 
 public:
-  MultibeamCoverageActionClient(std::shared_ptr<Task> task, const std::string& action_service, rclcpp::Node::SharedPtr node);
+  MultibeamCoverageActionClient(std::shared_ptr<Task> task, const std::string& action_service, rclcpp_lifecycle::LifecycleNode::WeakPtr node);
 
   int lineCount() const;
   int lastLineNumber() const;
@@ -76,8 +72,6 @@ private:
   friend class MultibeamCoverageActionCancel;
   friend class MultibeamCoverageActionDoneCondition;
 
-  rclcpp::Node::SharedPtr node_;
-
   ClientPtr action_client_;
 
 
@@ -88,6 +82,8 @@ private:
   std::vector<nav_msgs::msg::Path> survey_lines_;
   int last_line_number_ = -1;
   bool done_ = false;
+
+  rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
 
 };
 

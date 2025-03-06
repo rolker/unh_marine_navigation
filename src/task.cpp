@@ -7,16 +7,16 @@
 
 namespace project11_navigation
 {
-Task::Task(rclcpp::Node::SharedPtr node):
+Task::Task(rclcpp::Clock::SharedPtr clock):
   children_(this),
-  last_update_time_(node->get_clock()->now()),
-  node_(node)
+  last_update_time_(clock->now()),
+  clock_(clock)
 {
 }
 
 std::shared_ptr<Task> Task::create(const project11_nav_msgs::msg::TaskInformation& task_msg, TaskPtr parent_task)
 {
-  auto new_task = std::shared_ptr<Task>(new Task(parent_task->node_));
+  auto new_task = std::shared_ptr<Task>(new Task(parent_task->clock_));
   
   new_task->message_ = task_msg;
   new_task->self_ = new_task;
@@ -24,9 +24,9 @@ std::shared_ptr<Task> Task::create(const project11_nav_msgs::msg::TaskInformatio
   return new_task;
 }
 
-std::shared_ptr<Task> Task::create(const project11_nav_msgs::msg::TaskInformation& task_msg, rclcpp::Node::SharedPtr node)
+std::shared_ptr<Task> Task::create(const project11_nav_msgs::msg::TaskInformation& task_msg, rclcpp::Clock::SharedPtr clock)
 {
-  auto new_task = std::shared_ptr<Task>(new Task(node));
+  auto new_task = std::shared_ptr<Task>(new Task(clock));
   
   new_task->message_ = task_msg;
   new_task->self_ = new_task;
@@ -44,7 +44,7 @@ bool Task::update(const project11_nav_msgs::msg::TaskInformation& task_msg, bool
   if(!check_id || message_.id == task_msg.id)
   {
     if(message_ != task_msg)
-      last_update_time_ = node_->get_clock()->now();
+      last_update_time_ = clock_->now();
     message_= task_msg;
     return true;
   }
@@ -66,7 +66,7 @@ const project11_nav_msgs::msg::TaskInformation & Task::message() const
 void Task::setDone()
 {
   message_.done = true;
-  last_update_time_ = node_->get_clock()->now();
+  last_update_time_ = clock_->now();
 }
 
 YAML::Node Task::data() const
@@ -79,7 +79,7 @@ void Task::setData(const YAML::Node& data)
   std::stringstream ss;
   ss << data;
   message_.data = ss.str();
-  last_update_time_ = node_->get_clock()->now();
+  last_update_time_ = clock_->now();
 }
 
 YAML::Node Task::dataItem(std::string key, bool recurse_up) const
@@ -102,13 +102,13 @@ void Task::setStatus(const YAML::Node& status)
   std::stringstream ss;
   ss << status;
   message_.status = ss.str();
-  last_update_time_ = node_->get_clock()->now();
+  last_update_time_ = clock_->now();
 }
 
 void Task::setID(std::string id)
 {
   message_.id = id;
-  last_update_time_ = node_->get_clock()->now();
+  last_update_time_ = clock_->now();
 }
 
 void Task::setChildID(std::shared_ptr<Task> task, std::string id)

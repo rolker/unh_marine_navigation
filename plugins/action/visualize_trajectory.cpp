@@ -3,6 +3,7 @@
 #include "visualization_msgs/msg/marker_array.hpp"
 
 #include <project11_navigation/bt_types.h>
+#include "project11_navigation/context.h"
 
 namespace project11_navigation
 {
@@ -10,12 +11,12 @@ namespace project11_navigation
 VisualizeTrajectory::VisualizeTrajectory(const std::string& name, const BT::NodeConfig& config):
   BT::SyncActionNode(name, config)
 {
-  node_ = config.blackboard->template get<rclcpp::Node::SharedPtr>("node");
 }
 
 BT::PortsList VisualizeTrajectory::providedPorts()
 {
   return {
+    BT::InputPort<Context::Ptr>("context", "{@context}", "Navigation context"),
     BT::InputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("trajectory", "{navigation_trajectory}", "Trajectory to visualize"),
     BT::InputPort<std::shared_ptr<visualization_msgs::msg::MarkerArray> >("marker_array", "{marker_array}", "Pointer to MarkerArray to add visualization markers to"),
     BT::InputPort<std::string>("namespace", "trajectory", "Used in ns field of Markers"),
@@ -30,6 +31,13 @@ BT::PortsList VisualizeTrajectory::providedPorts()
 
 BT::NodeStatus VisualizeTrajectory::tick()
 {
+  auto context = getInput<Context::Ptr>("context");
+  if(!context)
+  {
+    throw BT::RuntimeError(name(), " missing required input [context]: ", context.error() );
+  }
+  auto node = context.value()->node().lock();
+
   auto trajectory = getInput<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("trajectory");
   if(!trajectory)
   {
@@ -37,26 +45,26 @@ BT::NodeStatus VisualizeTrajectory::tick()
   }
   if(!trajectory.value())
   {
-    RCLCPP_WARN_STREAM(node_->get_logger(), "VisualizeTrajectory node named " << name() << " [trajectory] is null");
+    RCLCPP_WARN_STREAM(node->get_logger(), "VisualizeTrajectory node named " << name() << " [trajectory] is null");
     return BT::NodeStatus::FAILURE;
   }
 
   auto marker_array = getInput<std::shared_ptr<visualization_msgs::msg::MarkerArray> >("marker_array");
   if(!marker_array)
   {
-    RCLCPP_WARN_STREAM(node_->get_logger(), "VisualizeTrajectory node named " << name() << " missing [marker_array]");
+    RCLCPP_WARN_STREAM(node->get_logger(), "VisualizeTrajectory node named " << name() << " missing [marker_array]");
     return BT::NodeStatus::FAILURE;
   }
   if(!marker_array.value())
   {
-    RCLCPP_WARN_STREAM(node_->get_logger(), "VisualizeTrajectory node named " << name() << " [marker_array] is null");
+    RCLCPP_WARN_STREAM(node->get_logger(), "VisualizeTrajectory node named " << name() << " [marker_array] is null");
     return BT::NodeStatus::FAILURE;
   }
 
   auto current_pose = getInput<geometry_msgs::msg::PoseStamped>("current_pose");
   if(!current_pose)
   {
-    RCLCPP_WARN_STREAM(node_->get_logger(), "VisualizeTrajectory node named " << name() << " missing [current_pose]");
+    RCLCPP_WARN_STREAM(node->get_logger(), "VisualizeTrajectory node named " << name() << " missing [current_pose]");
     return BT::NodeStatus::FAILURE;
   }
 

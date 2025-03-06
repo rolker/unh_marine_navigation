@@ -13,6 +13,9 @@
   <depend>behaviortree_cpp</depend>
   <depend>dubins_curves</depend>
   <depend>grid_map_ros</depend>
+  <depend>nav2_behavior_tree</depend>
+  <depend>nav2_behaviors</depend>
+  <depend>nav2_core</depend>
   <depend>nav2_util</depend>
   <depend>project11</depend>
   <depend>project11_nav_msgs</depend>
@@ -27,5 +30,6 @@
   <export>
     <build_type>ament_cmake</build_type>
     <behaviortree_cpp bt_lib_plugin="libproject11_navigation_bt_plugins"/>
+    <nav2_core plugin="${prefix}/navigator_plugin.xml"/>
   </export>
 </package>

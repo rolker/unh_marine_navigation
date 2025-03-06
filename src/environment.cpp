@@ -7,8 +7,8 @@ Environment::Environment(rclcpp_lifecycle::LifecycleNode::WeakPtr node_ptr)
 {
   auto node = node_ptr.lock();
   std::vector<std::string> static_grid_topics;
-  node->declare_parameter("grids/static", static_grid_topics);
-  node->get_parameter("grids/static", static_grid_topics);
+  node->declare_parameter("grids.static", static_grid_topics);
+  node->get_parameter("grids.static", static_grid_topics);
   for(auto sg: static_grid_topics)
   {
     static_grids_[sg].subscribe(node, sg);

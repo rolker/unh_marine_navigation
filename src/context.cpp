@@ -6,13 +6,14 @@ namespace project11_navigation
 
 Context::Context(rclcpp_lifecycle::LifecycleNode::WeakPtr node_ptr):
   environment_(node_ptr),
+  navigator_settings_(node_ptr),
+  node_(node_ptr),
   robot_(node_ptr),
-  robot_capabilities_(node_ptr),
-  node_(node_ptr)
+  robot_capabilities_(node_ptr)
 {
   auto node = node_.lock();
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(node->get_clock());
-  tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+  tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_, node);
 }
 
 const Environment& Context::environment() const
@@ -35,6 +36,10 @@ const RobotCapabilities& Context::robot_capabilities() const
   return robot_capabilities_;
 }
 
+const NavigatorSettings& Context::navigator_settings() const
+{
+  return navigator_settings_;
+}
 
 rclcpp_lifecycle::LifecycleNode::WeakPtr Context::node() const
 {

@@ -1,0 +1,479 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root BTCPP_format="4"
+      main_tree_to_execute="NavigatorSequence">
+  <BehaviorTree ID="GotoPose">
+    <Sequence name="GotoPoseSequence">
+      <CancelHover name="CancelHoverBeforeGotoPose"/>
+      <NavigateToPose goal="{goal_pose}"
+                      server_name="navigate_to_pose"
+                      server_timeout="1000"
+                      behavior_tree=""
+                      error_code_id="{navigate_to_pose_error_code}"/>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="GotoTask">
+    <ReactiveSequence name="GotoTaskReactiveSequence">
+      <SetPoseFromTask name="SetPoseFromGotoTask"
+                       out_of_range_flag="{index_out_of_range_flag}"
+                       pose_index="0"
+                       pose="{goal_pose}"
+                       task="{current_task}"/>
+      <Fallback name="SetTaskDoneAfterGotoSuccessFallback">
+        <Inverter name="GotoPoseResultInverter">
+          <SubTree ID="GotoPose"
+                   _autoremap="true"/>
+        </Inverter>
+        <SetTaskDone name="SetGotoTaskDone"
+                     task="{current_task}"/>
+      </Fallback>
+    </ReactiveSequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="HoverTask">
+    <Sequence>
+      <Fallback name="SetHoverGoalFallback">
+        <Inverter>
+          <SetPoseFromTask name="SetGoalPoseFromHoverTask"
+                           out_of_range_flag="{index_out_of_range_flag}"
+                           pose_index="0"
+                           pose="{goal_pose}"
+                           task="{current_task}"/>
+        </Inverter>
+        <SubTree ID="GotoPose"
+                 _autoremap="true"/>
+      </Fallback>
+      <Script code="navigation_state := &quot;hover&quot;"/>
+      <Hover maximum_distance="0.000000"
+             maximum_speed="0.000000"
+             error_code_id="{hover_error_code}"
+             minimum_distance="0.000000"/>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="NavigatorSequence">
+      <ReactiveSequence name="MainRunSequence">
+        <SubTree ID="UpdateCurrentTaskData"
+                 _autoremap="true"/>
+        <ReactiveFallback name="SelectTaskReactiveFallback">
+          <Precondition name="TaskIsHoverPrecondition"
+                        else="FAILURE"
+                        if="current_task_type == &apos;hover&apos;">
+            <SubTree ID="HoverTask"
+                     node="{node}"
+                     wait_for_service_timeout="{wait_for_service_timeout}"
+                     server_timeout="{server_timeout}"
+                     bt_loop_duration="{bt_loop_duration}"
+                     current_task_type="{current_task_type}"
+                     navigation_state="{navigation_state}"
+                     current_task="{current_task}"
+                     _autoremap="false"/>
+          </Precondition>
+          <Precondition name="TaskIsGotoPrecondition"
+                        else="FAILURE"
+                        if="current_task_type == &quot;goto&quot;">
+            <SubTree ID="GotoTask"
+                     current_task="{=}"
+                     lead_in_distance="0.0"
+                     node="{node}"
+                     server_timeout="{server_timeout}"
+                     bt_loop_duration="{bt_loop_duration}"
+                     wait_for_service_timeout="{wait_for_service_timeout}"
+                     _autoremap="true"/>
+          </Precondition>
+          <SubTree ID="SurveyLineTask"
+                   lead_in_distance="{survey_lead_in_distance}"
+                   survey_line_task="{current_task}"
+                   _skipIf="current_task_type != &apos;survey_line&apos;"
+                   _autoremap="true"/>
+          <SubTree ID="SurveyLineSetTask"
+                   survey_line_set_task="{current_task}"
+                   _skipIf="current_task_type != &apos;survey_line_set&apos;"
+                   _autoremap="true"/>
+          <SubTree ID="SurveyAreaTask"
+                   survey_area_task="{current_task}"
+                   node="{node}"
+                   server_timeout="{server_timeout}"
+                   bt_loop_duration="{bt_loop_duration}"
+                   wait_for_service_timeout="{wait_for_service_timeout}"
+                   _skipIf="current_task_type != &apos;survey_area&apos;"
+                   _autoremap="true"/>
+          <SetTaskDone name="SkipUnknownTaskType"
+                       task="{current_task}"/>
+        </ReactiveFallback>
+        <KeepRunningUntilFailure>
+          <Inverter>
+            <AllTasksDoneCondition task_list="{task_list}"/>
+          </Inverter>
+        </KeepRunningUntilFailure>
+      </ReactiveSequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="SurveyAreaTask">
+    <Sequence>
+      <GetTaskDataString value="{coverage_generator}"
+                         default_value="none"
+                         key="coverage_generator"
+                         task="{survey_area_task}"/>
+      <Sequence>
+        <IfThenElse>
+          <ScriptCondition code="coverage_generator == &apos;manda&apos;"/>
+          <Sequence>
+            <MultibeamCoverageActionSetGoal name="MandaMultibeamCoverageAction"
+                                            action_client="{multibeam_coverage_action_client}"
+                                            ros_action="survey_area_action"
+                                            task="{survey_area_task}"
+                                            context="{@context}"/>
+            <ReactiveSequence>
+              <MultibeamCoverageActionUpdateTask task="{survey_area_task}"
+                                                 action_client="{multibeam_coverage_action_client}"
+                                                 context="{@context}"/>
+              <GetSubTasks sub_tasks="{survey_area_tasks}"
+                           task="{survey_area_task}"/>
+              <WhileDoElse>
+                <ReactiveSequence>
+                  <MultibeamCoverageActionDoneCondition action_client="{multibeam_coverage_action_client}"/>
+                  <AllTasksDoneCondition task_list="{survey_area_tasks}"/>
+                </ReactiveSequence>
+                <SetTaskDone task="{survey_area_task}"/>
+                <KeepRunningUntilFailure>
+                  <ReactiveSequence>
+                    <SubTree ID="UpdateCurrentTaskData"
+                             default_planner="{=}"
+                             robot_default_speed="{=}"
+                             target_speed="{=}"
+                             current_tassk="{=}"
+                             active_task_id="{=}"
+                             current_task="{current_survey_area_task}"
+                             planner="{=}"
+                             current_task_type="{current_survey_area_task_type}"
+                             controller="{=}"
+                             current_task_id="{current_survey_area_task_id}"
+                             default_controller="{=}"
+                             task_list="{survey_area_tasks}"
+                             _autoremap="true"/>
+                    <IfThenElse>
+                      <ScriptCondition code="current_survey_area_task_type == &apos;survey_line&apos;"/>
+                      <SubTree ID="SurveyLineTask"
+                               survey_line_task="{current_survey_area_task}"
+                               lead_in_distance="{survey_lead_in_distance}"
+                               node="{node}"
+                               server_timeout="{server_timeout}"
+                               bt_loop_duration="{bt_loop_duration}"
+                               wait_for_service_timeout="{wait_for_service_timeout}"
+                               _autoremap="true"/>
+                      <AlwaysSuccess/>
+                    </IfThenElse>
+                  </ReactiveSequence>
+                </KeepRunningUntilFailure>
+              </WhileDoElse>
+            </ReactiveSequence>
+          </Sequence>
+          <ReactiveSequence>
+            <GetSubTasks sub_tasks="{survey_area_tasks}"
+                         task="{survey_area_task}"/>
+            <WhileDoElse>
+              <AllTasksDoneCondition task_list="{survey_area_tasks}"/>
+              <SetTaskDone task="{survey_area_task}"/>
+              <KeepRunningUntilFailure>
+                <ReactiveSequence>
+                  <SubTree ID="UpdateCurrentTaskData"
+                           default_planner="{=}"
+                           robot_default_speed="{=}"
+                           target_speed="{=}"
+                           current_tassk="{=}"
+                           active_task_id="{=}"
+                           current_task="{current_survey_area_task}"
+                           planner="{=}"
+                           current_task_type="{current_survey_area_task_type}"
+                           controller="{=}"
+                           current_task_id="{current_survey_area_task_id}"
+                           default_controller="{=}"
+                           task_list="{survey_area_tasks}"
+                           _autoremap="true"/>
+                  <ReactiveFallback>
+                    <SubTree ID="SurveyLineTask"
+                             lead_in_distance="{survey_lead_in_distance}"
+                             current_task="{current_survey_area_task}"
+                             node="{node}"
+                             server_timeout="{server_timeout}"
+                             bt_loop_duration="{bt_loop_duration}"
+                             wait_for_service_timeout="{wait_for_service_timeout}"
+                             _failureIf="current_survey_area_task_type != &apos;survey_line&apos;"
+                             _autoremap="true"/>
+                    <SubTree ID="SurveyLineSetTask"
+                             name="SurveyAreaSurveyLineSetTask"
+                             survey_line_set_task="{current_survey_area_task}"
+                             _failureIf="current_survey_area_task_type != &apos;survey_line_set&apos;"
+                             _autoremap="true"/>
+                    <SetTaskDone task="{current_survey_area_task}"/>
+                  </ReactiveFallback>
+                </ReactiveSequence>
+              </KeepRunningUntilFailure>
+            </WhileDoElse>
+          </ReactiveSequence>
+        </IfThenElse>
+        <SetTaskDone task="{survey_area_task}"/>
+      </Sequence>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="SurveyLine">
+    <Sequence>
+      <WhileDoElse>
+        <Inverter>
+          <GoalReachedCondition heading_accuracy="180"
+                                goal_pose="{start_pose}"
+                                context="{@context}"/>
+        </Inverter>
+        <SubTree ID="GotoPose"
+                 _autoremap="true"/>
+        <AlwaysSuccess/>
+      </WhileDoElse>
+      <ReactiveSequence>
+        <Script code="navigation_state := &quot;survey_line&quot;"/>
+      </ReactiveSequence>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="SurveyLineSetTask">
+    <ReactiveSequence>
+      <GetSubTasks sub_tasks="{survey_line_set_sub_tasks}"
+                   task="{survey_line_set_task}"/>
+      <WhileDoElse>
+        <AllTasksDoneCondition task_list="{survey_line_set_sub_tasks}"/>
+        <SetTaskDone task="{survey_line_set_task}"/>
+        <KeepRunningUntilFailure>
+          <ReactiveSequence>
+            <SubTree ID="UpdateCurrentTaskData"
+                     default_planner="{=}"
+                     robot_default_speed="{=}"
+                     target_speed="{=}"
+                     current_tassk="{=}"
+                     active_task_id="{=}"
+                     current_task="{survey_line_set_sub_task}"
+                     planner="{=}"
+                     current_task_type="{survey_line_set_sub_task_type}"
+                     controller="{=}"
+                     current_task_id="{survey_line_set_sub_task_id}"
+                     default_controller="{=}"
+                     task_list="{survey_line_set_sub_tasks}"
+                     _autoremap="true"/>
+            <ReactiveFallback>
+              <SubTree ID="SurveyLineTask"
+                       name="SurveyLineSetSurveyLineTask"
+                       survey_line_task="{survey_line_set_sub_task}"
+                       node="{node}"
+                       server_timeout="{server_timeout}"
+                       bt_loop_duration="{bt_loop_duration}"
+                       wait_for_service_timeout="{wait_for_service_timeout}"
+                       _failureIf="survey_line_set_sub_task_type != &apos;survey_line&apos;"
+                       _autoremap="true"/>
+              <SetTaskDone task="{survey_line_set_sub_task}"/>
+            </ReactiveFallback>
+          </ReactiveSequence>
+        </KeepRunningUntilFailure>
+      </WhileDoElse>
+    </ReactiveSequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="SurveyLineTask">
+    <Sequence>
+      <SetPoseFromTask out_of_range_flag="{index_out_of_range_flag}"
+                       pose_index="0"
+                       pose="{start_pose}"
+                       task="{survey_line_task}"/>
+      <SetTrajectoryFromTask current_segment="{current_survey_path_segment}"
+                             trajectory="{survey_path}"
+                             task="{survey_line_task}"/>
+      <SubTree ID="SurveyLine"
+               node="{node}"
+               server_timeout="{server_timeout}"
+               bt_loop_duration="{bt_loop_duration}"
+               wait_for_service_timeout="{wait_for_service_timeout}"
+               _autoremap="true"/>
+      <SetTaskDone task="{survey_line_task}"/>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="UpdateCurrentTaskData">
+    <Sequence>
+      <UpdateCurrentTask current_task_id="{current_task_id}"
+                         current_task_type="{current_task_type}"
+                         current_task="{current_task}"
+                         task_list="{task_list}"
+                         _onSuccess="active_task_id := current_task_id"/>
+      <GetTaskDataDouble value="{target_speed}"
+                         default_value="0.0"
+                         key="speed"
+                         task="{current_task}"/>
+      <GetTaskDataString value="{controller}"
+                         default_value="&quot;&quot;"
+                         key="controller"
+                         task="{current_task}"/>
+      <GetTaskDataString value="{planner}"
+                         default_value="&quot;&quot;"
+                         key="planner"
+                         task="{current_task}"/>
+    </Sequence>
+  </BehaviorTree>
+
+  <!-- Description of Node Models (used by Groot) -->
+  <TreeNodesModel>
+    <Condition ID="AllTasksDoneCondition">
+      <input_port name="task_list"
+                  default="{task_list}"
+                  type="std::shared_ptr&lt;project11_navigation::TaskList&gt;">List of tasks to check</input_port>
+    </Condition>
+    <Action ID="CancelHover">
+      <input_port name="server_timeout"
+                  type="std::chrono::milliseconds"/>
+      <input_port name="server_name"
+                  type="std::string">Action server name</input_port>
+    </Action>
+    <Action ID="GetSubTasks">
+      <output_port name="sub_tasks"
+                   default="{current_sub_tasks}"
+                   type="std::shared_ptr&lt;project11_navigation::TaskList&gt;">Sub tasks of the input task</output_port>
+      <input_port name="task"
+                  default="{current_task}"
+                  type="std::shared_ptr&lt;project11_navigation::Task&gt;">Task to get sub tasks from</input_port>
+    </Action>
+    <Action ID="GetTaskDataDouble">
+      <output_port name="value"
+                   type="double"/>
+      <input_port name="default_value"
+                  type="double"/>
+      <input_port name="key"
+                  type="std::string"/>
+      <input_port name="task"
+                  default="{task}"
+                  type="std::shared_ptr&lt;project11_navigation::Task&gt;">Task to get data from</input_port>
+    </Action>
+    <Action ID="GetTaskDataString">
+      <output_port name="value"
+                   type="std::string"/>
+      <input_port name="default_value"
+                  type="std::string"/>
+      <input_port name="key"
+                  type="std::string"/>
+      <input_port name="task"
+                  default="{task}"
+                  type="std::shared_ptr&lt;project11_navigation::Task&gt;">Task to get data from</input_port>
+    </Action>
+    <Condition ID="GoalReachedCondition">
+      <input_port name="heading_accuracy"
+                  default="180"
+                  type="double">How much can the heading can vary in degrees. 180 means it doesn't matter.</input_port>
+      <input_port name="goal_pose"
+                  default="{goal_pose}"
+                  type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;">Pose to compare current state with</input_port>
+      <input_port name="context"
+                  default="{@context}"
+                  type="std::shared_ptr&lt;project11_navigation::Context&gt;">Navigation context</input_port>
+    </Condition>
+    <SubTree ID="GotoTask"
+             editable="true">
+      <input_port name="current_task"
+                  default="{=}">Task with a goal pose as it's first pose element.</input_port>
+    </SubTree>
+    <Action ID="Hover">
+      <input_port name="maximum_distance"
+                  default="0.000000"
+                  type="double">Distance at which robot uses maximum speed to get to the target</input_port>
+      <input_port name="maximum_speed"
+                  default="0.000000"
+                  type="double">Maximum speed to use to get to the target</input_port>
+      <output_port name="error_code_id"
+                   type="unsigned short">The hover server error code</output_port>
+      <input_port name="server_timeout"
+                  type="std::chrono::milliseconds"/>
+      <input_port name="minimum_distance"
+                  default="0.000000"
+                  type="double">Distance within which robot is deemed at the target</input_port>
+      <input_port name="server_name"
+                  type="std::string">Action server name</input_port>
+    </Action>
+    <Condition ID="MultibeamCoverageActionDoneCondition">
+      <input_port name="action_client"
+                  default="{multibeam_coverage_action_client}"
+                  type="std::shared_ptr&lt;project11_navigation::MultibeamCoverageActionClient&gt;">Multibeam coverage action client</input_port>
+    </Condition>
+    <Action ID="MultibeamCoverageActionSetGoal">
+      <output_port name="action_client"
+                   default="{multibeam_coverage_action_client}"
+                   type="std::shared_ptr&lt;project11_navigation::MultibeamCoverageActionClient&gt;">Multibeam coverage action client</output_port>
+      <input_port name="ros_action"
+                  type="std::string"/>
+      <input_port name="task"
+                  default="{task}"
+                  type="std::shared_ptr&lt;project11_navigation::Task&gt;">Survey area Task describing area to survey</input_port>
+      <input_port name="context"
+                  default="{@context}"
+                  type="std::shared_ptr&lt;project11_navigation::Context&gt;">Navigation context</input_port>
+    </Action>
+    <Action ID="MultibeamCoverageActionUpdateTask">
+      <input_port name="task"
+                  default="{task}"
+                  type="std::shared_ptr&lt;project11_navigation::Task&gt;">Survey area Task describing area to survey</input_port>
+      <input_port name="action_client"
+                  default="{multibeam_coverage_action_client}"
+                  type="std::shared_ptr&lt;project11_navigation::MultibeamCoverageActionClient&gt;">Multibeam coverage action client</input_port>
+      <input_port name="context"
+                  default="{@context}"
+                  type="std::shared_ptr&lt;project11_navigation::Context&gt;">Navigation context</input_port>
+    </Action>
+    <Action ID="NavigateToPose">
+      <input_port name="goal">Goal</input_port>
+      <input_port name="server_name">Server name</input_port>
+      <input_port name="server_timeout">Server timeout</input_port>
+      <input_port name="behavior_tree">Behavior tree to run</input_port>
+      <output_port name="error_code_id">Navigate to pose error code</output_port>
+    </Action>
+    <Action ID="SetPoseFromTask">
+      <output_port name="out_of_range_flag"
+                   default="{index_out_of_range_flag}"
+                   type="bool">Flag to indicate if the pose index is out of range</output_port>
+      <input_port name="pose_index"
+                  default="0"
+                  type="int">Index of the pose to set as output pose</input_port>
+      <output_port name="pose"
+                   default="{goal_pose}"
+                   type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;">Pose to set</output_port>
+      <input_port name="task"
+                  default="{current_task}"
+                  type="std::shared_ptr&lt;project11_navigation::Task&gt;">Task to get pose from</input_port>
+    </Action>
+    <Action ID="SetTaskDone">
+      <input_port name="task"
+                  default="{task}"
+                  type="std::shared_ptr&lt;project11_navigation::Task&gt;">Task to set as done</input_port>
+    </Action>
+    <Action ID="SetTrajectoryFromTask">
+      <output_port name="current_segment"
+                   default="{current_segment}"
+                   type="int">Index of the current segment of the trajectory</output_port>
+      <output_port name="trajectory"
+                   default="{current_navigation_trajectory}"
+                   type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;">Trajectory to set</output_port>
+      <input_port name="task"
+                  default="{current_task}"
+                  type="std::shared_ptr&lt;project11_navigation::Task&gt;">Task to get trajectory from</input_port>
+    </Action>
+    <Action ID="UpdateCurrentTask">
+      <output_port name="current_task_id"
+                   default="{current_task_id}"
+                   type="std::string">ID of the current task</output_port>
+      <output_port name="current_task_type"
+                   default="{current_task_type}"
+                   type="std::string">Type of the current task</output_port>
+      <output_port name="current_task"
+                   default="{current_task}"
+                   type="std::shared_ptr&lt;project11_navigation::Task&gt;">Pointer to update with current task</output_port>
+      <input_port name="task_list"
+                  default="{task_list}"
+                  type="std::shared_ptr&lt;project11_navigation::TaskList&gt;">List of tasks to check</input_port>
+    </Action>
+  </TreeNodesModel>
+
+</root>

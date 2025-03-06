@@ -22,7 +22,6 @@ public:
   void onHalted() override;
 
 private:
-  rclcpp::Node::SharedPtr node_;
   nav_msgs::msg::Odometry last_odom_;
 
   rclcpp::Publisher<geometry_msgs::msg::Vector3Stamped>::SharedPtr acceleration_publisher_;

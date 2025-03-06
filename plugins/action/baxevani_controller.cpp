@@ -3,6 +3,7 @@
 #include "geometry_msgs/msg/twist_stamped.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "project11/utils.h"
+#include "project11_navigation/context.h"
 #include "tf2_ros/buffer.h"
 #include "nav_msgs/msg/odometry.hpp"
 
@@ -12,23 +13,16 @@ namespace project11_navigation
 BaxevaniController::BaxevaniController(const std::string& name, const BT::NodeConfig& config):
   BT::StatefulActionNode(name, config)
 {
-  node_ = config.blackboard->template get<rclcpp::Node::SharedPtr>("node");
 
-  acceleration_publisher_ = node_->create_publisher<geometry_msgs::msg::Vector3Stamped>("baxevani/debug/acceleration", 1);
-  angular_acceleration_publisher_ = node_->create_publisher<std_msgs::msg::Float32>("baxevani/debug/angular_acceleration", 1);
-  u_publisher_ = node_->create_publisher<std_msgs::msg::Float32>("baxevani/debug/u", 1);
-  a_publisher_ = node_->create_publisher<std_msgs::msg::Float32>("baxevani/debug/a", 1);
-  alpha_publisher_ = node_->create_publisher<std_msgs::msg::Float32>("baxevani/debug/alpha", 1);
 
 }
 
 BT::PortsList BaxevaniController::providedPorts()
 {
   return {
+    BT::InputPort<Context::Ptr>("context", "{@context}", "Navigation context"),
     BT::InputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_path", "{navigation_path}", "Path to follow"),
     BT::InputPort<int>("current_navigation_segment", "{current_navigation_segment}", "Current segment of the path to follow"),
-    BT::InputPort<nav_msgs::msg::Odometry>("odometry", "{odometry}", "Robot's current odometry state"),
-    BT::InputPort<std::shared_ptr<tf2_ros::Buffer> >("tf_buffer", "{tf_buffer}", "Transform buffer"),
     BT::InputPort<double>("target_speed", "{target_speed}", "Target speed"),
     BT::InputPort<double>("ricatti_parameter", "1.8752285", "Ricatti parameter"),
     BT::InputPort<double>("px_gain", "100.78", "Proportional gain for the x axis"),
@@ -41,11 +35,34 @@ BT::PortsList BaxevaniController::providedPorts()
 
 BT::NodeStatus BaxevaniController::onStart()
 {
+  if(!acceleration_publisher_)
+  {
+    auto context = getInput<Context::Ptr>("context");
+    if(!context)
+    {
+      throw BT::RuntimeError(name(), " missing required input [context]: ", context.error() );
+    }
+    auto node = context.value()->node().lock();
+
+    acceleration_publisher_ = node->create_publisher<geometry_msgs::msg::Vector3Stamped>("baxevani/debug/acceleration", 1);
+    angular_acceleration_publisher_ = node->create_publisher<std_msgs::msg::Float32>("baxevani/debug/angular_acceleration", 1);
+    u_publisher_ = node->create_publisher<std_msgs::msg::Float32>("baxevani/debug/u", 1);
+    a_publisher_ = node->create_publisher<std_msgs::msg::Float32>("baxevani/debug/a", 1);
+    alpha_publisher_ = node->create_publisher<std_msgs::msg::Float32>("baxevani/debug/alpha", 1);
+  }
+
   return BT::NodeStatus::RUNNING;
 }
 
 BT::NodeStatus BaxevaniController::onRunning()
 {
+  auto context_bb = getInput<Context::Ptr>("context");
+  if(!context_bb)
+  {
+    throw BT::RuntimeError("missing required input [context]: ", context_bb.error() );
+  }
+  auto context = context_bb.value();
+
   auto navigation_path_bb = getInput<std::shared_ptr<std::vector< geometry_msgs::msg::PoseStamped> > >("navigation_path");
   if(!navigation_path_bb)
   {
@@ -68,18 +85,10 @@ BT::NodeStatus BaxevaniController::onRunning()
   if(current_segment.value() == segment_count)
     return BT::NodeStatus::SUCCESS;
 
-  auto odom = getInput<nav_msgs::msg::Odometry>("odometry");
-  if(!odom)
-  {
-    throw BT::RuntimeError("missing required input [odometry]: ", odom.error() );
-  }
+  auto odom = context->robot().odometry();
 
-  auto tf_buffer = getInput<std::shared_ptr<tf2_ros::Buffer> >("tf_buffer");
-  if(!tf_buffer && tf_buffer.value())
-  {
-    throw BT::RuntimeError("missing required input [tf_buffer]: ", tf_buffer.error() );
-  }
-
+  auto tf_buffer = context->tfBuffer();
+  
   double target_speed = 0.0;
   auto target_speed_bb = getInput<double>("target_speed");
   if(!target_speed_bb)
@@ -121,11 +130,12 @@ BT::NodeStatus BaxevaniController::onRunning()
   geometry_msgs::msg::TransformStamped base_to_map;
   try
   {
-    base_to_map = tf_buffer.value()->lookupTransform(navigation_path->front().header.frame_id , odom.value().child_frame_id, tf2::TimePointZero);
+    base_to_map = tf_buffer->lookupTransform(navigation_path->front().header.frame_id , odom.child_frame_id, tf2::TimePointZero);
   }
   catch (tf2::TransformException &ex)
   {
-    RCLCPP_WARN_STREAM(node_->get_logger(), "FollowPathCommand node named " << name() << " Error getting path to base_frame transform: " << ex.what());
+    auto node = context->node().lock();
+    RCLCPP_WARN_STREAM(node->get_logger(), "FollowPathCommand node named " << name() << " Error getting path to base_frame transform: " << ex.what());
     return BT::NodeStatus::FAILURE;
   }
 
@@ -163,13 +173,13 @@ BT::NodeStatus BaxevaniController::onRunning()
   project11::AngleRadians theta(project11::AngleRadiansZeroCentered(target_heading - heading));
 
   geometry_msgs::msg::TwistStamped cmd_vel;
-  cmd_vel.header.stamp = odom.value().header.stamp;
-  cmd_vel.header.frame_id = odom.value().child_frame_id;
+  cmd_vel.header.stamp = odom.header.stamp;
+  cmd_vel.header.frame_id = odom.child_frame_id;
 
-  auto dt = (rclcpp::Time(odom.value().header.stamp) - rclcpp::Time(last_odom_.header.stamp)).seconds();
+  auto dt = (rclcpp::Time(odom.header.stamp) - rclcpp::Time(last_odom_.header.stamp)).seconds();
   if(dt <= maximum_dt.value() && dt > 0.0)
   {
-    auto twist = odom.value().twist.twist;
+    auto twist = odom.twist.twist;
 
     double sensor_velx = twist.linear.x;
     double sensor_vely = twist.linear.y;
@@ -195,8 +205,8 @@ BT::NodeStatus BaxevaniController::onRunning()
     double acc_w = (sensor_velw - prev_sensor_velw) / dt; //Acceleration on the sway axis
 
     geometry_msgs::msg::Vector3Stamped acceleration_msg;
-    acceleration_msg.header = odom.value().header;
-    acceleration_msg.header.frame_id = odom.value().child_frame_id;
+    acceleration_msg.header = odom.header;
+    acceleration_msg.header.frame_id = odom.child_frame_id;
     acceleration_msg.vector.x = acc_x;
     acceleration_msg.vector.y = acc_y;
 
@@ -238,7 +248,7 @@ BT::NodeStatus BaxevaniController::onRunning()
 
   }
 
-  last_odom_ = odom.value();
+  last_odom_ = odom;
 
   setOutput("command_velocity", cmd_vel);
   return BT::NodeStatus::RUNNING;

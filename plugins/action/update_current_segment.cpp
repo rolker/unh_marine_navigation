@@ -4,6 +4,7 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "tf2_ros/buffer.h"
 #include "project11/utils.h"
+#include "project11_navigation/context.h"
 
 namespace project11_navigation
 {
@@ -11,16 +12,14 @@ namespace project11_navigation
 UpdateCurrentSegment::UpdateCurrentSegment(const std::string& name, const BT::NodeConfig& config):
   BT::SyncActionNode(name, config)
 {
-  node_ = config.blackboard->template get<rclcpp::Node::SharedPtr>("node");
-  cross_track_error_publisher_ = node_->create_publisher<std_msgs::msg::Float32>("cross_track_error", 1);
+
 }
 
 BT::PortsList UpdateCurrentSegment::providedPorts()
 {
   return {
+    BT::InputPort<Context::Ptr>("context", "{@context}", "Navigation context"),
     BT::InputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_path", "{navigation_path}", "Path to follow"),
-    BT::InputPort<nav_msgs::msg::Odometry>("odometry", "{odometry}", "Robot's current odometry state"),
-    BT::InputPort<std::shared_ptr<tf2_ros::Buffer> >("tf_buffer", "{tf_buffer}", "Transform buffer"),
     BT::BidirectionalPort<int>("current_segment", "{current_navigation_segment}", "Current segment of the path"),
     BT::OutputPort<double>("segment_length", "{current_segment_length}", "Length of the current segment"),
     BT::OutputPort<double>("cross_track_error", "{current_segment_cross_track_error}", "Cross track error in meters"),
@@ -31,6 +30,17 @@ BT::PortsList UpdateCurrentSegment::providedPorts()
 
 BT::NodeStatus UpdateCurrentSegment::tick()
 {
+  auto context = getInput<Context::Ptr>("context");
+  if(!context)
+  {
+    throw BT::RuntimeError(name(), " missing required input [context]: ", context.error() );
+  }
+  if(!cross_track_error_publisher_)
+  {
+    auto node = context.value()->node().lock();
+    cross_track_error_publisher_ = node->create_publisher<std_msgs::msg::Float32>("cross_track_error", 1);
+  }
+
   auto navigation_path_bb = getInput<std::shared_ptr<std::vector< geometry_msgs::msg::PoseStamped> > >("navigation_path");
   if(!navigation_path_bb || !navigation_path_bb.value())
   {
@@ -38,17 +48,9 @@ BT::NodeStatus UpdateCurrentSegment::tick()
   }
   auto navigation_path = navigation_path_bb.value();
 
-  auto odom = getInput<nav_msgs::msg::Odometry>("odometry");
-  if(!odom)
-  {
-    throw BT::RuntimeError("missing required input [odometry]: ", odom.error() );
-  }
+  auto odom = context.value()->robot().odometry();
 
-  auto tf_buffer = getInput<std::shared_ptr<tf2_ros::Buffer> >("tf_buffer");
-  if(!tf_buffer)
-  {
-    throw BT::RuntimeError("missing required input [tf_buffer]: ", tf_buffer.error() );
-  }
+  auto tf_buffer = context.value()->tfBuffer();
 
   int segment_count = std::max<int>(0,navigation_path->size()-1);
   setOutput("segment_count", segment_count);
@@ -70,11 +72,12 @@ BT::NodeStatus UpdateCurrentSegment::tick()
     geometry_msgs::msg::TransformStamped base_to_map;
     try
     {
-      base_to_map = tf_buffer.value()->lookupTransform(navigation_path->front().header.frame_id , odom.value().child_frame_id, tf2::TimePointZero);
+      base_to_map = tf_buffer->lookupTransform(navigation_path->front().header.frame_id , odom.child_frame_id, tf2::TimePointZero);
     }
     catch (tf2::TransformException &ex)
     {
-      RCLCPP_WARN_STREAM(node_->get_logger(), "UpdateCurrentSegment node named " << name() << " Error getting path to base_frame transform: " << ex.what());
+      auto node = context.value()->node().lock();
+      RCLCPP_WARN_STREAM(node->get_logger(), "UpdateCurrentSegment node named " << name() << " Error getting path to base_frame transform: " << ex.what());
       return BT::NodeStatus::FAILURE;
     }
 

@@ -2,6 +2,7 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <tf2/utils.h>
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "project11_navigation/context.h"
 
 extern "C" {
 #include "dubins_curves/dubins.h"
@@ -20,11 +21,11 @@ GeneratePlan::GeneratePlan(const std::string& name, const BT::NodeConfig& config
 BT::PortsList GeneratePlan::providedPorts()
 {
   return {
+    BT::InputPort<Context::Ptr>("context", "{@context}", "Navigation context"),
     BT::InputPort<geometry_msgs::msg::PoseStamped>("start_pose", "{current_pose}", "Starting pose for the plan"),
     BT::InputPort<geometry_msgs::msg::PoseStamped>("goal_pose", "{goal_pose}", "Goal pose for the plan"),
     BT::InputPort<std::string>("planner", "{default_planner}", "Planner to use"),
-    BT::InputPort<double>("turn_radius", "{robot_turn_radius}", "Turn radius for the robot"),
-    BT::InputPort<double>("lead_in_distance", "{lead_in_distance}", "Distance in meters to lead into lines"),
+    BT::InputPort<bool>("use_lead_in", "false", "Use lead in distance"),
     BT::OutputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_trajectory", "{navigation_trajectory}", "Planned path to follow"),
     BT::OutputPort<int>("current_navigation_segment", "{current_navigation_segment}", "Index of the current segment of the navigation trajectory"),
   };
@@ -32,6 +33,13 @@ BT::PortsList GeneratePlan::providedPorts()
 
 BT::NodeStatus GeneratePlan::tick()
 {
+  auto context_bb = getInput<Context::Ptr>("context");
+  if(!context_bb)
+  {
+    throw BT::RuntimeError(name(), " missing required input [context]: ", context_bb.error() );
+  }
+  auto context = context_bb.value();
+
   auto start_pose = getInput<geometry_msgs::msg::PoseStamped>("start_pose");
   if(!start_pose)
   {
@@ -44,18 +52,12 @@ BT::NodeStatus GeneratePlan::tick()
     throw BT::RuntimeError(name(), " missing required input [goal_pose]: ", goal_pose.error() );
   }
 
-  auto turn_radius = getInput<double>("turn_radius");
-  if(!turn_radius)
-  {
-    throw BT::RuntimeError(name(), " missing required input [turn_radius]: ", turn_radius.error() );
-  }
+  auto turn_radius = context->robot_capabilities().turn_radius;
 
-  auto lead_in_distance = getInput<double>("lead_in_distance");
-  if(!lead_in_distance)
-  {
-    throw BT::RuntimeError(name(), " missing required input [lead_in_distance]: ", lead_in_distance.error() );
-  }
-
+  double lead_in_distance = 0.0;
+  auto use_lead_in = getInput<bool>("use_lead_in");
+  if(use_lead_in && use_lead_in.value())
+    lead_in_distance = context->navigator_settings().survey_lead_in_distance;
 
   double start[3];
   start[0] = start_pose.value().pose.position.x;
@@ -67,20 +69,20 @@ BT::NodeStatus GeneratePlan::tick()
   target[1] = goal_pose.value().pose.position.y;
   target[2] = tf2::getYaw(goal_pose.value().pose.orientation);
 
-  if(lead_in_distance.value() > 0.0)
+  if(lead_in_distance > 0.0)
   {
     auto cos_yaw = cos(target[2]);
     auto sin_yaw = sin(target[2]);
-    target[0] -= lead_in_distance.value()*cos_yaw;
-    target[1] -= lead_in_distance.value()*sin_yaw;
+    target[0] -= lead_in_distance*cos_yaw;
+    target[1] -= lead_in_distance*sin_yaw;
   }
 
   DubinsPath path;
 
-  if(dubins_shortest_path(&path, start, target, turn_radius.value()) == 0)
+  if(dubins_shortest_path(&path, start, target, turn_radius) == 0)
   {
     auto path_length = dubins_path_length(&path);
-    auto step_size = turn_radius.value() / 5.0;
+    auto step_size = turn_radius / 5.0;
     auto nav_trajectory = std::make_shared<std::vector<geometry_msgs::msg::PoseStamped> >();
     nav_trajectory->push_back(start_pose.value());
     double current_length = step_size;

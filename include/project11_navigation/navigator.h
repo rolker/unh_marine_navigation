@@ -71,6 +71,8 @@ private:
   std::string last_navigation_state_;
 
   BT::Tree tree_;
+
+  /// Global blackboard which can be seen by all sub-trees
   BT::Blackboard::Ptr blackboard_;
 
   std::shared_ptr<BT::Groot2Publisher> groot_;

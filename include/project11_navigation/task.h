@@ -2,6 +2,7 @@
 #define PROJECT11_NAVIGATION_TASK_H
 
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp_lifecycle/lifecycle_node.hpp"
 #include "rclcpp/time.hpp"
 #include "project11_navigation/task_list.h"
 #include "yaml-cpp/yaml.h"
@@ -24,7 +25,7 @@ public:
   /// Creates a new Task.
   static TaskPtr create(const project11_nav_msgs::msg::TaskInformation& task_msg, TaskPtr parent);
 
-  static TaskPtr create(const project11_nav_msgs::msg::TaskInformation& task_msg, rclcpp::Node::SharedPtr node);
+  static TaskPtr create(const project11_nav_msgs::msg::TaskInformation& task_msg, rclcpp::Clock::SharedPtr clock);
 
 
   /// Update or replace this task's TaskInformation.
@@ -111,7 +112,7 @@ public:
 
 private:
   // \todo make this private without breaking the create() method.
-  Task(rclcpp::Node::SharedPtr node);
+  Task(rclcpp::Clock::SharedPtr clock);
 
   std::weak_ptr<Task> self_;
   std::weak_ptr<Task> parent_task_;
@@ -119,7 +120,7 @@ private:
   project11_nav_msgs::msg::TaskInformation message_;
   TaskList children_;
   rclcpp::Time last_update_time_;
-  rclcpp::Node::SharedPtr node_;
+  rclcpp::Clock::SharedPtr clock_;
 };
 
 

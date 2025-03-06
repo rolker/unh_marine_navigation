@@ -1,0 +1,5 @@
+<library path="project11_navigation_hover_behavior_plugin">
+  <class type="project11_navigation::Hover" base_class_type="nav2_core::Behavior">
+    <description>This is behavior acts as a virtual anchor for station keeping of a marine robot.</description>
+  </class>
+</library>

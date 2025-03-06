@@ -4,6 +4,7 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "project11/utils.h"
 #include "project11/pid.h"
+#include "project11_navigation/context.h"
 #include "tf2_ros/buffer.h"
 #include "nav_msgs/msg/odometry.hpp"
 #include "std_msgs/msg/float32.hpp"
@@ -14,19 +15,15 @@ namespace project11_navigation
 CrabbingPathFollower::CrabbingPathFollower(const std::string& name, const BT::NodeConfig& config):
   BT::StatefulActionNode(name, config)
 {
-  node_ = config.blackboard->template get<rclcpp::Node::SharedPtr>("node");
-  crab_angle_publisher_ = node_->create_publisher<std_msgs::msg::Float32>("crab_angle", 1);
 }
 
 BT::PortsList CrabbingPathFollower::providedPorts()
 {
   return {
+    BT::InputPort<Context::Ptr>("context", "{@context}", "Navigation context"),
     BT::InputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_path", "{navigation_path}", "Path to follow"),
     BT::InputPort<int>("current_navigation_segment", "{current_navigation_segment}", "Current segment of the path"),
-    BT::InputPort<nav_msgs::msg::Odometry>("odometry", "{odometry}", "Robot's current odometry state"),
-    BT::InputPort<std::shared_ptr<tf2_ros::Buffer> >("tf_buffer", "{tf_buffer}", "Transform buffer"),
     BT::InputPort<double>("target_speed", "{target_speed}", "Target speed"),
-    BT::InputPort<std::string>("piloting_mode", "{piloting_mode}", "Piloting mode"),
     BT::OutputPort<geometry_msgs::msg::TwistStamped>("command_velocity", "{command_velocity}", "Output commanded velocity"),
     BT::BidirectionalPort<std::shared_ptr<project11::PID> >("pid", "{path_follower_pid}", "PID controller for crabbing"),
   };
@@ -34,18 +31,30 @@ BT::PortsList CrabbingPathFollower::providedPorts()
 
 BT::NodeStatus CrabbingPathFollower::onStart()
 {
+  if(!crab_angle_publisher_)
+  {
+    auto context = getInput<Context::Ptr>("context");
+    if(!context)
+    {
+      throw BT::RuntimeError(name(), " missing required input [context]: ", context.error() );
+    }
+    auto node = context.value()->node().lock();
+    crab_angle_publisher_ = node->create_publisher<std_msgs::msg::Float32>("crab_angle", 1);
+  }
   return BT::NodeStatus::RUNNING;
 }
 
 BT::NodeStatus CrabbingPathFollower::onRunning()
 {
-  auto piloting_mode = getInput<std::string>("piloting_mode");
-  if (!piloting_mode)
+  auto context = getInput<Context::Ptr>("context");
+  if(!context)
   {
-    throw BT::RuntimeError("missing required input [piloting_mode]: ", piloting_mode.error() );
+    throw BT::RuntimeError(name(), " missing required input [context]: ", context.error() );
   }
-  if(piloting_mode.value() != "autonomous")
+
+  if(!context.value()->robot().enabled())
     return BT::NodeStatus::RUNNING;
+
 
   auto navigation_path_bb = getInput<std::shared_ptr<std::vector< geometry_msgs::msg::PoseStamped> > >("navigation_path");
   if(!navigation_path_bb)
@@ -69,17 +78,10 @@ BT::NodeStatus CrabbingPathFollower::onRunning()
   if(current_segment.value() == segment_count)
     return BT::NodeStatus::SUCCESS;
 
-  auto odom = getInput<nav_msgs::msg::Odometry>("odometry");
-  if(!odom)
-  {
-    throw BT::RuntimeError("missing required input [odometry]: ", odom.error() );
-  }
 
-  auto tf_buffer = getInput<std::shared_ptr<tf2_ros::Buffer> >("tf_buffer");
-  if(!tf_buffer && tf_buffer.value())
-  {
-    throw BT::RuntimeError("missing required input [tf_buffer]: ", tf_buffer.error() );
-  }
+  auto odom = context.value()->robot().odometry();
+
+  auto tf_buffer = context.value()->tfBuffer();
 
   std::shared_ptr<project11::PID> pid;
   auto pid_bb = getInput<std::shared_ptr<project11::PID> >("pid");
@@ -89,7 +91,8 @@ BT::NodeStatus CrabbingPathFollower::onRunning()
   // create pid if it's not on the blackboard yet
   if(!pid)
   {
-    pid = std::make_shared<project11::PID>(node_, "path_follower/pid") ;
+    auto node = context.value()->node().lock();
+    pid = std::make_shared<project11::PID>(node, "path_follower/pid") ;
     setOutput("pid", pid);
   }
 
@@ -101,11 +104,12 @@ BT::NodeStatus CrabbingPathFollower::onRunning()
   geometry_msgs::msg::TransformStamped base_to_map;
   try
   {
-    base_to_map = tf_buffer.value()->lookupTransform(navigation_path->front().header.frame_id , odom.value().child_frame_id, tf2::TimePointZero);
+    base_to_map = tf_buffer->lookupTransform(navigation_path->front().header.frame_id , odom.child_frame_id, tf2::TimePointZero);
   }
   catch (tf2::TransformException &ex)
   {
-    RCLCPP_WARN_STREAM(node_->get_logger(), "FollowPathCommand node named " << name() << " Error getting path to base_frame transform: " << ex.what());
+    auto node = context.value()->node().lock();
+    RCLCPP_WARN_STREAM(node->get_logger(), "FollowPathCommand node named " << name() << " Error getting path to base_frame transform: " << ex.what());
     return BT::NodeStatus::FAILURE;
   }
 
@@ -134,7 +138,7 @@ BT::NodeStatus CrabbingPathFollower::onRunning()
   auto progress = vehicle_distance*cos_error_azimuth;
 
   auto cross_track_error = vehicle_distance*sin_error_azimuth;
-  auto crab_angle = project11::AngleDegrees(pid->update(cross_track_error, odom.value().header.stamp));
+  auto crab_angle = project11::AngleDegrees(pid->update(cross_track_error, odom.header.stamp));
   project11::AngleRadians heading(tf2::getYaw(base_to_map.transform.rotation));
 
   std_msgs::msg::Float32 crab_angle_msg;
@@ -144,8 +148,8 @@ BT::NodeStatus CrabbingPathFollower::onRunning()
   project11::AngleRadians target_heading = segment_azimuth +	crab_angle;
 
   geometry_msgs::msg::TwistStamped cmd_vel;
-  cmd_vel.header.stamp = odom.value().header.stamp;
-  cmd_vel.header.frame_id = odom.value().child_frame_id;
+  cmd_vel.header.stamp = odom.header.stamp;
+  cmd_vel.header.frame_id = odom.child_frame_id;
   
   cmd_vel.twist.angular.z = project11::AngleRadiansZeroCentered(target_heading-heading).value();
 

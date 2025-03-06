@@ -18,7 +18,7 @@ namespace project11_navigation
 Navigator::Navigator(const std::string & node_name):
   rclcpp_lifecycle::LifecycleNode(node_name)
 {
-
+  RCLCPP_INFO_STREAM(get_logger(), "BehaviorTree CPP version: " << BT::LibraryVersionString());
   std::vector<std::string> plugin_lib_names;
   plugin_lib_names = nav2_util::split(project11_navigation::details::BT_BUILTIN_PLUGINS, ';');
   plugin_lib_names.push_back("ccom_planner_bt_plugin");
@@ -167,7 +167,8 @@ CallbackReturn Navigator::on_shutdown(const rclcpp_lifecycle::State& state)
 
 BT::Tree Navigator::buildBehaviorTree()
 {
-  std::string bt_file =  ament_index_cpp::get_package_share_directory("project11_navigation")+"/behavior_trees/navigator.xml";
+  //std::string bt_file =  ament_index_cpp::get_package_share_directory("project11_navigation")+"/behavior_trees/navigator.xml";
+  std::string bt_file =  ament_index_cpp::get_package_share_directory("project11_navigation")+"/behavior_trees/run_tasks.xml";
   factory_.registerBehaviorTreeFromFile(bt_file);
 
   //factory.registerFromROSPlugins();
@@ -188,7 +189,8 @@ BT::Tree Navigator::buildBehaviorTree()
     // }
   }
 
-  return factory_.createTree("NavigatorSequence", blackboard_);
+  auto nav_sequence_bb = BT::Blackboard::create(blackboard_);
+  return factory_.createTree("NavigatorSequence", nav_sequence_bb);
 }
 
 rclcpp_action::GoalResponse Navigator::handleGoal(const rclcpp_action::GoalUUID & uuid, std::shared_ptr<const RunTasks::Goal> goal)
