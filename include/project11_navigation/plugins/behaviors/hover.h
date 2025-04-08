@@ -24,7 +24,7 @@ public:
   nav2_core::CostmapInfoType getResourceInfo() override {return nav2_core::CostmapInfoType::LOCAL;}
 
 protected:
-  void publish_visualization();
+  void publish_visualization(rclcpp::Time time);
 
   double minimum_radius_ = 1.0;
   double maximum_radius_ = 2.0;

@@ -3,7 +3,10 @@
       main_tree_to_execute="NavigatorSequence">
   <BehaviorTree ID="GotoPose">
     <Sequence name="GotoPoseSequence">
-      <CancelHover name="CancelHoverBeforeGotoPose"/>
+      <ForceSuccess>
+        <CancelHover name="CancelHoverBeforeGotoPose"
+                     />
+      </ForceSuccess>
       <NavigateToPose goal="{goal_pose}"
                       server_name="navigate_to_pose"
                       server_timeout="1000"
@@ -19,14 +22,12 @@
                        pose_index="0"
                        pose="{goal_pose}"
                        task="{current_task}"/>
-      <Fallback name="SetTaskDoneAfterGotoSuccessFallback">
-        <Inverter name="GotoPoseResultInverter">
-          <SubTree ID="GotoPose"
-                   _autoremap="true"/>
-        </Inverter>
+      <Sequence name="GotoPoseAndSetDoneSequence">
+        <SubTree ID="GotoPose"
+                 _autoremap="true"/>
         <SetTaskDone name="SetGotoTaskDone"
                      task="{current_task}"/>
-      </Fallback>
+      </Sequence>
     </ReactiveSequence>
   </BehaviorTree>
 
@@ -52,61 +53,61 @@
   </BehaviorTree>
 
   <BehaviorTree ID="NavigatorSequence">
-      <ReactiveSequence name="MainRunSequence">
-        <SubTree ID="UpdateCurrentTaskData"
-                 _autoremap="true"/>
-        <ReactiveFallback name="SelectTaskReactiveFallback">
-          <Precondition name="TaskIsHoverPrecondition"
-                        else="FAILURE"
-                        if="current_task_type == &apos;hover&apos;">
-            <SubTree ID="HoverTask"
-                     node="{node}"
-                     wait_for_service_timeout="{wait_for_service_timeout}"
-                     server_timeout="{server_timeout}"
-                     bt_loop_duration="{bt_loop_duration}"
-                     current_task_type="{current_task_type}"
-                     navigation_state="{navigation_state}"
-                     current_task="{current_task}"
-                     _autoremap="false"/>
-          </Precondition>
-          <Precondition name="TaskIsGotoPrecondition"
-                        else="FAILURE"
-                        if="current_task_type == &quot;goto&quot;">
-            <SubTree ID="GotoTask"
-                     current_task="{=}"
-                     lead_in_distance="0.0"
-                     node="{node}"
-                     server_timeout="{server_timeout}"
-                     bt_loop_duration="{bt_loop_duration}"
-                     wait_for_service_timeout="{wait_for_service_timeout}"
-                     _autoremap="true"/>
-          </Precondition>
-          <SubTree ID="SurveyLineTask"
-                   lead_in_distance="{survey_lead_in_distance}"
-                   survey_line_task="{current_task}"
-                   _skipIf="current_task_type != &apos;survey_line&apos;"
-                   _autoremap="true"/>
-          <SubTree ID="SurveyLineSetTask"
-                   survey_line_set_task="{current_task}"
-                   _skipIf="current_task_type != &apos;survey_line_set&apos;"
-                   _autoremap="true"/>
-          <SubTree ID="SurveyAreaTask"
-                   survey_area_task="{current_task}"
+    <ReactiveSequence name="MainRunSequence">
+      <SubTree ID="UpdateCurrentTaskData"
+               _autoremap="true"/>
+      <ReactiveFallback name="SelectTaskReactiveFallback">
+        <Precondition name="TaskIsHoverPrecondition"
+                      else="FAILURE"
+                      if="current_task_type == &apos;hover&apos;">
+          <SubTree ID="HoverTask"
+                   node="{node}"
+                   wait_for_service_timeout="{wait_for_service_timeout}"
+                   server_timeout="{server_timeout}"
+                   bt_loop_duration="{bt_loop_duration}"
+                   current_task_type="{current_task_type}"
+                   navigation_state="{navigation_state}"
+                   current_task="{current_task}"
+                   _autoremap="false"/>
+        </Precondition>
+        <Precondition name="TaskIsGotoPrecondition"
+                      else="FAILURE"
+                      if="current_task_type == &quot;goto&quot;">
+          <SubTree ID="GotoTask"
+                   current_task="{current_task}"
+                   lead_in_distance="0.0"
                    node="{node}"
                    server_timeout="{server_timeout}"
                    bt_loop_duration="{bt_loop_duration}"
                    wait_for_service_timeout="{wait_for_service_timeout}"
-                   _skipIf="current_task_type != &apos;survey_area&apos;"
                    _autoremap="true"/>
-          <SetTaskDone name="SkipUnknownTaskType"
-                       task="{current_task}"/>
-        </ReactiveFallback>
-        <KeepRunningUntilFailure>
-          <Inverter>
-            <AllTasksDoneCondition task_list="{task_list}"/>
-          </Inverter>
-        </KeepRunningUntilFailure>
-      </ReactiveSequence>
+        </Precondition>
+        <SubTree ID="SurveyLineTask"
+                 lead_in_distance="{survey_lead_in_distance}"
+                 survey_line_task="{current_task}"
+                 _skipIf="current_task_type != &apos;survey_line&apos;"
+                 _autoremap="true"/>
+        <SubTree ID="SurveyLineSetTask"
+                 survey_line_set_task="{current_task}"
+                 _skipIf="current_task_type != &apos;survey_line_set&apos;"
+                 _autoremap="true"/>
+        <SubTree ID="SurveyAreaTask"
+                 survey_area_task="{current_task}"
+                 node="{node}"
+                 server_timeout="{server_timeout}"
+                 bt_loop_duration="{bt_loop_duration}"
+                 wait_for_service_timeout="{wait_for_service_timeout}"
+                 _skipIf="current_task_type != &apos;survey_area&apos;"
+                 _autoremap="true"/>
+        <SetTaskDone name="SkipUnknownTaskType"
+                     task="{current_task}"/>
+      </ReactiveFallback>
+      <KeepRunningUntilFailure>
+        <Inverter>
+          <AllTasksDoneCondition task_list="{task_list}"/>
+        </Inverter>
+      </KeepRunningUntilFailure>
+    </ReactiveSequence>
   </BehaviorTree>
 
   <BehaviorTree ID="SurveyAreaTask">
