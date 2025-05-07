@@ -28,8 +28,10 @@ protected:
 
   double minimum_radius_ = 1.0;
   double maximum_radius_ = 2.0;
+  double minimum_speed_ = 0.0;
   double maximum_speed_ = 1.0;
   double deceleration_ = -0.5;
+  double maximum_rotation_speed_ = 0.5;
   geometry_msgs::msg::PoseStamped target_pose_;
 
   bool generate_visualization_ = false;

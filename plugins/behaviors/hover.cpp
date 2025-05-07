@@ -17,7 +17,11 @@ void Hover::onConfigure()
   nav2_util::declare_parameter_if_not_declared(
     node, behavior_name_+".maximum_radius", rclcpp::ParameterValue(maximum_radius_));
   nav2_util::declare_parameter_if_not_declared(
+    node, behavior_name_+".minimum_speed", rclcpp::ParameterValue(minimum_speed_));
+  nav2_util::declare_parameter_if_not_declared(
     node, behavior_name_+".maximum_speed", rclcpp::ParameterValue(maximum_speed_));
+  nav2_util::declare_parameter_if_not_declared(
+    node, behavior_name_+".maximum_rotation_speed", rclcpp::ParameterValue(maximum_rotation_speed_));
   nav2_util::declare_parameter_if_not_declared(
     node, behavior_name_+".deceleration", rclcpp::ParameterValue(deceleration_));
   nav2_util::declare_parameter_if_not_declared(
@@ -29,7 +33,9 @@ nav2_behaviors::ResultStatus Hover::onRun(const std::shared_ptr<const HoverActio
   auto node = node_.lock();
   node->get_parameter(behavior_name_+".minimum_radius", minimum_radius_);
   node->get_parameter(behavior_name_+".maximum_radius", maximum_radius_);
+  node->get_parameter(behavior_name_+".minimum_speed", minimum_speed_);
   node->get_parameter(behavior_name_+".maximum_speed", maximum_speed_);
+  node->get_parameter(behavior_name_+".maximum_rotation_speed", maximum_rotation_speed_);
   node->get_parameter(behavior_name_+".deceleration", deceleration_);
   node->get_parameter(behavior_name_+".generate_visualization", generate_visualization_);
 
@@ -90,13 +96,16 @@ nav2_behaviors::ResultStatus Hover::onCycleUpdate()
   else if (steering_angle < -M_PI)
     steering_angle += 2.0 * M_PI;
 
+  double steering_speed = (steering_angle/M_PI) * maximum_rotation_speed_;
+
+  double steering_proportion = abs(steering_angle) / M_PI;
+
   double current_target_speed = 0.0;
 
-  double turn_effort = current_range / maximum_radius_;
-  turn_effort = std::min(1.0, turn_effort) * 0.35;
-
   if (current_range >= maximum_radius_)
+  {
     current_target_speed = maximum_speed_;
+  }
   else if (current_range > minimum_radius_)
   {
     float p = (current_range-minimum_radius_)/(maximum_radius_-minimum_radius_);
@@ -104,15 +113,26 @@ nav2_behaviors::ResultStatus Hover::onCycleUpdate()
   }
   else
   {
-    float p = 0.1*(1.0-(current_range/minimum_radius_));
-    current_target_speed = -p*maximum_speed_; // apply some reverse, up to 10%
+    // float p = 0.1*(1.0-(current_range/minimum_radius_));
+    // current_target_speed = -p*maximum_speed_; // apply some reverse, up to 10%
+    current_target_speed = 0.0;
+    steering_speed = 0.0;
+  }
+
+  current_target_speed *= (1.0 - steering_proportion)*(1.0 - steering_proportion);
+
+  if (current_range > minimum_radius_)
+  {
+    current_target_speed = std::max(current_target_speed, minimum_speed_);
   }
 
   auto cmd_vel = std::make_unique<geometry_msgs::msg::TwistStamped>();
   cmd_vel->header.stamp = this->clock_->now();
   cmd_vel->header.frame_id = this->robot_base_frame_;
-  cmd_vel->twist.angular.z = steering_angle * turn_effort;
+  cmd_vel->twist.angular.z = steering_speed;
   cmd_vel->twist.linear.x = current_target_speed;
+
+  //RCLCPP_INFO_STREAM(logger_, "Hover: " << diff_x << ","  << diff_y << " range: " << current_range << " angle: " << steering_angle << "\tOutput cmd_vel: " << cmd_vel->twist.linear.x << " " << cmd_vel->twist.angular.z);
 
   // todo - collision avoidance
   vel_pub_->publish(std::move(cmd_vel));
