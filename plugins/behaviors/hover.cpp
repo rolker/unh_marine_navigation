@@ -113,13 +113,26 @@ nav2_behaviors::ResultStatus Hover::onCycleUpdate()
   }
   else
   {
-    // float p = 0.1*(1.0-(current_range/minimum_radius_));
-    // current_target_speed = -p*maximum_speed_; // apply some reverse, up to 10%
-    current_target_speed = 0.0;
-    steering_speed = 0.0;
+    if (current_range < minimum_radius_/2.0)
+    {
+      current_target_speed = 0.0;
+      float p = 0.1*(1.0-(current_range/minimum_radius_));
+      current_target_speed = -p*maximum_speed_; // apply some reverse, up to 10%
+    }
+    else
+    {
+      current_target_speed = 0.0;
+    }
+    // current_target_speed = 0.0;
+    // steering_speed = 0.0;
   }
 
-  current_target_speed *= (1.0 - steering_proportion)*(1.0 - steering_proportion);
+  if (steering_proportion > 0.25)
+  {
+    current_target_speed = 0.0;
+  }
+
+  current_target_speed *= (1.0 - steering_proportion*4.0);
 
   if (current_range > minimum_radius_)
   {
@@ -132,7 +145,7 @@ nav2_behaviors::ResultStatus Hover::onCycleUpdate()
   cmd_vel->twist.angular.z = steering_speed;
   cmd_vel->twist.linear.x = current_target_speed;
 
-  //RCLCPP_INFO_STREAM(logger_, "Hover: " << diff_x << ","  << diff_y << " range: " << current_range << " angle: " << steering_angle << "\tOutput cmd_vel: " << cmd_vel->twist.linear.x << " " << cmd_vel->twist.angular.z);
+  RCLCPP_INFO_STREAM(logger_, "Hover: " << diff_x << ","  << diff_y << " range: " << current_range << " angle: " << steering_angle << "\tOutput cmd_vel: " << cmd_vel->twist.linear.x << " " << cmd_vel->twist.angular.z);
 
   // todo - collision avoidance
   vel_pub_->publish(std::move(cmd_vel));
