@@ -21,7 +21,7 @@ BT::PortsList BaxevaniController::providedPorts()
 {
   return {
     BT::InputPort<Context::Ptr>("context", "{@context}", "Navigation context"),
-    BT::InputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_path", "{navigation_path}", "Path to follow"),
+    BT::InputPort<std::vector<geometry_msgs::msg::PoseStamped> >("navigation_path", "{navigation_path}", "Path to follow"),
     BT::InputPort<int>("current_navigation_segment", "{current_navigation_segment}", "Current segment of the path to follow"),
     BT::InputPort<double>("target_speed", "{target_speed}", "Target speed"),
     BT::InputPort<double>("ricatti_parameter", "1.8752285", "Ricatti parameter"),
@@ -63,14 +63,14 @@ BT::NodeStatus BaxevaniController::onRunning()
   }
   auto context = context_bb.value();
 
-  auto navigation_path_bb = getInput<std::shared_ptr<std::vector< geometry_msgs::msg::PoseStamped> > >("navigation_path");
+  auto navigation_path_bb = getInput<std::vector< geometry_msgs::msg::PoseStamped > >("navigation_path");
   if(!navigation_path_bb)
   {
     throw BT::RuntimeError("missing required input [navigation_path]: ", navigation_path_bb.error() );
   }
-  auto navigation_path = navigation_path_bb.value();
+  const auto& navigation_path = navigation_path_bb.value();
 
-  int segment_count = std::max<int>(0,navigation_path->size()-1);
+  int segment_count = std::max<int>(0,navigation_path.size()-1);
 
   auto current_segment = getInput<int>("current_navigation_segment");
   if(!current_segment)
@@ -130,7 +130,7 @@ BT::NodeStatus BaxevaniController::onRunning()
   geometry_msgs::msg::TransformStamped base_to_map;
   try
   {
-    base_to_map = tf_buffer->lookupTransform(navigation_path->front().header.frame_id , odom.child_frame_id, tf2::TimePointZero);
+    base_to_map = tf_buffer->lookupTransform(navigation_path.front().header.frame_id , odom.child_frame_id, tf2::TimePointZero);
   }
   catch (tf2::TransformException &ex)
   {
@@ -139,8 +139,8 @@ BT::NodeStatus BaxevaniController::onRunning()
     return BT::NodeStatus::FAILURE;
   }
 
-  auto p1 = (*navigation_path)[current_segment.value()];
-  auto p2 = (*navigation_path)[current_segment.value()+1];
+  auto p1 = navigation_path[current_segment.value()];
+  auto p2 = navigation_path[current_segment.value()+1];
 
   auto segment_dx = p2.pose.position.x - p1.pose.position.x;
   auto segment_dy = p2.pose.position.y - p1.pose.position.y;
@@ -263,8 +263,3 @@ void BaxevaniController::onHalted()
 
 } // namespace project11_navigation
 
-#include "behaviortree_cpp/bt_factory.h"
-BT_REGISTER_NODES(factory)
-{
-  factory.registerNodeType<project11_navigation::BaxevaniController>("BaxevaniController");
-}

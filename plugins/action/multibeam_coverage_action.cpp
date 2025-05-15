@@ -243,11 +243,3 @@ BT::NodeStatus MultibeamCoverageActionDoneCondition::tick()
 
 }
 
-#include "behaviortree_cpp/bt_factory.h"
-BT_REGISTER_NODES(factory)
-{
-  factory.registerNodeType<project11_navigation::MultibeamCoverageActionCancel>("MultibeamCoverageActionCancel");
-  factory.registerNodeType<project11_navigation::MultibeamCoverageActionDoneCondition>("MultibeamCoverageActionDoneCondition");
-  factory.registerNodeType<project11_navigation::MultibeamCoverageActionSetGoal>("MultibeamCoverageActionSetGoal");
-  factory.registerNodeType<project11_navigation::MultibeamCoverageActionUpdateTask>("MultibeamCoverageActionUpdateTask");
-}

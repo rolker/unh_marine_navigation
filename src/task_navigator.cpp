@@ -1,4 +1,5 @@
 #include "project11_navigation/task_navigator.h"
+#include "project11_navigation/task.h"
 #include "project11_navigation/task_list.h"
 #include "project11_navigation/bt_types.h"
 #include "nav2_util/node_utils.hpp"
@@ -11,6 +12,7 @@ bool TaskNavigator::configure(
   std::shared_ptr<nav2_util::OdomSmoother> odom_smoother)
 {
   auto node = parent_node.lock();
+  RCLCPP_INFO_STREAM(node->get_logger(), "Configuring TaskNavigator");
 
   nav2_util::declare_parameter_if_not_declared(
     node, getName()+".task_list_blackboard_id", rclcpp::ParameterValue(std::string("task_list")));
@@ -23,13 +25,23 @@ bool TaskNavigator::configure(
   nav2_util::declare_parameter_if_not_declared(
     node, getName()+".debug", rclcpp::ParameterValue(false));
   debug_ = node->get_parameter(getName()+".debug").as_bool();
-  RCLCPP_INFO_STREAM(node->get_logger(), "Debug: " << debug_);
 
-  self_client_ = rclcpp_action::create_client<ActionT>(node, getName());
   clock_ = node->get_clock();
 
   registerJsonDefinitions();
 
+  auto bt_node = bt_action_server_->getBlackboard()->get<rclcpp::Node::SharedPtr>("node");
+  if (!bt_node) {
+    RCLCPP_ERROR(node->get_logger(), "TaskNavigator: Failed to get node from blackboard");
+    return false;
+  }
+
+  return true;
+}
+
+bool TaskNavigator::activate()
+{
+  RCLCPP_INFO_STREAM(logger_, "Activating TaskNavigator");
   return true;
 }
 
@@ -49,11 +61,15 @@ std::string TaskNavigator::getDefaultBTFilepath(rclcpp_lifecycle::LifecycleNode:
 
   node->get_parameter("default_task_navigator_bt_xml", default_bt_xml_filename);
 
+  RCLCPP_INFO_STREAM(node->get_logger(), "TaskNavigator: Default BT XML file: " << default_bt_xml_filename);
+
   return default_bt_xml_filename;
 }
 
 bool TaskNavigator::goalReceived(ActionT::Goal::ConstSharedPtr goal)
 {
+  RCLCPP_INFO_STREAM(logger_, "TaskNavigator: Received goal: " << goal->tasks.size() << " tasks");
+
   if(!bt_action_server_->loadBehaviorTree())
   {
     RCLCPP_ERROR(logger_, "Failed to load behavior tree");
@@ -85,7 +101,9 @@ void TaskNavigator::onLoop()
   {
     auto task_list = task_list_entry->value.cast<std::shared_ptr<TaskList> >();
     if(task_list)
+    {
       feedback_msg->feedback.tasks = task_list->taskMessages();
+    }
   }
   bt_action_server_->publishFeedback(feedback_msg);
 
@@ -93,10 +111,12 @@ void TaskNavigator::onLoop()
 
 void TaskNavigator::onPreempt(typename ActionT::Goal::ConstSharedPtr goal)
 {
+  RCLCPP_INFO_STREAM(logger_, "TaskNavigator: Preempting goal");
   if(!initializeTaskList(goal))
   {
     bt_action_server_->terminatePendingGoal();
   }
+  bt_action_server_->acceptPendingGoal();
 }
 
 void TaskNavigator::goalCompleted(
@@ -115,6 +135,7 @@ void TaskNavigator::goalCompleted(
 
 bool TaskNavigator::initializeTaskList(ActionT::Goal::ConstSharedPtr goal)
 {
+  RCLCPP_INFO_STREAM(logger_, "TaskNavigator: Initializing task list");
   auto blackboard = bt_action_server_->getBlackboard();
   if(goal->tasks.empty())
     blackboard->set(task_list_blackboard_id_, std::shared_ptr<TaskList>());

@@ -26,15 +26,12 @@ BT::NodeStatus SetTaskDone::tick()
     throw BT::RuntimeError("missing required input [task]: ", task.error() );
   }
   task.value()->setDone();
+  auto blackboard = config().blackboard;
+  auto node = blackboard->get<rclcpp::Node::SharedPtr>("node");
+  RCLCPP_DEBUG_STREAM(node->get_logger(), "SetTaskDone  " << task.value()->message().id << " done:" << task.value()->done() << " pointer:" << task.value().get());
 
   return BT::NodeStatus::SUCCESS;
 }
 
 } // namespace project11_navigation
-
-#include "behaviortree_cpp/bt_factory.h"
-BT_REGISTER_NODES(factory)
-{
-  factory.registerNodeType<project11_navigation::SetTaskDone>("SetTaskDone");
-}
 

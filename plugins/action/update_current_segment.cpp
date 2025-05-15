@@ -19,7 +19,7 @@ BT::PortsList UpdateCurrentSegment::providedPorts()
 {
   return {
     BT::InputPort<Context::Ptr>("context", "{@context}", "Navigation context"),
-    BT::InputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_path", "{navigation_path}", "Path to follow"),
+    BT::InputPort<std::vector<geometry_msgs::msg::PoseStamped> >("navigation_path", "{navigation_path}", "Path to follow"),
     BT::BidirectionalPort<int>("current_segment", "{current_navigation_segment}", "Current segment of the path"),
     BT::OutputPort<double>("segment_length", "{current_segment_length}", "Length of the current segment"),
     BT::OutputPort<double>("cross_track_error", "{current_segment_cross_track_error}", "Cross track error in meters"),
@@ -41,18 +41,18 @@ BT::NodeStatus UpdateCurrentSegment::tick()
     cross_track_error_publisher_ = node->create_publisher<std_msgs::msg::Float32>("cross_track_error", 1);
   }
 
-  auto navigation_path_bb = getInput<std::shared_ptr<std::vector< geometry_msgs::msg::PoseStamped> > >("navigation_path");
-  if(!navigation_path_bb || !navigation_path_bb.value())
+  auto navigation_path_bb = getInput<std::vector< geometry_msgs::msg::PoseStamped> >("navigation_path");
+  if(!navigation_path_bb)
   {
     return BT::NodeStatus::FAILURE;
   }
-  auto navigation_path = navigation_path_bb.value();
+  const auto& navigation_path = navigation_path_bb.value();
 
   auto odom = context.value()->robot().odometry();
 
   auto tf_buffer = context.value()->tfBuffer();
 
-  int segment_count = std::max<int>(0,navigation_path->size()-1);
+  int segment_count = std::max<int>(0,navigation_path.size()-1);
   setOutput("segment_count", segment_count);
 
   int current_segment = 0;
@@ -72,7 +72,7 @@ BT::NodeStatus UpdateCurrentSegment::tick()
     geometry_msgs::msg::TransformStamped base_to_map;
     try
     {
-      base_to_map = tf_buffer->lookupTransform(navigation_path->front().header.frame_id , odom.child_frame_id, tf2::TimePointZero);
+      base_to_map = tf_buffer->lookupTransform(navigation_path.front().header.frame_id , odom.child_frame_id, tf2::TimePointZero);
     }
     catch (tf2::TransformException &ex)
     {
@@ -83,8 +83,8 @@ BT::NodeStatus UpdateCurrentSegment::tick()
 
     while(current_segment < segment_count)
     {
-      auto p1 = (*navigation_path)[current_segment];
-      auto p2 = (*navigation_path)[current_segment+1];
+      auto p1 = navigation_path[current_segment];
+      auto p2 = navigation_path[current_segment+1];
 
       auto segment_dx = p2.pose.position.x - p1.pose.position.x;
       auto segment_dy = p2.pose.position.y - p1.pose.position.y;
@@ -142,8 +142,3 @@ BT::NodeStatus UpdateCurrentSegment::tick()
 
 } // namespace project11_navigation
 
-#include "behaviortree_cpp/bt_factory.h"
-BT_REGISTER_NODES(factory)
-{
-  factory.registerNodeType<project11_navigation::UpdateCurrentSegment>("UpdateCurrentSegment");
-}

@@ -18,6 +18,7 @@ BT::PortsList UpdateCurrentTask::providedPorts()
     BT::OutputPort<std::shared_ptr<Task> >("current_task", "{current_task}", "Pointer to update with current task"),
     BT::OutputPort<std::string>("current_task_type", "{current_task_type}", "Type of the current task"),
     BT::OutputPort<std::string>("current_task_id", "{current_task_id}", "ID of the current task"),
+    BT::OutputPort<rclcpp::Time>("current_task_update_time", "{current_task_update_time}", "Time the current task was last updated"),
   };
 }
 
@@ -42,6 +43,7 @@ BT::NodeStatus UpdateCurrentTask::tick()
   {
     setOutput("current_task_type", current_task->message().type);
     setOutput("current_task_id", current_task->message().id);
+    setOutput("current_task_update_time", current_task->lastUpdateTime());
   }
   else
   {
@@ -52,10 +54,3 @@ BT::NodeStatus UpdateCurrentTask::tick()
 }
 
 } // namespace project11_navigation
-
-#include "behaviortree_cpp/bt_factory.h"
-BT_REGISTER_NODES(factory)
-{
-  factory.registerNodeType<project11_navigation::UpdateCurrentTask>("UpdateCurrentTask");
-}
-

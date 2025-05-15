@@ -13,14 +13,3 @@ HoverCancel::HoverCancel(
 
 } // namespace project11_navigation
 
-#include "behaviortree_cpp/bt_factory.h"
-BT_REGISTER_NODES(factory)
-{
-  BT::NodeBuilder builder =
-    [](const std::string &name, const BT::NodeConfiguration &config)
-    {
-      return std::make_unique<project11_navigation::HoverCancel>(name, "hover", config);
-    };
-
-  factory.registerBuilder<project11_navigation::HoverCancel>("CancelHover", builder);
-}

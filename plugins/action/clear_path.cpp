@@ -1,5 +1,5 @@
 #include <project11_navigation/plugins/action/clear_path.h>
-#include <geometry_msgs/msg/pose_stamped.hpp>
+#include "nav_msgs/msg/path.hpp"
 
 namespace project11_navigation
 {
@@ -13,21 +13,16 @@ ClearPath::ClearPath(const std::string& name, const BT::NodeConfig& config):
 BT::PortsList ClearPath::providedPorts()
 {
   return {
-    BT::OutputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_path", "{navigation_path}", "Empty shared pointer to a path to follow")
+    BT::OutputPort<nav_msgs::msg::Path>("navigation_path", "{navigation_path}", "Empty shared pointer to a path to follow")
   };
 }
 
 BT::NodeStatus ClearPath::tick()
 {
 
-  setOutput("navigation_path", std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> >());
+  setOutput("navigation_path", nav_msgs::msg::Path());
   return BT::NodeStatus::SUCCESS;
 }
 
 } // namespace project11_navigation
 
-#include "behaviortree_cpp/bt_factory.h"
-BT_REGISTER_NODES(factory)
-{
-  factory.registerNodeType<project11_navigation::ClearPath>("ClearPath");
-}

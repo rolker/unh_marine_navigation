@@ -17,7 +17,7 @@ BT::PortsList VisualizeTrajectory::providedPorts()
 {
   return {
     BT::InputPort<Context::Ptr>("context", "{@context}", "Navigation context"),
-    BT::InputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("trajectory", "{navigation_trajectory}", "Trajectory to visualize"),
+    BT::InputPort<std::vector<geometry_msgs::msg::PoseStamped> >("trajectory", "{navigation_trajectory}", "Trajectory to visualize"),
     BT::InputPort<std::shared_ptr<visualization_msgs::msg::MarkerArray> >("marker_array", "{marker_array}", "Pointer to MarkerArray to add visualization markers to"),
     BT::InputPort<std::string>("namespace", "trajectory", "Used in ns field of Markers"),
     BT::InputPort<geometry_msgs::msg::PoseStamped>("current_pose", "{current_pose}", "Current pose of the robot"),
@@ -38,15 +38,10 @@ BT::NodeStatus VisualizeTrajectory::tick()
   }
   auto node = context.value()->node().lock();
 
-  auto trajectory = getInput<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("trajectory");
+  auto trajectory = getInput<std::vector<geometry_msgs::msg::PoseStamped> >("trajectory");
   if(!trajectory)
   {
     throw BT::RuntimeError(name(), " missing required input [trajectory]: ", trajectory.error() );
-  }
-  if(!trajectory.value())
-  {
-    RCLCPP_WARN_STREAM(node->get_logger(), "VisualizeTrajectory node named " << name() << " [trajectory] is null");
-    return BT::NodeStatus::FAILURE;
   }
 
   auto marker_array = getInput<std::shared_ptr<visualization_msgs::msg::MarkerArray> >("marker_array");
@@ -86,9 +81,9 @@ BT::NodeStatus VisualizeTrajectory::tick()
   for(auto label: color_labels)
     colors.push_back(getInput<std_msgs::msg::ColorRGBA>(label));
 
-  if(!trajectory.value()->empty())
+  if(!trajectory.value().empty())
   {
-    const auto& poses = *trajectory.value();
+    const auto& poses = trajectory.value();
 
     std::vector<visualization_msgs::msg::Marker> markers(3);
     for(int i = 0; i < markers.size(); i++)
@@ -139,9 +134,3 @@ BT::NodeStatus VisualizeTrajectory::tick()
 }
 
 } // namespace project11_navigation
-
-#include "behaviortree_cpp/bt_factory.h"
-BT_REGISTER_NODES(factory)
-{
-  factory.registerNodeType<project11_navigation::VisualizeTrajectory>("VisualizeTrajectory");
-}

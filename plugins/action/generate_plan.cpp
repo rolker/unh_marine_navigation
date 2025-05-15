@@ -26,7 +26,7 @@ BT::PortsList GeneratePlan::providedPorts()
     BT::InputPort<geometry_msgs::msg::PoseStamped>("goal_pose", "{goal_pose}", "Goal pose for the plan"),
     BT::InputPort<std::string>("planner", "{default_planner}", "Planner to use"),
     BT::InputPort<bool>("use_lead_in", "false", "Use lead in distance"),
-    BT::OutputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_trajectory", "{navigation_trajectory}", "Planned path to follow"),
+    BT::OutputPort<std::vector<geometry_msgs::msg::PoseStamped> >("navigation_trajectory", "{navigation_trajectory}", "Planned path to follow"),
     BT::OutputPort<int>("current_navigation_segment", "{current_navigation_segment}", "Index of the current segment of the navigation trajectory"),
   };
 }
@@ -83,8 +83,8 @@ BT::NodeStatus GeneratePlan::tick()
   {
     auto path_length = dubins_path_length(&path);
     auto step_size = turn_radius / 5.0;
-    auto nav_trajectory = std::make_shared<std::vector<geometry_msgs::msg::PoseStamped> >();
-    nav_trajectory->push_back(start_pose.value());
+    std::vector<geometry_msgs::msg::PoseStamped> nav_trajectory;
+    nav_trajectory.push_back(start_pose.value());
     double current_length = step_size;
     while(current_length < path_length)
     {
@@ -98,10 +98,10 @@ BT::NodeStatus GeneratePlan::tick()
       tf2::Quaternion quat;
       quat.setRPY(0,0,q[2]);
       pose.pose.orientation = tf2::toMsg(quat);
-      nav_trajectory->push_back(pose);
+      nav_trajectory.push_back(pose);
       current_length += step_size;
     }
-    nav_trajectory->push_back(goal_pose.value());
+    nav_trajectory.push_back(goal_pose.value());
     setOutput("navigation_trajectory", nav_trajectory);
     setOutput("current_navigation_segment", 0);
     return BT::NodeStatus::SUCCESS;
@@ -112,8 +112,3 @@ BT::NodeStatus GeneratePlan::tick()
 
 } // namespace project11_navigation
 
-#include "behaviortree_cpp/bt_factory.h"
-BT_REGISTER_NODES(factory)
-{
-  factory.registerNodeType<project11_navigation::GeneratePlan>("GeneratePlan");
-}

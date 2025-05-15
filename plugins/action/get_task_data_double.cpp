@@ -56,8 +56,3 @@ BT::NodeStatus GetTaskDataDouble::tick()
 
 } // namespace project11_navigation
 
-#include "behaviortree_cpp/bt_factory.h"
-BT_REGISTER_NODES(factory)
-{
-  factory.registerNodeType<project11_navigation::GetTaskDataDouble>("GetTaskDataDouble");
-}

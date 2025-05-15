@@ -25,6 +25,8 @@ public:
     rclcpp_lifecycle::LifecycleNode::WeakPtr parent_node,
     std::shared_ptr<nav2_util::OdomSmoother> odom_smoother) override;
 
+  bool activate() override;
+
   std::string getDefaultBTFilepath(rclcpp_lifecycle::LifecycleNode::WeakPtr node) override;
 
   std::string getName() override {return std::string("run_tasks");}
@@ -42,7 +44,6 @@ protected:
 
   bool initializeTaskList(ActionT::Goal::ConstSharedPtr goal);
 private:
-  rclcpp_action::Client<ActionT>::SharedPtr self_client_;
   std::string task_list_blackboard_id_;
   std::string active_task_blackboard_id_;
   rclcpp::Clock::SharedPtr clock_;

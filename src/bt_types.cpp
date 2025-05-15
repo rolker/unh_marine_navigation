@@ -39,6 +39,27 @@ void from_json(const nlohmann::json& json, Time& time)
 
 }
 
+namespace rclcpp
+{
+
+void to_json(nlohmann::json& dest, const Time& time)
+{
+  builtin_interfaces::msg::Time time_msg;
+  time_msg = time;
+  builtin_interfaces::msg::to_json(dest, time_msg);
+}
+
+
+void from_json(const nlohmann::json& json, Time& time)
+{
+  builtin_interfaces::msg::Time time_msg;
+  builtin_interfaces::msg::from_json(json, time_msg);
+  time = time_msg;
+}
+
+}
+
+
 namespace std_msgs::msg
 {
 
@@ -265,6 +286,7 @@ void registerJsonDefinitions()
   BT::RegisterJsonDefinition<std_msgs::msg::ColorRGBA>();
   BT::RegisterJsonDefinition<std_msgs::msg::Header>();
   BT::RegisterJsonDefinition<builtin_interfaces::msg::Time>();
+  BT::RegisterJsonDefinition<rclcpp::Time>();
 
   BT::RegisterJsonDefinition<geometry_msgs::msg::Accel>();
   BT::RegisterJsonDefinition<geometry_msgs::msg::Point>();

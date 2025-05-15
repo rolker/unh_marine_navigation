@@ -89,72 +89,70 @@ install(
 
 
 # behavior tree plugins
-set(BT_PLUGIN_ACTIONS
-  baxevani_controller
-  clear_path
-  crabbing_path_follower
-  debug_blackboard
-  generate_plan
-  get_task_data_double
-  get_task_data_string
-  get_sub_tasks
-  hover_action
-  hover_cancel_node
-  multibeam_coverage_action
-  predict_stopping_pose
-  set_pose_from_task
-  set_task_done
-  set_trajectory_from_task
-  task_list_updater
-  update_current_segment
-  update_current_task
-  visualize_trajectory
+set(BT_PLUGIN_NODES
+  plugins/action/baxevani_controller.cpp
+  plugins/action/clear_path.cpp
+  plugins/action/crabbing_path_follower.cpp
+  plugins/action/debug_blackboard.cpp
+  plugins/action/follow_path_cancel_node.cpp
+  plugins/action/generate_plan.cpp
+  plugins/action/get_task_data_double.cpp
+  plugins/action/get_task_data_string.cpp
+  plugins/action/get_sub_tasks.cpp
+  plugins/action/hover_action.cpp
+  plugins/action/hover_cancel_node.cpp
+  plugins/action/multibeam_coverage_action.cpp
+  plugins/action/predict_stopping_pose.cpp
+  plugins/action/pose_vector_to_path.cpp
+  plugins/action/set_pose_from_task.cpp
+  plugins/action/set_task_done.cpp
+  plugins/action/set_trajectory_from_task.cpp
+  plugins/action/task_list_updater.cpp
+  plugins/action/update_current_segment.cpp
+  plugins/action/update_current_task.cpp
+  plugins/action/visualize_trajectory.cpp
+  plugins/condition/all_tasks_done.cpp
+  plugins/condition/goal_reached.cpp
+  plugins/condition/path_empty.cpp
+  plugins/condition/plan_needed.cpp
+  plugins/condition/task_updated.cpp
 )
 
-foreach(bt_plugin ${BT_PLUGIN_ACTIONS})
-  add_library(project11_navigation_${bt_plugin}_bt_node SHARED plugins/action/${bt_plugin}.cpp)
-  list(APPEND plugin_libs project11_navigation_${bt_plugin}_bt_node)
-endforeach()
+add_library(project11_navigation_bt_plugins SHARED
+  ${BT_PLUGIN_NODES}
+  src/bt_register_nodes.cpp
+)
+list(APPEND plugin_libs project11_navigation_bt_plugins)
 
-set(BT_PLUGIN_CONDITIONS
-  all_tasks_done
-  goal_reached
-  plan_needed
+target_include_directories(project11_navigation_bt_plugins
+  PRIVATE
+  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+  "$<INSTALL_INTERFACE:include/${PROJECT_NAME}>"
 )
 
-foreach(bt_plugin ${BT_PLUGIN_CONDITIONS})
-  add_library(project11_navigation_${bt_plugin}_bt_node SHARED plugins/condition/${bt_plugin}.cpp)
-  list(APPEND plugin_libs project11_navigation_${bt_plugin}_bt_node)
-endforeach()
+target_link_libraries(project11_navigation_bt_plugins
+  project11::project11
+  project11_navigation
+)
 
+ament_target_dependencies(project11_navigation_bt_plugins
+  behaviortree_cpp
+  dubins_curves
+  grid_map_ros
+  nav_msgs
+  nav2_behavior_tree
+  nav2_util
+  project11_msgs
+  project11_nav_msgs
+  rclcpp
+  rclcpp_action
+  rclcpp_lifecycle
+  tf2_geometry_msgs
+  tf2_ros
+  visualization_msgs
+)
 
-foreach(bt_plugin ${plugin_libs})
-  target_include_directories(${bt_plugin}
-    PRIVATE
-    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-    "$<INSTALL_INTERFACE:include/${PROJECT_NAME}>")
-  target_link_libraries(${bt_plugin}
-    project11::project11
-    project11_navigation
-  )
-  ament_target_dependencies(${bt_plugin}
-    behaviortree_cpp
-    dubins_curves
-    grid_map_ros
-    nav_msgs
-    nav2_behavior_tree
-    nav2_util
-    project11_msgs
-    project11_nav_msgs
-    rclcpp
-    rclcpp_action
-    rclcpp_lifecycle
-    tf2_geometry_msgs
-    tf2_ros
-    visualization_msgs
-  )
-  target_compile_definitions(${bt_plugin} PRIVATE BT_PLUGIN_EXPORT)
-endforeach()
+target_compile_definitions(project11_navigation_bt_plugins PRIVATE BT_PLUGIN_EXPORT)
 
 
 # from nav2_behavior_tree
@@ -214,6 +212,44 @@ install(FILES behavior_plugin.xml
   DESTINATION share/${PROJECT_NAME}
 )
 
+# controllers
+
+set(path_follower_plugin project11_navigation_crabbing_path_follower_controller_plugin)
+
+add_library(${path_follower_plugin} SHARED
+  plugins/controllers/crabbing_path_follower.cpp
+)
+
+target_include_directories(${path_follower_plugin}
+  PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    "$<INSTALL_INTERFACE:include/${PROJECT_NAME}>")
+
+
+target_compile_definitions(${path_follower_plugin} PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
+
+ament_target_dependencies(${path_follower_plugin}
+  nav2_core
+  nav2_costmap_2d
+  pluginlib
+  project11
+  project11_msgs
+  rclcpp
+  tf2
+)
+
+pluginlib_export_plugin_description_file(nav2_core crabbing_path_follower_plugin.xml)
+
+install(TARGETS ${path_follower_plugin}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
+
+install(FILES crabbing_path_follower_plugin.xml
+  DESTINATION share/${PROJECT_NAME}
+)
+
 
 # navigator
 
@@ -270,7 +306,7 @@ target_link_libraries(task_navigator PUBLIC
 pluginlib_export_plugin_description_file(nav2_core navigator_plugin.xml)
 
 install(
-  TARGETS ${plugin_libs} task_navigator
+  TARGETS project11_navigation_bt_plugins task_navigator
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin)

@@ -145,7 +145,7 @@ nav2_behaviors::ResultStatus Hover::onCycleUpdate()
   cmd_vel->twist.angular.z = steering_speed;
   cmd_vel->twist.linear.x = current_target_speed;
 
-  RCLCPP_INFO_STREAM(logger_, "Hover: " << diff_x << ","  << diff_y << " range: " << current_range << " angle: " << steering_angle << "\tOutput cmd_vel: " << cmd_vel->twist.linear.x << " " << cmd_vel->twist.angular.z);
+  RCLCPP_DEBUG_STREAM(logger_, "Hover: " << diff_x << ","  << diff_y << " range: " << current_range << " angle: " << steering_angle << "\tOutput cmd_vel: " << cmd_vel->twist.linear.x << " " << cmd_vel->twist.angular.z);
 
   // todo - collision avoidance
   vel_pub_->publish(std::move(cmd_vel));

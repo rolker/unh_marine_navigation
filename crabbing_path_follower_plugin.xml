@@ -1,0 +1,5 @@
+<library path="project11_navigation_crabbing_path_follower_controller_plugin">
+  <class type="project11_navigation::controllers::CrabbingPathFollower" base_class_type="nav2_core::Controller">
+    <description>Attempt to follow a path while compensating for currents and winds.</description>
+  </class>
+</library>

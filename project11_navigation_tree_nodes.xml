@@ -12,22 +12,26 @@
             <input_port name="pw_gain" type="double" default="20.055">Proportional gain for the w axis</input_port>
             <input_port name="target_speed" type="double" default="{target_speed}">Target speed</input_port>
             <input_port name="current_navigation_segment" type="int" default="{current_navigation_segment}">Current segment of the path to follow</input_port>
-            <input_port name="navigation_path" type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;" default="{navigation_path}">Path to follow</input_port>
+            <input_port name="navigation_path" type="std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt;" default="{navigation_path}">Path to follow</input_port>
             <input_port name="context" type="std::shared_ptr&lt;project11_navigation::Context&gt;" default="{@context}">Navigation context</input_port>
+        </Action>
+        <Action ID="CancelFollowPath">
+            <input_port name="server_timeout" type="std::chrono::milliseconds"/>
+            <input_port name="server_name" type="std::string">Action server name</input_port>
         </Action>
         <Action ID="CancelHover">
             <input_port name="server_timeout" type="std::chrono::milliseconds"/>
             <input_port name="server_name" type="std::string">Action server name</input_port>
         </Action>
         <Action ID="ClearPath">
-            <output_port name="navigation_path" type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;" default="{navigation_path}">Empty shared pointer to a path to follow</output_port>
+            <output_port name="navigation_path" type="nav_msgs::msg::Path_&lt;std::allocator&lt;void&gt; &gt;" default="{navigation_path}">Empty shared pointer to a path to follow</output_port>
         </Action>
         <Action ID="CrabbingPathFollower">
             <inout_port name="pid" type="std::shared_ptr&lt;project11::PID&gt;" default="{path_follower_pid}">PID controller for crabbing</inout_port>
             <output_port name="command_velocity" type="geometry_msgs::msg::TwistStamped_&lt;std::allocator&lt;void&gt; &gt;" default="{command_velocity}">Output commanded velocity</output_port>
             <input_port name="target_speed" type="double" default="{target_speed}">Target speed</input_port>
             <input_port name="current_navigation_segment" type="int" default="{current_navigation_segment}">Current segment of the path</input_port>
-            <input_port name="navigation_path" type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;" default="{navigation_path}">Path to follow</input_port>
+            <input_port name="navigation_path" type="std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt;" default="{navigation_path}">Path to follow</input_port>
             <input_port name="context" type="std::shared_ptr&lt;project11_navigation::Context&gt;" default="{@context}">Navigation context</input_port>
         </Action>
         <Action ID="DebugBlackboardDouble">
@@ -41,7 +45,7 @@
             <input_port name="context" type="std::shared_ptr&lt;project11_navigation::Context&gt;" default="{@context}">Navigation context</input_port>
         </Action>
         <Action ID="GeneratePlan">
-            <output_port name="navigation_trajectory" type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;" default="{navigation_trajectory}">Planned path to follow</output_port>
+            <output_port name="navigation_trajectory" type="std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt;" default="{navigation_trajectory}">Planned path to follow</output_port>
             <output_port name="current_navigation_segment" type="int" default="{current_navigation_segment}">Index of the current segment of the navigation trajectory</output_port>
             <input_port name="planner" type="std::string" default="{default_planner}">Planner to use</input_port>
             <input_port name="use_lead_in" type="bool" default="true">Use lead in distance</input_port>
@@ -66,9 +70,9 @@
             <input_port name="task" type="std::shared_ptr&lt;project11_navigation::Task&gt;" default="{task}">Task to get data from</input_port>
         </Action>
         <Condition ID="GoalReachedCondition">
+            <input_port name="goal_reached_distance" type="double" default="1.0">Distance to goal to be considered reached.</input_port>
             <input_port name="heading_accuracy" type="double" default="180">How much can the heading can vary in degrees. 180 means it doesn't matter.</input_port>
             <input_port name="goal_pose" type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;" default="{goal_pose}">Pose to compare current state with</input_port>
-            <input_port name="context" type="std::shared_ptr&lt;project11_navigation::Context&gt;" default="{@context}">Navigation context</input_port>
         </Condition>
         <Action ID="Hover">
             <input_port name="maximum_distance" type="double" default="0.000000">Distance at which robot uses maximum speed to get to the target</input_port>
@@ -95,12 +99,19 @@
             <input_port name="action_client" type="std::shared_ptr&lt;project11_navigation::MultibeamCoverageActionClient&gt;" default="{multibeam_coverage_action_client}">Multibeam coverage action client</input_port>
             <input_port name="context" type="std::shared_ptr&lt;project11_navigation::Context&gt;" default="{@context}">Navigation context</input_port>
         </Action>
+        <Condition ID="PathEmptyCondition">
+            <input_port name="path" type="std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt;" default="{path}">Path to check</input_port>
+        </Condition>
         <Condition ID="PlanNeededCondition">
             <input_port name="cross_track_error" type="double"/>
-            <input_port name="navigation_trajectory" type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;"/>
+            <input_port name="navigation_trajectory" type="std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt;"/>
             <input_port name="goal_pose" type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;"/>
             <input_port name="context" type="std::shared_ptr&lt;project11_navigation::Context&gt;" default="{@context}">Navigation context</input_port>
         </Condition>
+        <Action ID="PoseVectorToPath">
+            <output_port name="path" type="nav_msgs::msg::Path_&lt;std::allocator&lt;void&gt; &gt;" default="{path}">Path to set</output_port>
+            <input_port name="poses" type="std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt;" default="{poses}">Vector of poses to convert to path</input_port>
+        </Action>
         <Action ID="PredictStoppingPose">
             <output_port name="pose" type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;" default="{pose}">Predicted stopping pose</output_port>
             <input_port name="context" type="std::shared_ptr&lt;project11_navigation::Context&gt;" default="{@context}">Navigation context</input_port>
@@ -115,8 +126,9 @@
             <input_port name="task" type="std::shared_ptr&lt;project11_navigation::Task&gt;" default="{task}">Task to set as done</input_port>
         </Action>
         <Action ID="SetTrajectoryFromTask">
-            <output_port name="current_segment" type="int" default="{current_segment}">Index of the current segment of the trajectory</output_port>
-            <output_port name="trajectory" type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;" default="{current_navigation_trajectory}">Trajectory to set</output_port>
+            <output_port name="trajectory" type="std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt;" default="{current_navigation_trajectory}">Trajectory to set</output_port>
+            <input_port name="end_index" type="int" default="-1">Index of the last pose in the trajectory</input_port>
+            <input_port name="start_index" type="int" default="0">Index of the first pose in the trajectory</input_port>
             <input_port name="task" type="std::shared_ptr&lt;project11_navigation::Task&gt;" default="{current_task}">Task to get trajectory from</input_port>
         </Action>
         <Action ID="TaskListUpdater">
@@ -124,16 +136,21 @@
             <inout_port name="task_messages" type="std::shared_ptr&lt;std::vector&lt;project11_nav_msgs::msg::TaskInformation_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;project11_nav_msgs::msg::TaskInformation_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;" default="{task_messages}">Pointer to a vector of new TaskInformation messages</inout_port>
             <input_port name="context" type="std::shared_ptr&lt;project11_navigation::Context&gt;" default="{@context}">Navigation context</input_port>
         </Action>
+        <Condition ID="TaskUpdatedCondition">
+            <input_port name="last_update_time" type="rclcpp::Time" default="{last_update_time}">Last update time to compare against</input_port>
+            <input_port name="task" type="std::shared_ptr&lt;project11_navigation::Task&gt;" default="{task}">Task to check for updates</input_port>
+        </Condition>
         <Action ID="UpdateCurrentSegment">
             <output_port name="segment_count" type="int" default="{navigation_path_segment_count}">Number of segments in the path</output_port>
             <output_port name="along_track_progress" type="double" default="{current_segment_along_track_progress}">Distance along the current segment</output_port>
             <output_port name="cross_track_error" type="double" default="{current_segment_cross_track_error}">Cross track error in meters</output_port>
             <output_port name="segment_length" type="double" default="{current_segment_length}">Length of the current segment</output_port>
             <inout_port name="current_segment" type="int" default="{current_navigation_segment}">Current segment of the path</inout_port>
-            <input_port name="navigation_path" type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;" default="{navigation_path}">Path to follow</input_port>
+            <input_port name="navigation_path" type="std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt;" default="{navigation_path}">Path to follow</input_port>
             <input_port name="context" type="std::shared_ptr&lt;project11_navigation::Context&gt;" default="{@context}">Navigation context</input_port>
         </Action>
         <Action ID="UpdateCurrentTask">
+            <output_port name="current_task_update_time" type="rclcpp::Time" default="{current_task_update_time}">Time the current task was last updated</output_port>
             <output_port name="current_task_id" type="std::string" default="{current_task_id}">ID of the current task</output_port>
             <output_port name="current_task_type" type="std::string" default="{current_task_type}">Type of the current task</output_port>
             <output_port name="current_task" type="std::shared_ptr&lt;project11_navigation::Task&gt;" default="{current_task}">Pointer to update with current task</output_port>
@@ -147,7 +164,7 @@
             <input_port name="namespace" type="std::string" default="trajectory">Used in ns field of Markers</input_port>
             <input_port name="past_color" type="std_msgs::msg::ColorRGBA_&lt;std::allocator&lt;void&gt; &gt;" default="0.25, 0.25, 0.25, 0.5">Color for past segments</input_port>
             <input_port name="marker_array" type="std::shared_ptr&lt;visualization_msgs::msg::MarkerArray_&lt;std::allocator&lt;void&gt; &gt; &gt;" default="{marker_array}">Pointer to MarkerArray to add visualization markers to</input_port>
-            <input_port name="trajectory" type="std::shared_ptr&lt;std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt; &gt;" default="{navigation_trajectory}">Trajectory to visualize</input_port>
+            <input_port name="trajectory" type="std::vector&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;, std::allocator&lt;geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt; &gt; &gt;" default="{navigation_trajectory}">Trajectory to visualize</input_port>
             <input_port name="current_pose" type="geometry_msgs::msg::PoseStamped_&lt;std::allocator&lt;void&gt; &gt;" default="{current_pose}">Current pose of the robot</input_port>
             <input_port name="context" type="std::shared_ptr&lt;project11_navigation::Context&gt;" default="{@context}">Navigation context</input_port>
         </Action>

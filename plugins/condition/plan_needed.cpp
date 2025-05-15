@@ -17,7 +17,7 @@ BT::PortsList PlanNeeded::providedPorts()
   return {
     BT::InputPort<Context::Ptr>("context", "{@context}", "Navigation context"),
     BT::InputPort<geometry_msgs::msg::PoseStamped>("goal_pose"),
-    BT::InputPort<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_trajectory"),
+    BT::InputPort<std::vector<geometry_msgs::msg::PoseStamped> >("navigation_trajectory"),
     BT::InputPort<double>("cross_track_error"),
   };
 }
@@ -37,7 +37,7 @@ BT::NodeStatus PlanNeeded::tick()
     throw BT::RuntimeError("PlanNeeded node named ", name(), " missing required input [goal_pose]: ", goal_pose.error() );
   }
 
-  auto nav_trajectory = getInput<std::shared_ptr<std::vector<geometry_msgs::msg::PoseStamped> > >("navigation_trajectory");
+  auto nav_trajectory = getInput<std::vector<geometry_msgs::msg::PoseStamped> >("navigation_trajectory");
 
   auto cross_track_error = getInput<double>("cross_track_error");
   if(!cross_track_error)
@@ -50,9 +50,9 @@ BT::NodeStatus PlanNeeded::tick()
   if(fabs(cross_track_error.value()) > maximum_cross_track_error)
     return BT::NodeStatus::SUCCESS;
 
-  if(nav_trajectory && nav_trajectory.value() && !nav_trajectory.value()->empty())
+  if(nav_trajectory && !nav_trajectory.value().empty())
   {
-    if(goal_pose.value() != nav_trajectory.value()->back())
+    if(goal_pose.value() != nav_trajectory.value().back())
       return BT::NodeStatus::SUCCESS;
 
     return BT::NodeStatus::FAILURE;
@@ -61,9 +61,3 @@ BT::NodeStatus PlanNeeded::tick()
 }
 
 } // namespace project11_navigation
-
-#include "behaviortree_cpp/bt_factory.h"
-BT_REGISTER_NODES(factory)
-{
-  factory.registerNodeType<project11_navigation::PlanNeeded>("PlanNeededCondition");
-}
