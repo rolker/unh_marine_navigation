@@ -231,6 +231,7 @@ target_compile_definitions(${path_follower_plugin} PUBLIC "PLUGINLIB__DISABLE_BO
 ament_target_dependencies(${path_follower_plugin}
   nav2_core
   nav2_costmap_2d
+  nav2_util
   pluginlib
   project11
   project11_msgs

@@ -7,6 +7,7 @@
 #include "pluginlib/class_list_macros.hpp"
 #include "project11/pid.h"
 #include "std_msgs/msg/float32.hpp"
+#include "visualization_msgs/msg/marker_array.hpp"
 
 namespace project11_navigation
 {
@@ -40,6 +41,8 @@ public:
   void setSpeedLimit(const double & speed_limit, const bool & percentage) override;
 
 protected:
+  void publish_visualization(const geometry_msgs::msg::TwistStamped & cmd_vel);
+
   rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
   std::shared_ptr<tf2_ros::Buffer> tf_;
   std::string plugin_name_;
@@ -49,7 +52,7 @@ protected:
 
   double desired_speed_;
   double speed_limit_ = -1.0;
-  double speed_limit_percentage_ = -1.0;
+  bool speed_limit_is_percentage_ = false;
 
 
   rclcpp::Duration transform_tolerance_ {0, 0};
@@ -59,8 +62,9 @@ protected:
   std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>> global_pub_;
 
   std::shared_ptr<project11::PID> pid_;
-  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr crab_angle_publisher_;
 
+  bool visualize_ = false;
+  rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>::SharedPtr visualization_publisher_;
 };
 
 

@@ -1,6 +1,7 @@
 #include "project11_navigation/plugins/controllers/crabbing_path_follower.h"
 #include "project11/utils.h"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "nav2_util/node_utils.hpp"
 
 namespace project11_navigation
 {
@@ -24,15 +25,22 @@ void CrabbingPathFollower::configure(
 
   pid_ = std::make_shared<project11::PID>(node, plugin_name_+".pid");
 
-  node->declare_parameter(plugin_name_ + ".default_speed", 1.0);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".default_speed", rclcpp::ParameterValue(1.0));
   desired_speed_ = node->get_parameter(plugin_name_ + ".default_speed").as_double();
 
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".visualization", rclcpp::ParameterValue(visualize_));
+  visualize_ = node->get_parameter(plugin_name_ + ".visualization").as_bool();
+  if(visualize_)
+  {
+    visualization_publisher_ = node->create_publisher<visualization_msgs::msg::MarkerArray>(
+      "path_follower_visualization", 1);
+  }
   
   double transform_tolerance;
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".transform_tolerance", rclcpp::ParameterValue(transform_tolerance_.seconds()));
   node->get_parameter(plugin_name_ + ".transform_tolerance", transform_tolerance);
   transform_tolerance_ = rclcpp::Duration::from_seconds(transform_tolerance);
   global_pub_ = node->create_publisher<nav_msgs::msg::Path>("received_global_plan", 1);
-  crab_angle_publisher_ = node->create_publisher<std_msgs::msg::Float32>("crab_angle", 1);
 }
 
 void CrabbingPathFollower::cleanup()
@@ -43,6 +51,12 @@ void CrabbingPathFollower::cleanup()
 
 void CrabbingPathFollower::activate()
 {
+  global_pub_->on_activate();
+  if (visualize_)
+  {
+    visualization_publisher_->on_activate();
+  }
+  
   RCLCPP_INFO(logger_, "Activating controller plugin %s", plugin_name_.c_str());
 }
 
@@ -54,14 +68,8 @@ void CrabbingPathFollower::deactivate()
 void CrabbingPathFollower::setSpeedLimit(
   const double & speed_limit, const bool & percentage)
 {
-  if (percentage)
-  {
-    speed_limit_percentage_ = speed_limit;
-  }
-  else
-  {
-    speed_limit_ = speed_limit;
-  }
+  speed_limit_ = speed_limit;
+  speed_limit_is_percentage_ = percentage;
 }
 
 void CrabbingPathFollower::setPlan(const nav_msgs::msg::Path & path)
@@ -98,12 +106,13 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
   double target_speed = desired_speed_;
   if (speed_limit_ > 0.0)
   {
-    target_speed = std::min(target_speed, speed_limit_);
+    if(speed_limit_is_percentage_)
+      target_speed = std::min(target_speed, desired_speed_ * speed_limit_ / 100.0);
+    else
+      target_speed = std::min(target_speed, speed_limit_);
   }
-  else if (speed_limit_percentage_ > 0.0)
-  {
-    target_speed = std::min(target_speed, desired_speed_ * speed_limit_percentage_ / 100.0);
-  }
+
+  RCLCPP_INFO_STREAM(logger_, "CrabbingPathFollower: target_speed: " << target_speed << " desired_speed_: " << desired_speed_ << " speed_limit_: " << speed_limit_ << " speed_limit_is_percentage_: " << speed_limit_is_percentage_);
 
   geometry_msgs::msg::PoseStamped pose_in_plan;
   try
@@ -172,10 +181,6 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
 
   RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: progress: " << progress << " cross_track_error: " << cross_track_error << " crab_angle: " << crab_angle.value() << " heading: " << heading.value() << " segment_azimuth: " << segment_azimuth.value());
 
-  std_msgs::msg::Float32 crab_angle_msg;
-  crab_angle_msg.data = crab_angle.value();
-  crab_angle_publisher_->publish(crab_angle_msg);
-
   project11::AngleRadians target_heading = segment_azimuth +	crab_angle;
 
   cmd_vel.twist.angular.z = project11::AngleRadiansZeroCentered(target_heading-heading).value();
@@ -191,8 +196,92 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
   double cos_crab = std::max(cos(crab_angle), 0.5);
   cmd_vel.twist.linear.x = target_speed/cos_crab;
 
+  RCLCPP_INFO_STREAM(logger_, "CrabbingPathFollower: target_speed (after potential trajectory derivation): " << target_speed << " adjusted for crab angle: " << cmd_vel.twist.linear.x);
+
+  if(visualize_)
+  {
+    publish_visualization(cmd_vel);
+  }
+
   return cmd_vel;
 
+}
+
+void CrabbingPathFollower::publish_visualization(
+  const geometry_msgs::msg::TwistStamped & cmd_vel)
+{
+  if(!visualize_)
+    return;
+
+  visualization_msgs::msg::MarkerArray marker_array;
+  
+  std::array<std_msgs::msg::ColorRGBA, 3> colors;
+  // past_color
+  colors[0].r = 0.25;
+  colors[0].g = 0.25;
+  colors[0].b = 0.25;
+  colors[0].a = 0.5;
+  // current_color
+  colors[1].r = 0.35;
+  colors[1].g = 0.35;
+  colors[1].b = 0.5;
+  colors[1].a = 0.75;
+  // future_color
+  colors[2].r = 0.25;
+  colors[2].g = 0.25;
+  colors[2].b = 0.4;
+  colors[2].a = 0.5;
+
+  if(!global_plan_.poses.empty())
+  {
+    const auto& poses = global_plan_.poses;
+    std::vector<visualization_msgs::msg::Marker> markers(3);
+    for(int i = 0; i < markers.size(); i++)
+    {
+      markers[i].header.frame_id = poses.front().header.frame_id;
+      markers[i].header.stamp = cmd_vel.header.stamp;
+      markers[i].id = i;
+      markers[i].ns = plugin_name_;
+      markers[i].action = visualization_msgs::msg::Marker::ADD;
+      markers[i].type = visualization_msgs::msg::Marker::LINE_STRIP;
+      markers[i].pose.orientation.w = 1.0;
+      markers[i].color = colors[i];
+      markers[i].scale.x = 1.0;
+      markers[i].lifetime = rclcpp::Duration::from_seconds(2.0);
+    }
+
+    int markers_index = 0; // start with past
+    for(int i = 0; i < poses.size()-1; i++)
+    {
+      // still working on past markers?
+      if(markers_index == 0)
+      {
+        // did we reach the current segment?
+        if(i == current_segment_)
+        {
+          // add the final point if necessary
+          if(!markers[0].points.empty())
+            markers[0].points.push_back(poses[i].pose.position);
+          // add current segment
+          markers[1].points.push_back(poses[i].pose.position);
+          markers[1].points.push_back(poses[i+1].pose.position);
+          // rest will be assigned to future
+          markers_index = 2; 
+          continue; // so we don't add to future on this iteration
+        }
+      }
+      markers[markers_index].points.push_back(poses[i].pose.position);
+    }
+    // add last position to complete the segment, if necessary
+    if(!markers[markers_index].points.empty())
+      markers[markers_index].points.push_back(poses.back().pose.position);
+
+    for(const auto& marker: markers)
+      marker_array.markers.push_back(marker);
+  }
+
+
+  visualization_publisher_->publish(marker_array);
 }
 
 } // namespace controllers
