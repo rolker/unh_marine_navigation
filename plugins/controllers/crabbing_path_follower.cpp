@@ -112,7 +112,7 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
       target_speed = std::min(target_speed, speed_limit_);
   }
 
-  RCLCPP_INFO_STREAM(logger_, "CrabbingPathFollower: target_speed: " << target_speed << " desired_speed_: " << desired_speed_ << " speed_limit_: " << speed_limit_ << " speed_limit_is_percentage_: " << speed_limit_is_percentage_);
+  RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: target_speed: " << target_speed << " desired_speed_: " << desired_speed_ << " speed_limit_: " << speed_limit_ << " speed_limit_is_percentage_: " << speed_limit_is_percentage_);
 
   geometry_msgs::msg::PoseStamped pose_in_plan;
   try
@@ -196,7 +196,7 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
   double cos_crab = std::max(cos(crab_angle), 0.5);
   cmd_vel.twist.linear.x = target_speed/cos_crab;
 
-  RCLCPP_INFO_STREAM(logger_, "CrabbingPathFollower: target_speed (after potential trajectory derivation): " << target_speed << " adjusted for crab angle: " << cmd_vel.twist.linear.x);
+  RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: target_speed (after potential trajectory derivation): " << target_speed << " adjusted for crab angle: " << cmd_vel.twist.linear.x);
 
   if(visualize_)
   {
@@ -222,14 +222,14 @@ void CrabbingPathFollower::publish_visualization(
   colors[0].b = 0.25;
   colors[0].a = 0.5;
   // current_color
-  colors[1].r = 0.35;
-  colors[1].g = 0.35;
-  colors[1].b = 0.5;
+  colors[1].r = 0.25;
+  colors[1].g = 0.75;
+  colors[1].b = 0.25;
   colors[1].a = 0.75;
   // future_color
   colors[2].r = 0.25;
   colors[2].g = 0.25;
-  colors[2].b = 0.4;
+  colors[2].b = 0.75;
   colors[2].a = 0.5;
 
   if(!global_plan_.poses.empty())

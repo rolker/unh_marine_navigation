@@ -36,6 +36,7 @@ protected:
 
   bool generate_visualization_ = false;
   rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::Marker>::SharedPtr visualization_publisher_;
+  rclcpp::Time last_visualization_publish_time_;
 
 
 };

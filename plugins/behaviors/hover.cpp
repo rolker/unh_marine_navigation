@@ -160,12 +160,15 @@ nav2_behaviors::ResultStatus Hover::onCycleUpdate()
 
 void Hover::publish_visualization(rclcpp::Time time)
 {
+  if(last_visualization_publish_time_.nanoseconds() != 0 && (time-last_visualization_publish_time_).seconds() < 0.5)
+    return;
   auto marker_array = std::make_unique<visualization_msgs::msg::MarkerArray>();
   const auto& target = target_pose_;
   visualization_msgs::msg::Marker marker;
   marker.header.frame_id = target.header.frame_id;
   // go back a few milliseconds to try to avoid tf issues
-  marker.header.stamp = time-rclcpp::Duration::from_seconds(0.5);
+  // marker.header.stamp = time-rclcpp::Duration::from_seconds(0.5);
+  marker.header.stamp = time;
   marker.id = 0;
   marker.ns = behavior_name_;
   marker.action = visualization_msgs::msg::Marker::ADD;
@@ -179,7 +182,7 @@ void Hover::publish_visualization(rclcpp::Time time)
   marker.scale.x =  2.0*maximum_radius_;
   marker.scale.y = 2.0*maximum_radius_;
   marker.scale.z = 0.01;
-  marker.lifetime = rclcpp::Duration::from_seconds(2.5);
+  marker.lifetime = rclcpp::Duration::from_seconds(2.0);
   marker_array->markers.push_back(marker);
   visualization_publisher_->publish(marker);
 
@@ -202,6 +205,8 @@ void Hover::publish_visualization(rclcpp::Time time)
   inmarker.lifetime = rclcpp::Duration::from_seconds(2.5);
   marker_array->markers.push_back(inmarker);
   visualization_publisher_->publish(inmarker);
+
+  last_visualization_publish_time_ = time;
 
   //visualization_publisher_->publish(std::move(marker_array));
 }
