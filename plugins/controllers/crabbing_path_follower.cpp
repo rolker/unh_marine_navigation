@@ -56,6 +56,7 @@ void CrabbingPathFollower::activate()
   {
     visualization_publisher_->on_activate();
   }
+  pid_->on_activate();
   
   RCLCPP_INFO(logger_, "Activating controller plugin %s", plugin_name_.c_str());
 }
@@ -77,6 +78,7 @@ void CrabbingPathFollower::setPlan(const nav_msgs::msg::Path & path)
   global_pub_->publish(path);
   global_plan_ = path;
   current_segment_ = 0;
+  pid_->reset();
 }
 
 
