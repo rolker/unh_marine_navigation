@@ -31,6 +31,7 @@ def generate_launch_description():
             ],
             respawn=True,
             respawn_delay=5,
+            emulate_tty=True,
         ),
         LifecycleTransition(
             lifecycle_node_names=(
@@ -56,7 +57,8 @@ def generate_launch_description():
                 ('input', 'project11/avoidance_map'),
                 ('output', 'project11/avoidance_map_local')
             ],
-            parameters=[{'frame_id': map_frame}]
+            parameters=[{'frame_id': map_frame}],
+            emulate_tty=True
         ),
         # occupancy_grid_from_vector_map converts a vector map to an occupancy grid.
         Node(
@@ -66,7 +68,8 @@ def generate_launch_description():
             remappings=[
                 ('input', 'project11/avoidance_map_local'),
                 ('output', 'project11/avoidance_grid')
-            ]
+            ],
+            emulate_tty=True
         ),
 
     ])
