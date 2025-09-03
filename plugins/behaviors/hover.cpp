@@ -41,7 +41,7 @@ nav2_behaviors::ResultStatus Hover::onRun(const std::shared_ptr<const HoverActio
 
   if(generate_visualization_)
   {
-    visualization_publisher_ = node->create_publisher<visualization_msgs::msg::Marker>(behavior_name_+"_visualization", 1);
+    visualization_publisher_ = node->create_publisher<visualization_msgs::msg::MarkerArray>(behavior_name_+"_visualization", 1);
     visualization_publisher_->on_activate();
   }
 
@@ -184,7 +184,6 @@ void Hover::publish_visualization(rclcpp::Time time)
   marker.scale.z = 0.01;
   marker.lifetime = rclcpp::Duration::from_seconds(2.0);
   marker_array->markers.push_back(marker);
-  visualization_publisher_->publish(marker);
 
   visualization_msgs::msg::Marker inmarker;
   inmarker.header.frame_id = target.header.frame_id;
@@ -204,11 +203,10 @@ void Hover::publish_visualization(rclcpp::Time time)
   inmarker.scale.z = 0.01;
   inmarker.lifetime = rclcpp::Duration::from_seconds(2.5);
   marker_array->markers.push_back(inmarker);
-  visualization_publisher_->publish(inmarker);
 
   last_visualization_publish_time_ = time;
 
-  //visualization_publisher_->publish(std::move(marker_array));
+  visualization_publisher_->publish(std::move(marker_array));
 }
 
 

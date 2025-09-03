@@ -35,7 +35,7 @@ protected:
   geometry_msgs::msg::PoseStamped target_pose_;
 
   bool generate_visualization_ = false;
-  rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::Marker>::SharedPtr visualization_publisher_;
+  rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>::SharedPtr visualization_publisher_;
   rclcpp::Time last_visualization_publish_time_;
 
 
