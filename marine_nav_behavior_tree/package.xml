@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>marine_nav_behavior_tree</name>
+  <version>0.0.0</version>
+  <description>Nav2 behavior tree nodes useful for marine navigation</description>
+
+  <maintainer email="roland@ccom.unh.edu">Roland Arsenault</maintainer>
+
+  <license>BSD</license>
+
+  <buildtool_depend>ament_cmake_ros</buildtool_depend>
+  <depend>marine_nav_tasks</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+    <behaviortree_cpp bt_lib_plugin="libmarine_nav_behavior_tree_plugins"/>
+  </export>
+</package>

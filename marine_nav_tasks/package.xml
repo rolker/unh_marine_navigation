@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>marine_nav_tasks</name>
+  <version>0.0.0</version>
+  <description>Package providing tasked based navigation for marine robots</description>
+
+  <maintainer email="roland@ccom.unh.edu">Roland Arsenault</maintainer>
+
+  <license>BSD</license>
+
+  <buildtool_depend>ament_cmake_ros</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+  <depend>marine_nav_interfaces</depend>
+  <depend>marine_nav_utilities</depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_lifecycle</depend>
+  <depend>visualization_msgs</depend>
+  <depend>yaml_cpp_vendor</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

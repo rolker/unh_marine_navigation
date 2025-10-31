@@ -1,0 +1,59 @@
+#include "marine_nav_behavior_tree/plugins/action/update_current_task.h"
+#include <marine_nav_tasks/task_list.h>
+#include <marine_nav_tasks/task.h>
+
+namespace marine_nav_behavior_tree
+{
+
+using marine_nav_tasks::Task;
+using marine_nav_tasks::TaskList;
+
+UpdateCurrentTask::UpdateCurrentTask(const std::string& name, const BT::NodeConfig& config):
+  BT::SyncActionNode(name, config)
+{
+
+}
+
+BT::PortsList UpdateCurrentTask::providedPorts()
+{
+  return {
+    BT::InputPort<std::shared_ptr<TaskList> >("task_list", "{task_list}", "List of tasks to check"),
+    BT::OutputPort<std::shared_ptr<Task> >("current_task", "{current_task}", "Pointer to update with current task"),
+    BT::OutputPort<std::string>("current_task_type", "{current_task_type}", "Type of the current task"),
+    BT::OutputPort<std::string>("current_task_id", "{current_task_id}", "ID of the current task"),
+    BT::OutputPort<rclcpp::Time>("current_task_update_time", "{current_task_update_time}", "Time the current task was last updated"),
+  };
+}
+
+BT::NodeStatus UpdateCurrentTask::tick()
+{
+  auto task_list_entry = getInput<std::shared_ptr<TaskList> >("task_list");
+  if(!task_list_entry)
+  {
+    throw BT::RuntimeError("missing required input [task_list]: ", task_list_entry.error() );
+  }
+
+  auto task_list = task_list_entry.value();
+  std::shared_ptr<Task> current_task;
+  if(task_list)
+  {
+    auto todo_list = task_list->tasksByPriority(true);
+    if(!todo_list.empty())
+      current_task = todo_list.front();
+  }
+  setOutput("current_task", current_task);
+  if(current_task)
+  {
+    setOutput("current_task_type", current_task->message().type);
+    setOutput("current_task_id", current_task->message().id);
+    setOutput("current_task_update_time", current_task->lastUpdateTime());
+  }
+  else
+  {
+    setOutput("current_task_type", "");
+    setOutput("current_task_id", "");
+  }
+  return BT::NodeStatus::SUCCESS;
+}
+
+} // namespace marine_nav_behavior_tree

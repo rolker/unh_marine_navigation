@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>marine_nav_utilities</name>
+  <version>0.0.0</version>
+  <description>Utilities used for navigation of marine robots</description>
+
+  <maintainer email="roland@ccom.unh.edu">Roland Arsenault</maintainer>
+
+  <license>BSD</license>
+
+  <buildtool_depend>ament_cmake_ros</buildtool_depend>
+  <depend>geometry_msgs</depend>
+  <depend>rclcpp</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

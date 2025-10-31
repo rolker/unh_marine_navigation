@@ -1,0 +1,15 @@
+#goal
+marine_nav_interfaces/TaskInformation[] tasks
+---
+#result
+marine_nav_interfaces/TaskInformation[] tasks
+
+# Error codes (copied from nav2_msgs)
+# Note: The expected priority order of the errors should match the message order
+uint16 NONE=0
+
+uint16 error_code
+string error_msg
+---
+# feedback
+marine_nav_interfaces/TaskFeedback feedback
