@@ -26,16 +26,22 @@
 #include "plugins_list.hpp"
 #include "nav2_util/string_utils.hpp"
 
+//BT_REGISTER_NODES(factory);
+#include "bt_register_nodes.cpp"
+
 int main()
 {
   BT::BehaviorTreeFactory factory;
 
   std::vector<std::string> plugins_list = nav2_util::split(marine_nav_behavior_tree::details::BT_BUILTIN_PLUGINS, ';');
 
-  for (const auto & plugin : plugins_list) {
-    std::cout << "Loading: " << plugin << "\n";
-    factory.registerFromPlugin(BT::SharedLibrary::getOSName(plugin));
-  }
+  // for (const auto & plugin : plugins_list) {
+  //   std::cout << "Loading: " << plugin << "\n";
+  //   factory.registerFromPlugin(BT::SharedLibrary::getOSName(plugin));
+  // }
+  
+  BT_RegisterNodesFromPlugin(factory);
+
   std::cout << "\nGenerating file: marine_nav_behavior_tree_nodes.xml\n"
             << "\nCompare it with the one in the git repo and update the latter if necessary.\n";
 

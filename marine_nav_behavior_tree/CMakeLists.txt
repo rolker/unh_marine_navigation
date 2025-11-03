@@ -120,10 +120,21 @@ set(GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/gen)
 configure_file(plugins_list.hpp.in ${GENERATED_DIR}/plugins_list.hpp)
 install(FILES ${GENERATED_DIR}/plugins_list.hpp DESTINATION include/${PROJECT_NAME}/${PROJECT_NAME})
 
-add_executable(generate_${PROJECT_NAME}_nodes_xml src/generate_${PROJECT_NAME}_nodes_xml.cpp)
+add_executable(generate_${PROJECT_NAME}_nodes_xml
+  src/generate_${PROJECT_NAME}_nodes_xml.cpp
+)
 
 # allow tree nodes xml generator to find plugins_list.hpp
-target_include_directories(generate_${PROJECT_NAME}_nodes_xml PRIVATE ${GENERATED_DIR})
+target_include_directories(generate_${PROJECT_NAME}_nodes_xml PRIVATE ${GENERATED_DIR}
+  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+  "$<INSTALL_INTERFACE:include/${PROJECT_NAME}>"
+)
+
+
+target_link_libraries(generate_${PROJECT_NAME}_nodes_xml
+  ${PROJECT_NAME}_bt_plugins
+  ${marine_nav_interfaces_TARGETS}
+)
 
 ament_target_dependencies(generate_${PROJECT_NAME}_nodes_xml 
   behaviortree_cpp
@@ -138,6 +149,7 @@ add_custom_command(TARGET generate_${PROJECT_NAME}_nodes_xml POST_BUILD
   WORKING_DIRECTORY ${GENERATED_DIR}
   COMMENT "Generating marine_nav_behavior_tree_nodes.xml"
 )
+
 
 install(FILES ${GENERATED_DIR}/marine_nav_behavior_tree_nodes.xml DESTINATION share/${PROJECT_NAME})
 
