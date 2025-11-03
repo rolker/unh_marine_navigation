@@ -129,8 +129,11 @@ bool TaskList::getLastPose(geometry_msgs::msg::PoseStamped& pose, bool recursive
 std::shared_ptr<Task> TaskList::createTaskBefore(std::shared_ptr<Task> task, std::string type)
 {
   auto task_iterator = tasks_.begin();
-  while(task && task_iterator != tasks_.end() && *task_iterator != task)
-    task_iterator++;
+  if(!task)
+    task_iterator = tasks_.end();
+  else
+    while(task && task_iterator != tasks_.end() && *task_iterator != task)
+      task_iterator++;
   
   std::shared_ptr<Task> ret;
 
