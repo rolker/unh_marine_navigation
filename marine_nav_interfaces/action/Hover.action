@@ -10,10 +10,10 @@ float32 maximum_speed
 #result definition
 
 uint16 NONE=0
-uint16 UNKNOWN=1020
-uint16 TF_ERROR=1022
-uint16 COLLISION_AHEAD=1023
-uint16 INVALID_INPUT=1024
+uint16 UNKNOWN=9000
+uint16 FAILED_TO_LOAD_BEHAVIOR_TREE=9001
+uint16 TF_ERROR=9002
+uint16 TIMEOUT=9003
 
 builtin_interfaces/Duration total_elapsed_time
 uint16 error_code
