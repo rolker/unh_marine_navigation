@@ -1,9 +1,0 @@
-<launch>
-  <arg name="namespace"/>
-
-  <group ns="$(arg namespace)">
-    <rosparam file="$(find project11_navigation)/config/default_stack.yaml" command="load"/>
-    <!-- <rosparam file="$(find orbit)/config/orbit.yaml"/> -->
-  </group>
-
-</launch>

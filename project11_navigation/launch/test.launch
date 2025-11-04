@@ -1,3 +1,0 @@
-<launch>
-  <node pkg="project11_navigation" type="navigator" name="navtest"/>
-</launch>

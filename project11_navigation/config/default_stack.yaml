@@ -1,9 +1,0 @@
-controller_frequency: 10.0
-
-path_follower:
-  pid:
-    upper_limit: 90
-    lower_limit: -90
-    windup_limit: 50
-
-
