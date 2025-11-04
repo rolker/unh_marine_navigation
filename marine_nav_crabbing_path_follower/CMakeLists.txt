@@ -16,6 +16,7 @@ find_package(nav2_core REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(tf2 REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
 add_library(${PROJECT_NAME} SHARED
   src/crabbing_path_follower.cpp
@@ -39,6 +40,7 @@ ament_target_dependencies(${PROJECT_NAME}
   pluginlib
   rclcpp
   tf2
+  visualization_msgs
 )
 
 pluginlib_export_plugin_description_file(nav2_core plugin.xml)
