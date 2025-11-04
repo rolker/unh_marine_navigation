@@ -53,7 +53,7 @@ protected:
   bool speed_limit_is_percentage_ = false;
 
 
-  rclcpp::Duration transform_tolerance_ {0, 0};
+  double transform_tolerance_ {0.0};
 
   int current_segment_ = -1;
   nav_msgs::msg::Path global_plan_;
