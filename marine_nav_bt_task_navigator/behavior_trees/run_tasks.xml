@@ -102,12 +102,14 @@
               <IsPathValid path="{path}"
                            server_timeout="{server_timeout}"/>
             </ReactiveSequence>
-            <ComputePathThroughPoses goals="{goals_vector}"
-                                     server_name="compute_path_through_poses"
-                                     server_timeout="{server_timeout}"
-                                     planner_id="{selected_planner}"
-                                     path="{path}"
-                                     error_code_id="{compute_path_error_code}"/>
+            <RetryUntilSuccessful num_attempts="20">
+              <ComputePathThroughPoses goals="{goals_vector}"
+                                       server_name="compute_path_through_poses"
+                                       server_timeout="{server_timeout}"
+                                       planner_id="{selected_planner}"
+                                       path="{path}"
+                                       error_code_id="{compute_path_error_code}"/>
+            </RetryUntilSuccessful>
           </Fallback>
         </RateController>
         <FollowPath controller_id="{selected_controller}"
