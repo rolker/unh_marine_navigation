@@ -154,6 +154,11 @@ add_custom_command(TARGET generate_${PROJECT_NAME}_nodes_xml POST_BUILD
 install(FILES ${GENERATED_DIR}/marine_nav_behavior_tree_nodes.xml DESTINATION share/${PROJECT_NAME})
 
 
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  ament_lint_auto_find_test_dependencies()
+endif()
+
 ament_package()
 
 
