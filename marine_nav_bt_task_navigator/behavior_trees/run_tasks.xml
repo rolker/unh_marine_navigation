@@ -62,7 +62,7 @@
                      _autoremap="true"/>
           </IfThenElse>
         </Fallback>
-        <Script code="navigation_state := &quot;hover&quot;"/>
+        <Script code="navigation_state := &apos;hover&apos;"/>
         <Hover maximum_distance="0.000000"
                maximum_speed="0.000000"
                error_code_id="{hover_error_code}"
@@ -278,7 +278,7 @@
       <SubTree ID="CancelAllNavigation"
                _autoremap="true"/>
       <ReactiveSequence>
-        <Script code="navigation_state := &quot;survey_line&quot;"/>
+        <Script code="navigation_state := &apos;survey_line&apos;"/>
         <ControllerSelector topic_name="controller_selector"
                             default_controller="FollowPath"
                             selected_controller="{selected_controller}"/>
@@ -355,7 +355,7 @@
                   end_index="0"
                   start_index="0"
                   input_path="{survey_path}"/>
-      <Script code="navigation_state := &quot;transit&quot;"/>
+      <Script code="navigation_state := &apos;transit&apos;"/>
       <SubTree ID="NavigateThroughWaypoints"
                goals="{transit_path}"
                _autoremap="true"/>
