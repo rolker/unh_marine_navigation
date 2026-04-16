@@ -129,11 +129,10 @@ nav2_behaviors::ResultStatus Hover::onCycleUpdate()
 
   if (steering_proportion > 0.25)
   {
-    current_target_speed = 0.0;
+    current_target_speed =  std::max(current_target_speed, 0.2);
   }
 
-  current_target_speed *= (1.0 - steering_proportion*4.0);
-
+  current_target_speed *= std::max(0.0, 1.0 - steering_proportion*4.0); 
   if (current_range > minimum_radius_)
   {
     current_target_speed = std::max(current_target_speed, minimum_speed_);
