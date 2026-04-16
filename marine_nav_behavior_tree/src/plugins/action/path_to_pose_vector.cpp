@@ -29,7 +29,9 @@ BT::NodeStatus PathToPoseVector::tick()
   std::vector<geometry_msgs::msg::PoseStamped> poses;
   for(const auto& pose: path.value().poses)
   {
-    poses.push_back(pose);
+    auto p = pose;
+    p.header.stamp = builtin_interfaces::msg::Time();   // NEW: zero stamp = "latest" in TF lookups
+    poses.push_back(p);
   }
 
   setOutput("poses", poses);
