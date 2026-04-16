@@ -130,14 +130,21 @@ nav2_behaviors::ResultStatus Hover::onCycleUpdate()
   // Smooth taper: 1.0 at aligned, 0.0 at >= 45° heading error.
   current_target_speed *= std::max(0.0, 1.0 - steering_proportion*4.0);
 
-  // Floor: ensure minimum forward thrust whenever heading correction
-  // is non-trivial, so vectored thrust has flow to redirect. Applied
-  // AFTER the taper so the floor isn't multiplied to zero.
-  // Threshold lowered from 0.25 to 0.1 (~18°) since vectored thrust
-  // needs flow even for moderate heading errors. (v3 of field patch.)
-  if (steering_proportion > 0.1)
+  // Range-aware floor for vectored-thrust authority during heading
+  // correction. Tapers linearly from 0.5 * maximum_speed_ at
+  // maximum_radius down to 0.2 * maximum_speed_ at minimum_radius, then
+  // drops to zero inside minimum_radius so the boat can settle on
+  // station instead of orbiting at the kinematic radius v_min/yaw_rate.
+  // (v4 of field patch — v3 used a flat 0.2 floor everywhere, which
+  // produced a ~3 m stable orbital loop in field testing.)
+  if (steering_proportion > 0.1 && current_range >= minimum_radius_)
   {
-    current_target_speed = std::max(current_target_speed, 0.2);
+    double range_factor = std::clamp(
+        (current_range - minimum_radius_) /
+        (maximum_radius_ - minimum_radius_),
+        0.0, 1.0);
+    double turn_min_speed = (0.2 + 0.3 * range_factor) * maximum_speed_;
+    current_target_speed = std::max(current_target_speed, turn_min_speed);
   }
 
   if (current_range > minimum_radius_)
