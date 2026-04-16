@@ -127,12 +127,19 @@ nav2_behaviors::ResultStatus Hover::onCycleUpdate()
     // steering_speed = 0.0;
   }
 
-  if (steering_proportion > 0.25)
+  // Smooth taper: 1.0 at aligned, 0.0 at >= 45° heading error.
+  current_target_speed *= std::max(0.0, 1.0 - steering_proportion*4.0);
+
+  // Floor: ensure minimum forward thrust whenever heading correction
+  // is non-trivial, so vectored thrust has flow to redirect. Applied
+  // AFTER the taper so the floor isn't multiplied to zero.
+  // Threshold lowered from 0.25 to 0.1 (~18°) since vectored thrust
+  // needs flow even for moderate heading errors. (v3 of field patch.)
+  if (steering_proportion > 0.1)
   {
-    current_target_speed =  std::max(current_target_speed, 0.2);
+    current_target_speed = std::max(current_target_speed, 0.2);
   }
 
-  current_target_speed *= std::max(0.0, 1.0 - steering_proportion*4.0); 
   if (current_range > minimum_radius_)
   {
     current_target_speed = std::max(current_target_speed, minimum_speed_);
