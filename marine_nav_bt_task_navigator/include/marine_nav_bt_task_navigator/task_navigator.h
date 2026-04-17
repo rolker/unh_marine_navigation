@@ -5,6 +5,7 @@
 #include "marine_nav_interfaces/action/run_tasks.hpp"
 #include "behaviortree_cpp/loggers/groot2_publisher.h"
 #include <behaviortree_cpp/loggers/bt_cout_logger.h>
+#include "nav2_behavior_tree/ros_topic_logger.hpp"
 
 namespace marine_nav_bt_task_navigator
 {
@@ -48,6 +49,7 @@ private:
   std::string active_task_blackboard_id_;
   rclcpp::Clock::SharedPtr clock_;
   std::shared_ptr<BT::Groot2Publisher> groot_;
+  std::shared_ptr<nav2_behavior_tree::RosTopicLogger> ros_topic_logger_;
   bool debug_ = false;
   std::shared_ptr<BT::StdCoutLogger> console_logger_;
 

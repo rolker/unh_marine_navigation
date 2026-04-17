@@ -82,6 +82,13 @@ bool TaskNavigator::goalReceived(ActionT::Goal::ConstSharedPtr goal)
   groot_.reset();
   groot_ = std::make_shared<BT::Groot2Publisher>(bt_action_server_->getTree());
 
+  ros_topic_logger_.reset();
+  auto bt_node = bt_action_server_->getBlackboard()->get<rclcpp::Node::SharedPtr>("node");
+  if (bt_node) {
+    ros_topic_logger_ = std::make_shared<nav2_behavior_tree::RosTopicLogger>(
+      bt_node, bt_action_server_->getTree());
+  }
+
   if(debug_)
   {
     RCLCPP_INFO(logger_, "Logging to console");
@@ -111,6 +118,9 @@ void TaskNavigator::onLoop()
   }
   bt_action_server_->publishFeedback(feedback_msg);
 
+  if (ros_topic_logger_) {
+    ros_topic_logger_->flush();
+  }
 }
 
 void TaskNavigator::onPreempt(typename ActionT::Goal::ConstSharedPtr goal)
