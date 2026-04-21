@@ -191,23 +191,25 @@
                      task_list="{survey_area_tasks}"
                      _autoremap="true"/>
             <RetryNode num_attempts="3">
-              <ReactiveFallback>
-                <SubTree ID="SurveyLineTask"
-                         lead_in_distance="{survey_lead_in_distance}"
-                         survey_line_task="{current_survey_area_task}"
-                         server_timeout="{server_timeout}"
-                         bt_loop_duration="{bt_loop_duration}"
-                         wait_for_service_timeout="{wait_for_service_timeout}"
-                         current_task_type="{current_survey_area_task_type}"
-                         _failureIf="current_survey_area_task_type != &apos;survey_line&apos;"
-                         _autoremap="true"/>
-                <SubTree ID="SurveyLineSetTask"
-                         name="SurveyAreaSurveyLineSetTask"
-                         survey_line_set_task="{current_survey_area_task}"
-                         _failureIf="current_survey_area_task_type != &apos;survey_line_set&apos;"
-                         _autoremap="true"/>
+              <Sequence>
+                <ReactiveFallback>
+                  <SubTree ID="SurveyLineTask"
+                           lead_in_distance="{survey_lead_in_distance}"
+                           survey_line_task="{current_survey_area_task}"
+                           server_timeout="{server_timeout}"
+                           bt_loop_duration="{bt_loop_duration}"
+                           wait_for_service_timeout="{wait_for_service_timeout}"
+                           current_task_type="{current_survey_area_task_type}"
+                           _failureIf="current_survey_area_task_type != &apos;survey_line&apos;"
+                           _autoremap="true"/>
+                  <SubTree ID="SurveyLineSetTask"
+                           name="SurveyAreaSurveyLineSetTask"
+                           survey_line_set_task="{current_survey_area_task}"
+                           _failureIf="current_survey_area_task_type != &apos;survey_line_set&apos;"
+                           _autoremap="true"/>
+                </ReactiveFallback>
                 <SetTaskDone task="{current_survey_area_task}"/>
-              </ReactiveFallback>
+              </Sequence>
             </RetryNode>
           </ReactiveSequence>
         </KeepRunningUntilFailure>
