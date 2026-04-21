@@ -190,7 +190,7 @@
                      default_controller="{=}"
                      task_list="{survey_area_tasks}"
                      _autoremap="true"/>
-            <RetryNode num_attempts="3">
+            <RetryUntilSuccessful num_attempts="3">
               <Sequence>
                 <ReactiveFallback>
                   <SubTree ID="SurveyLineTask"
@@ -210,7 +210,7 @@
                 </ReactiveFallback>
                 <SetTaskDone task="{current_survey_area_task}"/>
               </Sequence>
-            </RetryNode>
+            </RetryUntilSuccessful>
           </ReactiveSequence>
         </KeepRunningUntilFailure>
       </WhileDoElse>
@@ -321,7 +321,7 @@
                      default_controller="{=}"
                      task_list="{survey_line_set_sub_tasks}"
                      _autoremap="true"/>
-            <RetryNode num_attempts="3">
+            <RetryUntilSuccessful num_attempts="3">
               <Sequence>
                 <SubTree ID="SurveyLineTask"
                          name="SurveyLineSetSurveyLineTask"
@@ -333,7 +333,7 @@
                          _autoremap="true"/>
                 <SetTaskDone task="{survey_line_set_sub_task}"/>
               </Sequence>
-            </RetryNode>
+            </RetryUntilSuccessful>
           </ReactiveSequence>
         </KeepRunningUntilFailure>
       </WhileDoElse>
