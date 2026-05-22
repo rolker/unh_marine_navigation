@@ -34,11 +34,13 @@ void CrabbingPathFollower::configure(
   pid_reset_threshold_ = rclcpp::Duration::from_seconds(pid_reset_threshold_seconds);
 
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".default_speed", rclcpp::ParameterValue(1.0));
-  desired_speed_ = node->get_parameter(plugin_name_ + ".default_speed").as_double();
+  desired_speed_.store(node->get_parameter(plugin_name_ + ".default_speed").as_double());
 
   // Live updates: a SetParameters call against this node (from `ros2 param set`
   // or a BT plugin per task) will update `desired_speed_` in place. Other
-  // parameters are passed through unchanged.
+  // parameters are passed through unchanged. Only logs when the value
+  // actually changes to avoid log spam if some caller pushes the same
+  // value repeatedly.
   const std::string default_speed_name = plugin_name_ + ".default_speed";
   params_cb_handle_ = node->add_on_set_parameters_callback(
     [this, default_speed_name](const std::vector<rclcpp::Parameter> & params) {
@@ -47,10 +49,15 @@ void CrabbingPathFollower::configure(
       for (const auto & p : params) {
         if (p.get_name() == default_speed_name &&
             p.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE) {
-          desired_speed_ = p.as_double();
-          RCLCPP_INFO(
-            logger_, "CrabbingPathFollower: default_speed updated live to %.3f m/s",
-            desired_speed_);
+          const double new_value = p.as_double();
+          const double prev_value = desired_speed_.load();
+          if (new_value != prev_value) {
+            desired_speed_.store(new_value);
+            RCLCPP_INFO(
+              logger_,
+              "CrabbingPathFollower: default_speed updated %.3f -> %.3f m/s",
+              prev_value, new_value);
+          }
         }
       }
       return result;
@@ -131,16 +138,20 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
   if(current_segment_ == segment_count)
     return cmd_vel;
 
-  double target_speed = desired_speed_;
+  // Snapshot the atomic once per cycle so the speed-limit math and the
+  // log line below see a consistent value (avoids a torn read between
+  // computations).
+  const double desired_speed_snapshot = desired_speed_.load();
+  double target_speed = desired_speed_snapshot;
   if (speed_limit_ > 0.0)
   {
     if(speed_limit_is_percentage_)
-      target_speed = std::min(target_speed, desired_speed_ * speed_limit_ / 100.0);
+      target_speed = std::min(target_speed, desired_speed_snapshot * speed_limit_ / 100.0);
     else
       target_speed = std::min(target_speed, speed_limit_);
   }
 
-  RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: target_speed: " << target_speed << " desired_speed_: " << desired_speed_ << " speed_limit_: " << speed_limit_ << " speed_limit_is_percentage_: " << speed_limit_is_percentage_);
+  RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: target_speed: " << target_speed << " desired_speed_: " << desired_speed_snapshot << " speed_limit_: " << speed_limit_ << " speed_limit_is_percentage_: " << speed_limit_is_percentage_);
 
   geometry_msgs::msg::PoseStamped pose_in_plan;
   nav2_util::transformPoseInTargetFrame(

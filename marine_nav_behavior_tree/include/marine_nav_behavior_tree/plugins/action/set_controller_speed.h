@@ -28,6 +28,13 @@ public:
 private:
   rclcpp::AsyncParametersClient::SharedPtr params_client_;
   std::string cached_target_node_;
+
+  // Dedup across BT ticks. SyncActionNode is re-ticked at the BT loop
+  // rate (~100 Hz) once it has returned SUCCESS; without dedup we'd
+  // issue a SetParameters call every tick, accumulating pending
+  // requests in rmw and flooding the controller's param-change log.
+  // Sentinel -1.0 ensures the first valid speed always fires.
+  double last_pushed_speed_ = -1.0;
 };
 
 } // namespace marine_nav_behavior_tree

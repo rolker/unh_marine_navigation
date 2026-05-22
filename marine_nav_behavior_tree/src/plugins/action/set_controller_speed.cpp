@@ -70,15 +70,59 @@ BT::NodeStatus SetControllerSpeed::tick()
     return BT::NodeStatus::SUCCESS;
   }
 
+  // Dedup: only fire when the requested speed actually changes. Without
+  // this, BT re-ticks at ~100 Hz drown rmw in pending SetParameters
+  // requests and the controller's param-change callback in matching
+  // log lines. The dedup also bounds the failure-log noise from the
+  // completion callback below.
+  if (speed.value() == last_pushed_speed_) {
+    return BT::NodeStatus::SUCCESS;
+  }
+
   std::vector<rclcpp::Parameter> params{
     rclcpp::Parameter(parameter_name.value(), speed.value())
   };
 
-  // Fire-and-forget: the controller's on_set_parameters_callback updates
-  // desired_speed_ synchronously when the SetParameters service handles
-  // the request. Blocking the BT tick on the future is unnecessary and
-  // would slow the tree loop.
-  params_client_->set_parameters(params);
+  // Completion callback consumes the future (so rclcpp prunes the
+  // pending request) and surfaces a WARN on a failed SetParameters
+  // response — silent failure would let the boat run on whatever
+  // default the controller has, which is safety-relevant.
+  const std::string target_name_for_log = target_node.value();
+  const std::string param_name_for_log = parameter_name.value();
+  const double speed_for_log = speed.value();
+  auto logger = node->get_logger();
+  auto on_complete =
+    [logger, target_name_for_log, param_name_for_log, speed_for_log](
+      std::shared_future<std::vector<rcl_interfaces::msg::SetParametersResult>> future) {
+      try {
+        auto results = future.get();
+        bool any_failed = false;
+        std::string failure_reason;
+        for (const auto & r : results) {
+          if (!r.successful) {
+            any_failed = true;
+            failure_reason = r.reason;
+            break;
+          }
+        }
+        if (any_failed) {
+          RCLCPP_WARN(
+            logger,
+            "SetControllerSpeed: %s.%s := %.3f rejected by %s (reason: '%s')",
+            target_name_for_log.c_str(), param_name_for_log.c_str(),
+            speed_for_log, target_name_for_log.c_str(),
+            failure_reason.c_str());
+        }
+      } catch (const std::exception & e) {
+        RCLCPP_WARN(
+          logger,
+          "SetControllerSpeed: SetParameters future failed on %s: %s",
+          target_name_for_log.c_str(), e.what());
+      }
+    };
+
+  params_client_->set_parameters(params, on_complete);
+  last_pushed_speed_ = speed.value();
 
   RCLCPP_DEBUG(
     node->get_logger(),

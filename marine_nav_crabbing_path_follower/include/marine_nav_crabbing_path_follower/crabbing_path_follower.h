@@ -1,6 +1,8 @@
 #ifndef MARINE_NAV_CRABBING_PATH_FOLLOWER_CRABBING_PATH_FOLLOWER_H
 #define MARINE_NAV_CRABBING_PATH_FOLLOWER_CRABBING_PATH_FOLLOWER_H
 
+#include <atomic>
+
 #include "nav2_core/controller.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "pluginlib/class_loader.hpp"
@@ -48,7 +50,10 @@ protected:
   rclcpp::Logger logger_ {rclcpp::get_logger("CrabbingPathFollower")};
   rclcpp::Clock::SharedPtr clock_;
 
-  double desired_speed_;
+  // Atomic because the parameter-service callback (rclcpp services thread)
+  // writes this while computeVelocityCommands (controller-server compute
+  // thread) reads it. Plain `double` would be UB per the C++ memory model.
+  std::atomic<double> desired_speed_{0.0};
   double speed_limit_ = -1.0;
   bool speed_limit_is_percentage_ = false;
 
