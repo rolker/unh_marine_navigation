@@ -2,6 +2,7 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav2_util/node_utils.hpp"
 #include "marine_nav_utilities/gz4d/angles.hpp"
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
 
 namespace marine_nav_crabbing_path_follower
 {
@@ -34,6 +35,26 @@ void CrabbingPathFollower::configure(
 
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".default_speed", rclcpp::ParameterValue(1.0));
   desired_speed_ = node->get_parameter(plugin_name_ + ".default_speed").as_double();
+
+  // Live updates: a SetParameters call against this node (from `ros2 param set`
+  // or a BT plugin per task) will update `desired_speed_` in place. Other
+  // parameters are passed through unchanged.
+  const std::string default_speed_name = plugin_name_ + ".default_speed";
+  params_cb_handle_ = node->add_on_set_parameters_callback(
+    [this, default_speed_name](const std::vector<rclcpp::Parameter> & params) {
+      rcl_interfaces::msg::SetParametersResult result;
+      result.successful = true;
+      for (const auto & p : params) {
+        if (p.get_name() == default_speed_name &&
+            p.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE) {
+          desired_speed_ = p.as_double();
+          RCLCPP_INFO(
+            logger_, "CrabbingPathFollower: default_speed updated live to %.3f m/s",
+            desired_speed_);
+        }
+      }
+      return result;
+    });
 
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".visualization", rclcpp::ParameterValue(visualize_));
   visualize_ = node->get_parameter(plugin_name_ + ".visualization").as_bool();

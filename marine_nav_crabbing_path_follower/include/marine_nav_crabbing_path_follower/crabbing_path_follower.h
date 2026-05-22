@@ -65,6 +65,11 @@ protected:
 
   bool visualize_ = false;
   rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>::SharedPtr visualization_publisher_;
+
+  // Live updates to `default_speed` via the node's parameter service —
+  // without this `desired_speed_` is captured once at configure() and
+  // never updated.
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr params_cb_handle_;
 };
 
 
