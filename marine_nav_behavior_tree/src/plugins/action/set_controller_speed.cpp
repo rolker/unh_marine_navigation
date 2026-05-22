@@ -60,8 +60,12 @@ BT::NodeStatus SetControllerSpeed::tick()
   }
 
   if (!params_client_->service_is_ready()) {
-    RCLCPP_WARN(
-      node->get_logger(),
+    // Throttle: BT re-ticks this node at ~5+ Hz inside ReactiveSequence /
+    // PipelineSequence; without throttling a misconfigured target_node
+    // (or a controller mid-restart) floods the log. 5 s gives the user
+    // enough visibility to notice but not enough to drown the log.
+    RCLCPP_WARN_THROTTLE(
+      node->get_logger(), *node->get_clock(), 5000,
       "SetControllerSpeed: parameter service on %s not ready; skipping speed update",
       target_node.value().c_str());
     // Don't fail the tree just because the controller is mid-restart — the

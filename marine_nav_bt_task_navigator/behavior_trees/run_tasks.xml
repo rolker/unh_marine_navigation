@@ -112,7 +112,8 @@
             </RetryUntilSuccessful>
           </Fallback>
         </RateController>
-        <SetControllerSpeed speed="{target_speed}"/>
+        <SetControllerSpeed speed="{target_speed}"
+                            target_node="/bizzy/controller_server"/>
         <FollowPath controller_id="{selected_controller}"
                     path="{path}"
                     goal_checker_id=""
@@ -287,7 +288,8 @@
         <ControllerSelector topic_name="controller_selector"
                             default_controller="FollowPath"
                             selected_controller="{selected_controller}"/>
-        <SetControllerSpeed speed="{target_speed}"/>
+        <SetControllerSpeed speed="{target_speed}"
+                            target_node="/bizzy/controller_server"/>
         <FollowPath controller_id="{selected_controller}"
                     path="{survey_path}"
                     goal_checker_id=""
