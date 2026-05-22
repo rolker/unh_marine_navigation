@@ -75,6 +75,7 @@ add_library(${PROJECT_NAME}_bt_plugins SHARED
   src/plugins/action/hover_action.cpp
   src/plugins/action/hover_cancel_node.cpp
   src/plugins/action/path_to_pose_vector.cpp
+  src/plugins/action/set_controller_speed.cpp
   src/plugins/action/set_path_from_task.cpp
   src/plugins/action/set_polygon_from_task.cpp
   src/plugins/action/set_task_done.cpp
