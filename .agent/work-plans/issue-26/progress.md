@@ -171,4 +171,6 @@ Build clean; gtest 5/5 pass.
 **CI**: all-pass
 
 ### Actions
-- [ ] Accept `PARAMETER_INTEGER` for `default_speed` in both the configure-time read and the live-update callback. YAML `default_speed: 2` parses as integer (common operator mistake); current strict-double rejection silently falls back to 1.0 m/s. Coerce via `static_cast<double>(p.as_int())`, keep the existing isfinite + >0 checks. Also switch the configure-time WARN to use `value_to_string()` so the actual provided value shows up in the log instead of "nan" (the type-mismatch placeholder). Mirror the change in the param callback for symmetry (Copilot R10 #1).
+- [x] Accept `PARAMETER_INTEGER` for `default_speed` in both the configure-time read and the live-update callback. YAML `default_speed: 2` parses as integer (common operator mistake); current strict-double rejection silently falls back to 1.0 m/s. Coerce via `static_cast<double>(p.as_int())`, keep the existing isfinite + >0 checks. Also switch the configure-time WARN to use `value_to_string()` so the actual provided value shows up in the log instead of "nan" (the type-mismatch placeholder). Mirror the change in the param callback for symmetry (Copilot R10 #1).
+
+Build clean; gtest 5/5 pass.

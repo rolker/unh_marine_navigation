@@ -49,22 +49,35 @@ void CrabbingPathFollower::configure(
   {
     const std::string default_speed_param = plugin_name_ + ".default_speed";
     const auto initial_param = node->get_parameter(default_speed_param);
-    const bool type_ok =
-      initial_param.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE;
-    const double initial_value = type_ok
-      ? initial_param.as_double()
-      : std::numeric_limits<double>::quiet_NaN();
+    // Accept both PARAMETER_DOUBLE and PARAMETER_INTEGER. YAML `default_speed: 2`
+    // (no decimal) parses as integer — a common operator mistake worth
+    // coercing rather than silently rejecting. Other types route through
+    // the invalid branch below.
+    double initial_value;
+    bool type_ok = true;
+    const auto initial_type = initial_param.get_type();
+    if (initial_type == rclcpp::ParameterType::PARAMETER_DOUBLE) {
+      initial_value = initial_param.as_double();
+    } else if (initial_type == rclcpp::ParameterType::PARAMETER_INTEGER) {
+      initial_value = static_cast<double>(initial_param.as_int());
+    } else {
+      initial_value = std::numeric_limits<double>::quiet_NaN();
+      type_ok = false;
+    }
     if (type_ok && std::isfinite(initial_value) && initial_value > 0.0) {
       desired_speed_.store(initial_value);
     } else {
       constexpr double kFallback = 1.0;
+      // Use value_to_string() so the WARN shows the actual provided value
+      // (e.g. "false", "[1, 2]") rather than the nan placeholder we use
+      // internally to route wrong-type cases through the invalid branch.
       RCLCPP_WARN(
         logger_,
         "CrabbingPathFollower: configured default_speed is invalid "
-        "(type=%s, value=%.3f; must be PARAMETER_DOUBLE, finite, > 0); "
+        "(type=%s, value=%s; must be a finite positive number); "
         "falling back to %.3f m/s",
-        rclcpp::to_string(initial_param.get_type()).c_str(),
-        initial_value, kFallback);
+        rclcpp::to_string(initial_type).c_str(),
+        initial_param.value_to_string().c_str(), kFallback);
       desired_speed_.store(kFallback);
       // Write the fallback back to the parameter so the param service reports
       // the effective value. Without this, `ros2 param get` would keep showing
@@ -104,23 +117,25 @@ void CrabbingPathFollower::configure(
         if (p.get_name() != default_speed_name) {
           continue;
         }
-        // Reject wrong-type updates explicitly. Without this, the AND-
-        // condition that used to gate validation here silently fell through
-        // when name matched but type was wrong — leaving result.successful
-        // at its default `true`. That meant `ros2 param set
-        // /<ns>/controller_server FollowPath.default_speed 1` (integer)
-        // would succeed in the param service but leave `desired_speed_`
-        // unchanged: observability mismatch between `ros2 param get` and
-        // the controller's effective speed. Mirrors the configure-time
-        // type check above.
-        if (p.get_type() != rclcpp::ParameterType::PARAMETER_DOUBLE) {
+        // Accept PARAMETER_DOUBLE and PARAMETER_INTEGER (CLI `ros2 param set
+        // ... 2` parses as integer; common operator mistake worth coercing).
+        // Reject other types explicitly so callers see the error instead of
+        // a silent state mismatch between param service and controller.
+        // Mirrors the configure-time type check above.
+        double new_value;
+        const auto p_type = p.get_type();
+        if (p_type == rclcpp::ParameterType::PARAMETER_DOUBLE) {
+          new_value = p.as_double();
+        } else if (p_type == rclcpp::ParameterType::PARAMETER_INTEGER) {
+          new_value = static_cast<double>(p.as_int());
+        } else {
           result.successful = false;
           result.reason =
-            "default_speed must be PARAMETER_DOUBLE; got type='" +
-            rclcpp::to_string(p.get_type()) + "'";
+            "default_speed must be a numeric type (double or integer); got type='" +
+            rclcpp::to_string(p_type) + "', value='" +
+            p.value_to_string() + "'";
           return result;
         }
-        const double new_value = p.as_double();
         // Reject non-finite or non-positive speeds at the parameter boundary.
         // Without this guard NaN/Inf propagates into desired_speed_ and then
         // into computeVelocityCommands' target_speed, commanding NaN cmd_vel
