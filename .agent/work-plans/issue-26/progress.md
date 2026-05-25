@@ -98,3 +98,15 @@ Build clean; gtest 5/5 pass.
 - [x] Refactor `SetControllerSpeed` to follow the selected controller. Replaced `parameter_name` port with `controller_name` (default `"FollowPath"`) + `parameter_suffix` (default `"default_speed"`); constructed full path in `tick()`. Both XML insertions pass `controller_name="{selected_controller}"`. Inline `<TreeNodesModel>` entry and auto-generated `marine_nav_behavior_tree_nodes.xml` updated. Empty-string guards on both new ports throw `BT::RuntimeError` to avoid the malformed `".default_speed"` / `"FollowPath."` cases. Cache key remains the resolved target-node name (unchanged) (Copilot R6 #1+#2 collapsed).
 
 Build clean; gtest 5/5 pass; generated nodes XML reflects the new port set.
+
+## External Review (round 7)
+**Status**: complete
+**When**: 2026-05-25 17:15 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**PR**: #27 at `f365ee0`
+**Reviews**: 1 new inline comment at this head; 1 valid, 0 false positives
+**CI**: all-pass
+
+### Actions
+- [ ] Type-check the configure-time `default_speed` read in `CrabbingPathFollower::configure()`. Currently `node->get_parameter(default_speed_param).as_double()` throws `InvalidParameterTypeException` if the parameter was declared with a non-double type — common when YAML has `default_speed: 1` (no decimal, parses as integer) or CLI `default_speed:=1`. The throw escapes `configure()` and aborts controller bring-up — defeats the safety guard. Match the live-update callback's strictness (only accept `PARAMETER_DOUBLE`); on any other type, route through the existing invalid-value fallback path so the WARN + param-server write is shared. Consolidated single WARN covering both type and value (Copilot R7 #1).
