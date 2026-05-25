@@ -109,4 +109,6 @@ Build clean; gtest 5/5 pass; generated nodes XML reflects the new port set.
 **CI**: all-pass
 
 ### Actions
-- [ ] Type-check the configure-time `default_speed` read in `CrabbingPathFollower::configure()`. Currently `node->get_parameter(default_speed_param).as_double()` throws `InvalidParameterTypeException` if the parameter was declared with a non-double type — common when YAML has `default_speed: 1` (no decimal, parses as integer) or CLI `default_speed:=1`. The throw escapes `configure()` and aborts controller bring-up — defeats the safety guard. Match the live-update callback's strictness (only accept `PARAMETER_DOUBLE`); on any other type, route through the existing invalid-value fallback path so the WARN + param-server write is shared. Consolidated single WARN covering both type and value (Copilot R7 #1).
+- [x] Type-check the configure-time `default_speed` read in `CrabbingPathFollower::configure()`. Currently `node->get_parameter(default_speed_param).as_double()` throws `InvalidParameterTypeException` if the parameter was declared with a non-double type — common when YAML has `default_speed: 1` (no decimal, parses as integer) or CLI `default_speed:=1`. The throw escapes `configure()` and aborts controller bring-up — defeats the safety guard. Match the live-update callback's strictness (only accept `PARAMETER_DOUBLE`); on any other type, route through the existing invalid-value fallback path so the WARN + param-server write is shared. Consolidated single WARN covering both type and value (Copilot R7 #1).
+
+Build clean; gtest 5/5 pass.

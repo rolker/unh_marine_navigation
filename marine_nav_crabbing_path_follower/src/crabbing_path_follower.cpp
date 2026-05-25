@@ -1,6 +1,7 @@
 #include "marine_nav_crabbing_path_follower/crabbing_path_follower.h"
 
 #include <cmath>
+#include <limits>
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav2_util/node_utils.hpp"
@@ -37,21 +38,32 @@ void CrabbingPathFollower::configure(
   pid_reset_threshold_ = rclcpp::Duration::from_seconds(pid_reset_threshold_seconds);
 
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".default_speed", rclcpp::ParameterValue(1.0));
-  // Apply the same isfinite/>0 guard at configure-time that the param
-  // callback below applies to live updates. Without this, an invalid
-  // YAML/launch value (NaN/Inf/<=0) propagates into computeVelocityCommands
-  // before any SetParameters update can correct it.
+  // Apply the same type + isfinite + >0 guard at configure-time that the
+  // param callback below applies to live updates. Without this, an
+  // invalid YAML/launch value (wrong type, NaN/Inf, <=0) propagates into
+  // computeVelocityCommands before any SetParameters update can correct it.
+  // The wrong-type case is real: `default_speed: 1` in YAML parses as
+  // integer (PARAMETER_INTEGER), and a bare `as_double()` then throws
+  // InvalidParameterTypeException — which would abort configure() instead
+  // of falling back, defeating the safety guard.
   {
     const std::string default_speed_param = plugin_name_ + ".default_speed";
-    const double initial_value = node->get_parameter(default_speed_param).as_double();
-    if (std::isfinite(initial_value) && initial_value > 0.0) {
+    const auto initial_param = node->get_parameter(default_speed_param);
+    const bool type_ok =
+      initial_param.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE;
+    const double initial_value = type_ok
+      ? initial_param.as_double()
+      : std::numeric_limits<double>::quiet_NaN();
+    if (type_ok && std::isfinite(initial_value) && initial_value > 0.0) {
       desired_speed_.store(initial_value);
     } else {
       constexpr double kFallback = 1.0;
       RCLCPP_WARN(
         logger_,
-        "CrabbingPathFollower: configured default_speed=%.3f is invalid "
-        "(must be finite and > 0); falling back to %.3f m/s",
+        "CrabbingPathFollower: configured default_speed is invalid "
+        "(type=%s, value=%.3f; must be PARAMETER_DOUBLE, finite, > 0); "
+        "falling back to %.3f m/s",
+        rclcpp::to_string(initial_param.get_type()).c_str(),
         initial_value, kFallback);
       desired_speed_.store(kFallback);
       // Write the fallback back to the parameter so the param service reports
