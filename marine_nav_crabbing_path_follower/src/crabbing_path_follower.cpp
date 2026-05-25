@@ -63,7 +63,12 @@ void CrabbingPathFollower::configure(
       // set_parameter can throw if the node is being torn down concurrently.
       try {
         node->set_parameter(rclcpp::Parameter(default_speed_param, kFallback));
-      } catch (const rclcpp::exceptions::RCLError & e) {
+      } catch (const std::exception & e) {
+        // Broad catch: covers all rclcpp::exceptions::* (e.g., RCLError,
+        // InvalidParameterValueException from a future param validator) plus
+        // any std-derived exception. Narrower catches risk propagating out of
+        // configure() and failing controller bring-up on the very edge case
+        // the fallback is trying to defend against.
         RCLCPP_WARN(
           logger_,
           "CrabbingPathFollower: could not update default_speed parameter to "
