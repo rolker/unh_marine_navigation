@@ -112,3 +112,16 @@ Build clean; gtest 5/5 pass; generated nodes XML reflects the new port set.
 - [x] Type-check the configure-time `default_speed` read in `CrabbingPathFollower::configure()`. Currently `node->get_parameter(default_speed_param).as_double()` throws `InvalidParameterTypeException` if the parameter was declared with a non-double type — common when YAML has `default_speed: 1` (no decimal, parses as integer) or CLI `default_speed:=1`. The throw escapes `configure()` and aborts controller bring-up — defeats the safety guard. Match the live-update callback's strictness (only accept `PARAMETER_DOUBLE`); on any other type, route through the existing invalid-value fallback path so the WARN + param-server write is shared. Consolidated single WARN covering both type and value (Copilot R7 #1).
 
 Build clean; gtest 5/5 pass.
+
+## External Review (round 8)
+**Status**: complete
+**When**: 2026-05-25 18:05 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**PR**: #27 at `3d32def`
+**Reviews**: 2 new inline comments at this head; 2 valid, 0 false positives
+**CI**: all-pass
+
+### Actions
+- [ ] Mirror R7's type check on the runtime callback side: in `CrabbingPathFollower`'s `add_on_set_parameters_callback`, when name matches but type ≠ `PARAMETER_DOUBLE`, set `result.successful=false` with a reason including the actual type. Currently the AND-condition silently falls through (loop continues, default `successful=true`), so `ros2 param set .../FollowPath.default_speed 1` would succeed in the param service but leave `desired_speed_` unchanged — same observability mismatch R4 fixed on the configure side (Copilot R8 #1).
+- [ ] Rework log lines in `set_controller_speed.cpp:207-210` (failure-WARN) and `:223-227` (DEBUG) to use a clearer separator. Current `"%s.%s = %.3f"` joins `target_node` and `parameter_name` with a dot, but `parameter_name` already contains a dot post-R6 (e.g., `FollowPath.default_speed`), producing visually confusing output `"/bizzy/controller_server.FollowPath.default_speed"` — looks like a single hierarchical name. Use `"on %s set %s = %.3f"` instead (Copilot R8 #2).
