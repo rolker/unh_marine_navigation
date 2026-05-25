@@ -68,3 +68,17 @@ Build clean; gtest 5/5 still pass.
 - [x] Extend the `speed` port description in `SetControllerSpeed::providedPorts()` to mention that non-finite values (NaN/Inf) are also skipped with a throttled WARN. Keeps the generated `marine_nav_behavior_tree_nodes.xml` in sync with the actual `isfinite` check landed in R3 (Copilot R4 #3).
 
 Build clean; gtest 5/5 pass; auto-generated nodes XML reflects the updated docstring; param-server write is in place with `RCLError` catch.
+
+## External Review (round 5)
+**Status**: complete
+**When**: 2026-05-25 16:00 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**PR**: #27 at `70a203f`
+**Reviews**: 3 new inline comments at this head; 3 valid, 0 false positives
+**CI**: all-pass
+
+### Actions
+- [ ] Broaden the `set_parameter()` catch in `CrabbingPathFollower::configure()` from `rclcpp::exceptions::RCLError` to `std::exception`. R4's catch was too narrow — `set_parameter()` could throw other `rclcpp::exceptions::*` types or `std::exception` during teardown/future API changes, propagating out of configure() and crashing controller bring-up. Defeats the safety guard's intent (Copilot R5 #1).
+- [ ] Complete dep declarations on `marine_nav_crabbing_path_follower`: CMakeLists `ament_target_dependencies` includes `nav2_costmap_2d` and `nav2_util` but neither has a `find_package` call or `<depend>` entry. Add `find_package(nav2_costmap_2d REQUIRED)` + `find_package(nav2_util REQUIRED)` to CMakeLists; add `<depend>nav2_costmap_2d</depend>` + `<depend>nav2_util</depend>` to package.xml. Pre-existing gap exposed by R2's partial cleanup (Copilot R5 #2).
+- [ ] Complete dep declarations on `marine_nav_behavior_tree/package.xml`: 7 missing `<depend>` entries (`behaviortree_cpp`, `geometry_msgs`, `marine_nav_interfaces`, `nav2_behavior_tree`, `nav2_util`, `tf2_ros`, `std_msgs`). All 7 already have `find_package` and `ament_target_dependencies`; only the package.xml side is stale. Pre-existing gap (Copilot R5 #3).
