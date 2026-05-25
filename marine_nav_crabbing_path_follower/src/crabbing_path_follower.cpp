@@ -37,7 +37,23 @@ void CrabbingPathFollower::configure(
   pid_reset_threshold_ = rclcpp::Duration::from_seconds(pid_reset_threshold_seconds);
 
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".default_speed", rclcpp::ParameterValue(1.0));
-  desired_speed_.store(node->get_parameter(plugin_name_ + ".default_speed").as_double());
+  // Apply the same isfinite/>0 guard at configure-time that the param
+  // callback below applies to live updates. Without this, an invalid
+  // YAML/launch value (NaN/Inf/<=0) propagates into computeVelocityCommands
+  // before any SetParameters update can correct it.
+  {
+    const double initial_value = node->get_parameter(plugin_name_ + ".default_speed").as_double();
+    if (std::isfinite(initial_value) && initial_value > 0.0) {
+      desired_speed_.store(initial_value);
+    } else {
+      RCLCPP_WARN(
+        logger_,
+        "CrabbingPathFollower: configured default_speed=%.3f is invalid "
+        "(must be finite and > 0); falling back to 1.0 m/s",
+        initial_value);
+      desired_speed_.store(1.0);
+    }
+  }
 
   // Live updates: a SetParameters call against this node (from `ros2 param set`
   // or a BT plugin per task) will update `desired_speed_` in place. Other

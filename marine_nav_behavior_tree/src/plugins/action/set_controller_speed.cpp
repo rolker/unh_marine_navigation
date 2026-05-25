@@ -111,10 +111,9 @@ BT::NodeStatus SetControllerSpeed::tick()
     // restart would silently drop the per-task speed: the controller comes
     // back up at its YAML default_speed, but our dedup still has the
     // pre-restart value cached, so the BT skips re-sending.
-    // Safe to write here on the BT thread — the completion callback runs on
-    // the rclcpp executor thread but only reads/writes last_pushed_speed_
-    // via this same tick() path (which holds the BT-thread reentrancy
-    // guarantee for SyncActionNode).
+    // `last_pushed_speed_` is only ever read/written here in tick(), which
+    // runs single-threaded on the BT loop — no cross-thread synchronization
+    // needed (the completion callback below only inspects results and logs).
     last_pushed_speed_ = -1.0;
     // Throttle: BT re-ticks this node at ~5+ Hz inside ReactiveSequence /
     // PipelineSequence; without throttling a misconfigured target_node
