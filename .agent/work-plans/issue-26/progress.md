@@ -123,5 +123,7 @@ Build clean; gtest 5/5 pass.
 **CI**: all-pass
 
 ### Actions
-- [ ] Mirror R7's type check on the runtime callback side: in `CrabbingPathFollower`'s `add_on_set_parameters_callback`, when name matches but type ≠ `PARAMETER_DOUBLE`, set `result.successful=false` with a reason including the actual type. Currently the AND-condition silently falls through (loop continues, default `successful=true`), so `ros2 param set .../FollowPath.default_speed 1` would succeed in the param service but leave `desired_speed_` unchanged — same observability mismatch R4 fixed on the configure side (Copilot R8 #1).
-- [ ] Rework log lines in `set_controller_speed.cpp:207-210` (failure-WARN) and `:223-227` (DEBUG) to use a clearer separator. Current `"%s.%s = %.3f"` joins `target_node` and `parameter_name` with a dot, but `parameter_name` already contains a dot post-R6 (e.g., `FollowPath.default_speed`), producing visually confusing output `"/bizzy/controller_server.FollowPath.default_speed"` — looks like a single hierarchical name. Use `"on %s set %s = %.3f"` instead (Copilot R8 #2).
+- [x] Mirror R7's type check on the runtime callback side: in `CrabbingPathFollower`'s `add_on_set_parameters_callback`, when name matches but type ≠ `PARAMETER_DOUBLE`, set `result.successful=false` with a reason including the actual type. Refactored the loop body — early-`continue` for non-matching names, early-`return` with reject for wrong type, early-`return` with reject for invalid value (existing). Matches the R7 configure-side type check (Copilot R8 #1).
+- [x] Rework log lines to use `"on %s set %s = %.3f"` separator. Applied to the failure-WARN in the completion callback and the DEBUG line at the bottom of `tick()`. Output now reads `"SetControllerSpeed: on /bizzy/controller_server set FollowPath.default_speed = 1.5"` instead of the previous confusing `"/bizzy/controller_server.FollowPath.default_speed"` triple-dot form (Copilot R8 #2).
+
+Build clean; gtest 5/5 pass.

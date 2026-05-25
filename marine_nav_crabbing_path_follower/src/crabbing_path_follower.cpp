@@ -101,32 +101,48 @@ void CrabbingPathFollower::configure(
       rcl_interfaces::msg::SetParametersResult result;
       result.successful = true;
       for (const auto & p : params) {
-        if (p.get_name() == default_speed_name &&
-            p.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE) {
-          const double new_value = p.as_double();
-          // Reject non-finite or non-positive speeds at the parameter boundary.
-          // Without this guard NaN/Inf propagates into desired_speed_ and then
-          // into computeVelocityCommands' target_speed, commanding NaN cmd_vel
-          // on an autonomous boat. The BT-side SetControllerSpeed plugin has
-          // its own isfinite check; this is defense in depth (operators may
-          // also `ros2 param set` directly).
-          if (!std::isfinite(new_value) || new_value <= 0.0) {
-            result.successful = false;
-            result.reason =
-              "default_speed must be a finite positive value (m/s); got " +
-              std::to_string(new_value);
-            // Don't update desired_speed_; the operator's request is rejected
-            // and the controller stays at its prior value.
-            return result;
-          }
-          const double prev_value = desired_speed_.load();
-          if (new_value != prev_value) {
-            desired_speed_.store(new_value);
-            RCLCPP_INFO(
-              logger_,
-              "CrabbingPathFollower: default_speed updated %.3f -> %.3f m/s",
-              prev_value, new_value);
-          }
+        if (p.get_name() != default_speed_name) {
+          continue;
+        }
+        // Reject wrong-type updates explicitly. Without this, the AND-
+        // condition that used to gate validation here silently fell through
+        // when name matched but type was wrong — leaving result.successful
+        // at its default `true`. That meant `ros2 param set
+        // /<ns>/controller_server FollowPath.default_speed 1` (integer)
+        // would succeed in the param service but leave `desired_speed_`
+        // unchanged: observability mismatch between `ros2 param get` and
+        // the controller's effective speed. Mirrors the configure-time
+        // type check above.
+        if (p.get_type() != rclcpp::ParameterType::PARAMETER_DOUBLE) {
+          result.successful = false;
+          result.reason =
+            "default_speed must be PARAMETER_DOUBLE; got type='" +
+            rclcpp::to_string(p.get_type()) + "'";
+          return result;
+        }
+        const double new_value = p.as_double();
+        // Reject non-finite or non-positive speeds at the parameter boundary.
+        // Without this guard NaN/Inf propagates into desired_speed_ and then
+        // into computeVelocityCommands' target_speed, commanding NaN cmd_vel
+        // on an autonomous boat. The BT-side SetControllerSpeed plugin has
+        // its own isfinite check; this is defense in depth (operators may
+        // also `ros2 param set` directly).
+        if (!std::isfinite(new_value) || new_value <= 0.0) {
+          result.successful = false;
+          result.reason =
+            "default_speed must be a finite positive value (m/s); got " +
+            std::to_string(new_value);
+          // Don't update desired_speed_; the operator's request is rejected
+          // and the controller stays at its prior value.
+          return result;
+        }
+        const double prev_value = desired_speed_.load();
+        if (new_value != prev_value) {
+          desired_speed_.store(new_value);
+          RCLCPP_INFO(
+            logger_,
+            "CrabbingPathFollower: default_speed updated %.3f -> %.3f m/s",
+            prev_value, new_value);
         }
       }
       return result;

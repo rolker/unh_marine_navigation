@@ -204,10 +204,9 @@ BT::NodeStatus SetControllerSpeed::tick()
         if (any_failed) {
           RCLCPP_WARN(
             logger,
-            "SetControllerSpeed: %s.%s := %.3f rejected by %s (reason: '%s')",
+            "SetControllerSpeed: on %s set %s = %.3f rejected (reason: '%s')",
             target_name_for_log.c_str(), param_name_for_log.c_str(),
-            speed_for_log, target_name_for_log.c_str(),
-            failure_reason.c_str());
+            speed_for_log, failure_reason.c_str());
         }
       } catch (const std::exception & e) {
         RCLCPP_WARN(
@@ -222,7 +221,7 @@ BT::NodeStatus SetControllerSpeed::tick()
 
   RCLCPP_DEBUG(
     node->get_logger(),
-    "SetControllerSpeed: requested %s.%s = %.3f",
+    "SetControllerSpeed: on %s set %s = %.3f",
     resolved_target.c_str(), parameter_name.c_str(),
     speed.value());
 
