@@ -127,3 +127,20 @@ Build clean; gtest 5/5 pass.
 - [x] Rework log lines to use `"on %s set %s = %.3f"` separator. Applied to the failure-WARN in the completion callback and the DEBUG line at the bottom of `tick()`. Output now reads `"SetControllerSpeed: on /bizzy/controller_server set FollowPath.default_speed = 1.5"` instead of the previous confusing `"/bizzy/controller_server.FollowPath.default_speed"` triple-dot form (Copilot R8 #2).
 
 Build clean; gtest 5/5 pass.
+
+## Local Review (Post-PR)
+**Status**: complete
+**When**: 2026-05-25 18:30 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+**Verdict**: changes-requested
+
+**PR**: #27 at `eda10c3`
+**Mode**: post-PR
+**Depth**: Deep (reason: 670 lines + 12 files + cross-package within unh_marine_navigation)
+**Must-fix**: 1 | **Suggestions**: 3
+
+### Findings
+- [ ] (must-fix) `params_cb_handle_` registered in `configure()` but not reset in `cleanup()` — nav2 lifecycle hygiene; defensive against rclcpp callback-list ordering edge cases — `crabbing_path_follower.cpp:164-167` (Copilot Adversarial)
+- [ ] (suggestion) Per-pose timestamp override silently negates per-task speed when path poses have non-zero `header.stamp` — pre-existing behavior but defeats the PR's stated purpose on stamped paths; the original field commit `8100131` footnoted this exact question — `crabbing_path_follower.cpp:325-329` (Claude Adversarial)
+- [ ] (suggestion) Task-without-speed inherits prior task's speed (`GetTaskDataDouble` defaults to 0.0, `SetControllerSpeed` skips on `<=0`, controller stays at previous task's value). Sticky semantics — document explicitly or route through YAML default — `set_controller_speed.cpp:86-88` + `run_tasks.xml` GetTaskDataDouble (Claude Adversarial)
+- [ ] (suggestion) Fast controller restart can defeat the dedup sentinel reset if `service_is_ready()` stays true across a quick restart and the BT tick falls outside the down-window. Consider rejection-based reset in `on_complete` as defense in depth — `set_controller_speed.cpp:145-167` (Claude Adversarial)
