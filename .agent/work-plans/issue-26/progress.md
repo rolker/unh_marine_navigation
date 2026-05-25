@@ -37,3 +37,16 @@ All valid findings addressed in commit (pending). 5/5 gtest cases still pass; bu
 - [x] Add `find_package(rcl_interfaces)` + `ament_target_dependencies(... rcl_interfaces)` + `<depend>rcl_interfaces</depend>` to `marine_nav_crabbing_path_follower` CMakeLists + package.xml (Copilot R2 #4).
 
 Build clean on both packages; gtest 5/5 pass; no new lint findings.
+
+## External Review (round 3)
+**Status**: complete
+**When**: 2026-05-25 13:50 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**PR**: #27 at `1ac59f2`
+**Reviews**: 2 new inline comments at this head; 2 valid, 0 false positives
+**CI**: all-pass
+
+### Actions
+- [ ] Add `std::isfinite + > 0.0` validation to the initial `default_speed` read in `CrabbingPathFollower::configure()`. On invalid YAML/launch input, log a WARN and fall back to the declared default (1.0 m/s). Closes the symmetry gap: param callback validates updates, but the initial config-time read currently doesn't (Copilot R3 #1).
+- [ ] Rewrite the misleading comment block at `set_controller_speed.cpp:114-117`. The completion callback doesn't read/write `last_pushed_speed_` — it only inspects SetParameters results and logs. The real thread-safety story: `last_pushed_speed_` is only touched in `tick()`, which runs single-threaded on the BT loop (Copilot R3 #2).
