@@ -9,6 +9,18 @@ SetControllerSpeed::SetControllerSpeed(
 {
 }
 
+std::string SetControllerSpeed::resolveTargetNode(
+  const std::string & raw_target, const std::string & ns)
+{
+  if (!raw_target.empty() && raw_target.front() == '/') {
+    return raw_target;
+  }
+  if (ns.empty() || ns == "/") {
+    return "/" + raw_target;
+  }
+  return ns + "/" + raw_target;
+}
+
 BT::PortsList SetControllerSpeed::providedPorts()
 {
   return {
@@ -60,18 +72,8 @@ BT::NodeStatus SetControllerSpeed::tick()
   // Resolve target_node against the BT node's namespace if it's a relative
   // name. Keeps `run_tasks.xml` boat-agnostic — the same XML works on bizzy,
   // izzy, or any unnamespaced deployment without per-boat overrides.
-  const std::string & raw_target = target_node.value();
-  std::string resolved_target;
-  if (!raw_target.empty() && raw_target.front() == '/') {
-    resolved_target = raw_target;
-  } else {
-    const std::string ns = node->get_namespace();  // "/" or "/foo" or "/foo/bar"
-    if (ns == "/" || ns.empty()) {
-      resolved_target = "/" + raw_target;
-    } else {
-      resolved_target = ns + "/" + raw_target;
-    }
-  }
+  const std::string resolved_target =
+    resolveTargetNode(target_node.value(), node->get_namespace());
 
   if (!params_client_ || cached_target_node_ != resolved_target) {
     params_client_ = std::make_shared<rclcpp::AsyncParametersClient>(node, resolved_target);
@@ -116,7 +118,7 @@ BT::NodeStatus SetControllerSpeed::tick()
   auto logger = node->get_logger();
   auto on_complete =
     [logger, target_name_for_log, param_name_for_log, speed_for_log](
-      std::shared_future<std::vector<rcl_interfaces::msg::SetParametersResult>> future) {
+    std::shared_future<std::vector<rcl_interfaces::msg::SetParametersResult>> future) {
       try {
         auto results = future.get();
         bool any_failed = false;
@@ -156,4 +158,4 @@ BT::NodeStatus SetControllerSpeed::tick()
   return BT::NodeStatus::SUCCESS;
 }
 
-} // namespace marine_nav_behavior_tree
+}  // namespace marine_nav_behavior_tree

@@ -1,7 +1,9 @@
 #ifndef MARINE_NAV_BEHAVIOR_TREE_ACTIONS_SET_CONTROLLER_SPEED_H
 #define MARINE_NAV_BEHAVIOR_TREE_ACTIONS_SET_CONTROLLER_SPEED_H
 
-#include <behaviortree_cpp/bt_factory.h>
+#include <string>
+
+#include <behaviortree_cpp/bt_factory.h>  // NOLINT(build/include_order) cpplint misclassifies third-party .h headers as "C system" by extension.
 #include <rclcpp/rclcpp.hpp>
 
 namespace marine_nav_behavior_tree
@@ -25,6 +27,15 @@ public:
 
   BT::NodeStatus tick() override;
 
+  // Resolve a target-node name against a ROS namespace. Absolute names
+  // (starting with '/') pass through unchanged. Relative names are
+  // prefixed with the namespace: "/" or empty namespace yields just
+  // "/<raw>", a non-trivial namespace yields "<ns>/<raw>" (single
+  // slash join). Exposed as a static helper so the resolution logic
+  // is unit-testable without an rclcpp node fixture.
+  static std::string resolveTargetNode(
+    const std::string & raw_target, const std::string & ns);
+
 private:
   rclcpp::AsyncParametersClient::SharedPtr params_client_;
   // Resolved (absolute) target-node name, used as the cache key so the
@@ -39,6 +50,6 @@ private:
   double last_pushed_speed_ = -1.0;
 };
 
-} // namespace marine_nav_behavior_tree
+}  // namespace marine_nav_behavior_tree
 
-#endif
+#endif  // MARINE_NAV_BEHAVIOR_TREE_ACTIONS_SET_CONTROLLER_SPEED_H

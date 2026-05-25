@@ -158,6 +158,24 @@ install(FILES ${GENERATED_DIR}/marine_nav_behavior_tree_nodes.xml DESTINATION sh
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
+
+  find_package(ament_cmake_gtest REQUIRED)
+
+  ament_add_gtest(test_set_controller_speed_resolve
+    test/test_set_controller_speed_resolve.cpp
+  )
+  if(TARGET test_set_controller_speed_resolve)
+    target_include_directories(test_set_controller_speed_resolve PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    )
+    target_link_libraries(test_set_controller_speed_resolve
+      ${PROJECT_NAME}_bt_plugins
+    )
+    ament_target_dependencies(test_set_controller_speed_resolve
+      behaviortree_cpp
+      rclcpp
+    )
+  endif()
 endif()
 
 ament_package()
