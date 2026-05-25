@@ -16,6 +16,8 @@ find_package(marine_nav_interfaces REQUIRED)
 find_package(marine_nav_tasks REQUIRED)
 find_package(nav2_behavior_tree REQUIRED)
 find_package(nav2_util REQUIRED)
+find_package(rcl_interfaces REQUIRED)
+find_package(rclcpp REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(std_msgs REQUIRED)
 
@@ -75,6 +77,7 @@ add_library(${PROJECT_NAME}_bt_plugins SHARED
   src/plugins/action/hover_action.cpp
   src/plugins/action/hover_cancel_node.cpp
   src/plugins/action/path_to_pose_vector.cpp
+  src/plugins/action/set_controller_speed.cpp
   src/plugins/action/set_path_from_task.cpp
   src/plugins/action/set_polygon_from_task.cpp
   src/plugins/action/set_task_done.cpp
@@ -102,6 +105,8 @@ ament_target_dependencies(${PROJECT_NAME}_bt_plugins
   behaviortree_cpp
   marine_nav_interfaces
   nav2_behavior_tree
+  rcl_interfaces
+  rclcpp
 )
 
 target_compile_definitions(${PROJECT_NAME}_bt_plugins PRIVATE BT_PLUGIN_EXPORT)
@@ -157,6 +162,24 @@ install(FILES ${GENERATED_DIR}/marine_nav_behavior_tree_nodes.xml DESTINATION sh
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
+
+  find_package(ament_cmake_gtest REQUIRED)
+
+  ament_add_gtest(test_set_controller_speed_resolve
+    test/test_set_controller_speed_resolve.cpp
+  )
+  if(TARGET test_set_controller_speed_resolve)
+    target_include_directories(test_set_controller_speed_resolve PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    )
+    target_link_libraries(test_set_controller_speed_resolve
+      ${PROJECT_NAME}_bt_plugins
+    )
+    ament_target_dependencies(test_set_controller_speed_resolve
+      behaviortree_cpp
+      rclcpp
+    )
+  endif()
 endif()
 
 ament_package()

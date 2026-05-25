@@ -12,7 +12,10 @@
   <depend>control_toolbox</depend>
   <depend>marine_nav_utilities</depend>
   <depend>nav2_core</depend>
+  <depend>nav2_costmap_2d</depend>
+  <depend>nav2_util</depend>
   <depend>pluginlib</depend>
+  <depend>rcl_interfaces</depend>
   <depend>rclcpp</depend>
   <depend>tf2</depend>
   <depend>visualization_msgs</depend>

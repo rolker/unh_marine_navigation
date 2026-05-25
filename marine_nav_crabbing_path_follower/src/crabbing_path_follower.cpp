@@ -1,7 +1,12 @@
 #include "marine_nav_crabbing_path_follower/crabbing_path_follower.h"
+
+#include <cmath>
+#include <limits>
+
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav2_util/node_utils.hpp"
 #include "marine_nav_utilities/gz4d/angles.hpp"
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
 
 namespace marine_nav_crabbing_path_follower
 {
@@ -33,7 +38,130 @@ void CrabbingPathFollower::configure(
   pid_reset_threshold_ = rclcpp::Duration::from_seconds(pid_reset_threshold_seconds);
 
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".default_speed", rclcpp::ParameterValue(1.0));
-  desired_speed_ = node->get_parameter(plugin_name_ + ".default_speed").as_double();
+  // Apply the same type + isfinite + >0 guard at configure-time that the
+  // param callback below applies to live updates. Without this, an
+  // invalid YAML/launch value (wrong type, NaN/Inf, <=0) propagates into
+  // computeVelocityCommands before any SetParameters update can correct it.
+  // The wrong-type case is real: `default_speed: 1` in YAML parses as
+  // integer (PARAMETER_INTEGER), and a bare `as_double()` then throws
+  // InvalidParameterTypeException — which would abort configure() instead
+  // of falling back, defeating the safety guard.
+  {
+    const std::string default_speed_param = plugin_name_ + ".default_speed";
+    const auto initial_param = node->get_parameter(default_speed_param);
+    // Accept both PARAMETER_DOUBLE and PARAMETER_INTEGER. YAML `default_speed: 2`
+    // (no decimal) parses as integer — a common operator mistake worth
+    // coercing rather than silently rejecting. Other types route through
+    // the invalid branch below.
+    double initial_value;
+    bool type_ok = true;
+    const auto initial_type = initial_param.get_type();
+    if (initial_type == rclcpp::ParameterType::PARAMETER_DOUBLE) {
+      initial_value = initial_param.as_double();
+    } else if (initial_type == rclcpp::ParameterType::PARAMETER_INTEGER) {
+      initial_value = static_cast<double>(initial_param.as_int());
+    } else {
+      initial_value = std::numeric_limits<double>::quiet_NaN();
+      type_ok = false;
+    }
+    if (type_ok && std::isfinite(initial_value) && initial_value > 0.0) {
+      desired_speed_.store(initial_value);
+    } else {
+      constexpr double kFallback = 1.0;
+      // Use value_to_string() so the WARN shows the actual provided value
+      // (e.g. "false", "[1, 2]") rather than the nan placeholder we use
+      // internally to route wrong-type cases through the invalid branch.
+      RCLCPP_WARN(
+        logger_,
+        "CrabbingPathFollower: configured default_speed is invalid "
+        "(type=%s, value=%s; must be a finite positive number); "
+        "falling back to %.3f m/s",
+        rclcpp::to_string(initial_type).c_str(),
+        initial_param.value_to_string().c_str(), kFallback);
+      desired_speed_.store(kFallback);
+      // Write the fallback back to the parameter so the param service reports
+      // the effective value. Without this, `ros2 param get` would keep showing
+      // the original invalid value while the controller runs at the fallback,
+      // which is misleading at field-debug time. The on-set-parameters
+      // callback isn't registered yet at this point in configure(), so this
+      // doesn't re-trigger validation. Wrapped in try/catch defensively —
+      // set_parameter can throw if the node is being torn down concurrently.
+      try {
+        node->set_parameter(rclcpp::Parameter(default_speed_param, kFallback));
+      } catch (const std::exception & e) {
+        // Broad catch: covers all rclcpp::exceptions::* (e.g., RCLError,
+        // InvalidParameterValueException from a future param validator) plus
+        // any std-derived exception. Narrower catches risk propagating out of
+        // configure() and failing controller bring-up on the very edge case
+        // the fallback is trying to defend against.
+        RCLCPP_WARN(
+          logger_,
+          "CrabbingPathFollower: could not update default_speed parameter to "
+          "fallback %.3f (param service refused): %s",
+          kFallback, e.what());
+      }
+    }
+  }
+
+  // Live updates: a SetParameters call against this node (from `ros2 param set`
+  // or a BT plugin per task) will update `desired_speed_` in place. Other
+  // parameters are passed through unchanged. Only logs when the value
+  // actually changes to avoid log spam if some caller pushes the same
+  // value repeatedly.
+  const std::string default_speed_name = plugin_name_ + ".default_speed";
+  params_cb_handle_ = node->add_on_set_parameters_callback(
+    [this, default_speed_name](const std::vector<rclcpp::Parameter> & params) {
+      rcl_interfaces::msg::SetParametersResult result;
+      result.successful = true;
+      for (const auto & p : params) {
+        if (p.get_name() != default_speed_name) {
+          continue;
+        }
+        // Accept PARAMETER_DOUBLE and PARAMETER_INTEGER (CLI `ros2 param set
+        // ... 2` parses as integer; common operator mistake worth coercing).
+        // Reject other types explicitly so callers see the error instead of
+        // a silent state mismatch between param service and controller.
+        // Mirrors the configure-time type check above.
+        double new_value;
+        const auto p_type = p.get_type();
+        if (p_type == rclcpp::ParameterType::PARAMETER_DOUBLE) {
+          new_value = p.as_double();
+        } else if (p_type == rclcpp::ParameterType::PARAMETER_INTEGER) {
+          new_value = static_cast<double>(p.as_int());
+        } else {
+          result.successful = false;
+          result.reason =
+            "default_speed must be a numeric type (double or integer); got type='" +
+            rclcpp::to_string(p_type) + "', value='" +
+            p.value_to_string() + "'";
+          return result;
+        }
+        // Reject non-finite or non-positive speeds at the parameter boundary.
+        // Without this guard NaN/Inf propagates into desired_speed_ and then
+        // into computeVelocityCommands' target_speed, commanding NaN cmd_vel
+        // on an autonomous boat. The BT-side SetControllerSpeed plugin has
+        // its own isfinite check; this is defense in depth (operators may
+        // also `ros2 param set` directly).
+        if (!std::isfinite(new_value) || new_value <= 0.0) {
+          result.successful = false;
+          result.reason =
+            "default_speed must be a finite positive value (m/s); got " +
+            std::to_string(new_value);
+          // Don't update desired_speed_; the operator's request is rejected
+          // and the controller stays at its prior value.
+          return result;
+        }
+        const double prev_value = desired_speed_.load();
+        if (new_value != prev_value) {
+          desired_speed_.store(new_value);
+          RCLCPP_INFO(
+            logger_,
+            "CrabbingPathFollower: default_speed updated %.3f -> %.3f m/s",
+            prev_value, new_value);
+        }
+      }
+      return result;
+    });
 
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".visualization", rclcpp::ParameterValue(visualize_));
   visualize_ = node->get_parameter(plugin_name_ + ".visualization").as_bool();
@@ -50,6 +178,15 @@ void CrabbingPathFollower::configure(
 
 void CrabbingPathFollower::cleanup()
 {
+  // Release the parameter callback registered in configure() so rclcpp's
+  // callback list no longer holds a lambda capturing `this`. Pairs with
+  // the registration above; without it the callback would only release
+  // at destructor time, which is fine in well-ordered teardown but
+  // leaves a small lifecycle window where a parameter SetParameters
+  // could trigger the callback against a plugin in the wrong lifecycle
+  // state. Aligns with the nav2 controller plugin idiom of mirroring
+  // configure()'s resource acquisition in cleanup().
+  params_cb_handle_.reset();
   RCLCPP_INFO(logger_, "Cleaning up controller plugin %s", plugin_name_.c_str());
 }
 
@@ -110,16 +247,22 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
   if(current_segment_ == segment_count)
     return cmd_vel;
 
-  double target_speed = desired_speed_;
+  // Snapshot the atomic once per cycle so the speed-limit math and the
+  // DEBUG log below see the same value, even if a SetParameters update
+  // lands mid-cycle. (`desired_speed_` is `std::atomic<double>` so
+  // individual `load()`s are already tear-free; this is about
+  // intra-cycle consistency, not tearing.)
+  const double desired_speed_snapshot = desired_speed_.load();
+  double target_speed = desired_speed_snapshot;
   if (speed_limit_ > 0.0)
   {
     if(speed_limit_is_percentage_)
-      target_speed = std::min(target_speed, desired_speed_ * speed_limit_ / 100.0);
+      target_speed = std::min(target_speed, desired_speed_snapshot * speed_limit_ / 100.0);
     else
       target_speed = std::min(target_speed, speed_limit_);
   }
 
-  RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: target_speed: " << target_speed << " desired_speed_: " << desired_speed_ << " speed_limit_: " << speed_limit_ << " speed_limit_is_percentage_: " << speed_limit_is_percentage_);
+  RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: target_speed: " << target_speed << " desired_speed_: " << desired_speed_snapshot << " speed_limit_: " << speed_limit_ << " speed_limit_is_percentage_: " << speed_limit_is_percentage_);
 
   geometry_msgs::msg::PoseStamped pose_in_plan;
   nav2_util::transformPoseInTargetFrame(

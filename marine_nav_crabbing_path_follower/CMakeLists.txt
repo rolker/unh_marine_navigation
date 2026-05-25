@@ -13,7 +13,10 @@ find_package(ament_cmake REQUIRED)
 find_package(control_toolbox REQUIRED)
 find_package(marine_nav_utilities REQUIRED)
 find_package(nav2_core REQUIRED)
+find_package(nav2_costmap_2d REQUIRED)
+find_package(nav2_util REQUIRED)
 find_package(pluginlib REQUIRED)
+find_package(rcl_interfaces REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(visualization_msgs REQUIRED)
@@ -38,6 +41,7 @@ ament_target_dependencies(${PROJECT_NAME}
   nav2_costmap_2d
   nav2_util
   pluginlib
+  rcl_interfaces
   rclcpp
   tf2
   visualization_msgs
