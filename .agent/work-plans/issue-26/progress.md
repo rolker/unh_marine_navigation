@@ -174,3 +174,17 @@ Build clean; gtest 5/5 pass.
 - [x] Accept `PARAMETER_INTEGER` for `default_speed` in both the configure-time read and the live-update callback. YAML `default_speed: 2` parses as integer (common operator mistake); current strict-double rejection silently falls back to 1.0 m/s. Coerce via `static_cast<double>(p.as_int())`, keep the existing isfinite + >0 checks. Also switch the configure-time WARN to use `value_to_string()` so the actual provided value shows up in the log instead of "nan" (the type-mismatch placeholder). Mirror the change in the param callback for symmetry (Copilot R10 #1).
 
 Build clean; gtest 5/5 pass.
+
+## External Review (round 11)
+**Status**: complete
+**When**: 2026-05-25 19:55 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**PR**: #27 at `69a169c`
+**Reviews**: 1 new inline comment at this head; **0 new actionable findings** (the one finding duplicates Claude Adversarial R8 #3, already deferred to #32)
+**CI**: all-pass
+
+### Actions
+- [x] Task-without-speed inheritance — **already-tracked** in [#32](https://github.com/rolker/unh_marine_navigation/issues/32) (case 3). Same finding Claude Adversarial caught in the Deep post-PR review; user-decided to defer to #32 alongside related speed-precedence concerns. No new PR-#27 work (Copilot R11 #1, duplicate).
+
+**Convergence**: 11 review rounds, 29 cumulative Copilot findings + 3 from Claude Adversarial Deep review, all addressed or deferred to #32. CI green. Recommend marking PR ready for merge.
