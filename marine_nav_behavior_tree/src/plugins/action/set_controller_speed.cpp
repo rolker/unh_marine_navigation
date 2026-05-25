@@ -18,8 +18,11 @@ BT::PortsList SetControllerSpeed::providedPorts()
       "and skip the update."),
     BT::InputPort<std::string>(
       "target_node",
-      "/controller_server",
-      "Fully-qualified name of the controller server hosting the FollowPath plugin."),
+      "controller_server",
+      "Name of the controller server hosting the FollowPath plugin. "
+      "Relative names are resolved against the BT node's namespace "
+      "(so the default works on any boat namespace). Absolute names "
+      "(starting with '/') are used as-is."),
     BT::InputPort<std::string>(
       "parameter_name",
       "FollowPath.default_speed",
@@ -54,9 +57,25 @@ BT::NodeStatus SetControllerSpeed::tick()
   auto blackboard = config().blackboard;
   auto node = blackboard->get<rclcpp::Node::SharedPtr>("node");
 
-  if (!params_client_ || cached_target_node_ != target_node.value()) {
-    params_client_ = std::make_shared<rclcpp::AsyncParametersClient>(node, target_node.value());
-    cached_target_node_ = target_node.value();
+  // Resolve target_node against the BT node's namespace if it's a relative
+  // name. Keeps `run_tasks.xml` boat-agnostic — the same XML works on bizzy,
+  // izzy, or any unnamespaced deployment without per-boat overrides.
+  const std::string & raw_target = target_node.value();
+  std::string resolved_target;
+  if (!raw_target.empty() && raw_target.front() == '/') {
+    resolved_target = raw_target;
+  } else {
+    const std::string ns = node->get_namespace();  // "/" or "/foo" or "/foo/bar"
+    if (ns == "/" || ns.empty()) {
+      resolved_target = "/" + raw_target;
+    } else {
+      resolved_target = ns + "/" + raw_target;
+    }
+  }
+
+  if (!params_client_ || cached_target_node_ != resolved_target) {
+    params_client_ = std::make_shared<rclcpp::AsyncParametersClient>(node, resolved_target);
+    cached_target_node_ = resolved_target;
   }
 
   if (!params_client_->service_is_ready()) {
@@ -67,7 +86,7 @@ BT::NodeStatus SetControllerSpeed::tick()
     RCLCPP_WARN_THROTTLE(
       node->get_logger(), *node->get_clock(), 5000,
       "SetControllerSpeed: parameter service on %s not ready; skipping speed update",
-      target_node.value().c_str());
+      resolved_target.c_str());
     // Don't fail the tree just because the controller is mid-restart — the
     // controller will fall back to whatever default_speed it was configured
     // with, which is acceptable.
@@ -91,7 +110,7 @@ BT::NodeStatus SetControllerSpeed::tick()
   // pending request) and surfaces a WARN on a failed SetParameters
   // response — silent failure would let the boat run on whatever
   // default the controller has, which is safety-relevant.
-  const std::string target_name_for_log = target_node.value();
+  const std::string target_name_for_log = resolved_target;
   const std::string param_name_for_log = parameter_name.value();
   const double speed_for_log = speed.value();
   auto logger = node->get_logger();
@@ -130,9 +149,9 @@ BT::NodeStatus SetControllerSpeed::tick()
 
   RCLCPP_DEBUG(
     node->get_logger(),
-    "SetControllerSpeed: requested %s.%s = %.3f on %s",
-    target_node.value().c_str(), parameter_name.value().c_str(),
-    speed.value(), target_node.value().c_str());
+    "SetControllerSpeed: requested %s.%s = %.3f",
+    resolved_target.c_str(), parameter_name.value().c_str(),
+    speed.value());
 
   return BT::NodeStatus::SUCCESS;
 }

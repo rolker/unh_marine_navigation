@@ -27,6 +27,8 @@ public:
 
 private:
   rclcpp::AsyncParametersClient::SharedPtr params_client_;
+  // Resolved (absolute) target-node name, used as the cache key so the
+  // AsyncParametersClient is rebuilt only when the resolved target changes.
   std::string cached_target_node_;
 
   // Dedup across BT ticks. SyncActionNode is re-ticked at the BT loop
