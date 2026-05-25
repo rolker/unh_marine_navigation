@@ -41,9 +41,20 @@ BT::PortsList SetControllerSpeed::providedPorts()
       "(so the default works on any boat namespace). Absolute names "
       "(starting with '/') are used as-is."),
     BT::InputPort<std::string>(
-      "parameter_name",
-      "FollowPath.default_speed",
-      "Parameter on the target node to update with the speed value."),
+      "controller_name",
+      "FollowPath",
+      "Name of the controller plugin whose `default_speed` is updated. "
+      "Pair with the BT's `selected_controller` blackboard variable "
+      "(e.g., `controller_name=\"{selected_controller}\"`) so the speed "
+      "update follows whichever controller `FollowPath` is using, not "
+      "a hardcoded one. The full parameter name set on `target_node` "
+      "is `<controller_name>.<parameter_suffix>`."),
+    BT::InputPort<std::string>(
+      "parameter_suffix",
+      "default_speed",
+      "Parameter suffix appended to `controller_name` to form the full "
+      "parameter path. Override only if a controller plugin exposes its "
+      "speed under a non-default name."),
   };
 }
 
@@ -87,10 +98,35 @@ BT::NodeStatus SetControllerSpeed::tick()
       "non-empty name in the XML or omit the port to use the default.");
   }
 
-  auto parameter_name = getInput<std::string>("parameter_name");
-  if (!parameter_name) {
-    throw BT::RuntimeError(name(), " missing [parameter_name]: ", parameter_name.error());
+  auto controller_name = getInput<std::string>("controller_name");
+  if (!controller_name) {
+    throw BT::RuntimeError(
+      name(), " missing [controller_name]: ", controller_name.error());
   }
+  if (controller_name.value().empty()) {
+    throw BT::RuntimeError(
+      name(), " [controller_name] is empty — the full parameter name would "
+      "be \".<parameter_suffix>\" which the param service will reject. "
+      "Pair with the BT's selected_controller blackboard variable (e.g. "
+      "controller_name=\"{selected_controller}\") or set a non-empty default.");
+  }
+
+  auto parameter_suffix = getInput<std::string>("parameter_suffix");
+  if (!parameter_suffix) {
+    throw BT::RuntimeError(
+      name(), " missing [parameter_suffix]: ", parameter_suffix.error());
+  }
+  if (parameter_suffix.value().empty()) {
+    throw BT::RuntimeError(
+      name(), " [parameter_suffix] is empty — the full parameter name "
+      "would be \"<controller_name>.\" which the param service will reject.");
+  }
+
+  // Compose the full parameter path. The plugin sets
+  // `<controller_name>.<parameter_suffix>` on `target_node` — e.g. with
+  // defaults: "FollowPath.default_speed".
+  const std::string parameter_name =
+    controller_name.value() + "." + parameter_suffix.value();
 
   auto blackboard = config().blackboard;
   auto node = blackboard->get<rclcpp::Node::SharedPtr>("node");
@@ -140,7 +176,7 @@ BT::NodeStatus SetControllerSpeed::tick()
   }
 
   std::vector<rclcpp::Parameter> params{
-    rclcpp::Parameter(parameter_name.value(), speed.value())
+    rclcpp::Parameter(parameter_name, speed.value())
   };
 
   // Completion callback consumes the future (so rclcpp prunes the
@@ -148,7 +184,7 @@ BT::NodeStatus SetControllerSpeed::tick()
   // response — silent failure would let the boat run on whatever
   // default the controller has, which is safety-relevant.
   const std::string target_name_for_log = resolved_target;
-  const std::string param_name_for_log = parameter_name.value();
+  const std::string param_name_for_log = parameter_name;
   const double speed_for_log = speed.value();
   auto logger = node->get_logger();
   auto on_complete =
@@ -187,7 +223,7 @@ BT::NodeStatus SetControllerSpeed::tick()
   RCLCPP_DEBUG(
     node->get_logger(),
     "SetControllerSpeed: requested %s.%s = %.3f",
-    resolved_target.c_str(), parameter_name.value().c_str(),
+    resolved_target.c_str(), parameter_name.c_str(),
     speed.value());
 
   return BT::NodeStatus::SUCCESS;
