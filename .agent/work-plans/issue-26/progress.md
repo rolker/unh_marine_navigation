@@ -146,3 +146,15 @@ Build clean; gtest 5/5 pass.
 - [ ] (suggestion) Fast controller restart can defeat the dedup-reset — **deferred to #32** (folded as the optional case 4).
 
 Follow-up issue: [rolker/unh_marine_navigation#32](https://github.com/rolker/unh_marine_navigation/issues/32) covers all three deferred suggestions plus the related concern that `speed_limit_` should also clamp timestamp-derived speeds.
+
+## External Review (round 9)
+**Status**: complete
+**When**: 2026-05-25 19:10 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**PR**: #27 at `db2930f`
+**Reviews**: 1 new inline comment at this head; 1 valid, 0 false positives
+**CI**: all-pass
+
+### Actions
+- [ ] Track `cached_parameter_name_` in `SetControllerSpeed`. Reset `last_pushed_speed_` to the sentinel whenever the composed `parameter_name` differs from the cached value (also reset on `target_node` change, which already rebuilds params_client_). Without this, R6's plumbing that routes `controller_name="{selected_controller}"` is correct for the *target* of the SetParameters call but dedup *state* doesn't follow — if ControllerSelector switches controllers while speed stays the same, the newly-selected controller silently keeps its old `default_speed` (Copilot R9 #1).
