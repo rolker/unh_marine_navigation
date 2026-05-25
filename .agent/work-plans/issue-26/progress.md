@@ -140,7 +140,9 @@ Build clean; gtest 5/5 pass.
 **Must-fix**: 1 | **Suggestions**: 3
 
 ### Findings
-- [ ] (must-fix) `params_cb_handle_` registered in `configure()` but not reset in `cleanup()` — nav2 lifecycle hygiene; defensive against rclcpp callback-list ordering edge cases — `crabbing_path_follower.cpp:164-167` (Copilot Adversarial)
-- [ ] (suggestion) Per-pose timestamp override silently negates per-task speed when path poses have non-zero `header.stamp` — pre-existing behavior but defeats the PR's stated purpose on stamped paths; the original field commit `8100131` footnoted this exact question — `crabbing_path_follower.cpp:325-329` (Claude Adversarial)
-- [ ] (suggestion) Task-without-speed inherits prior task's speed (`GetTaskDataDouble` defaults to 0.0, `SetControllerSpeed` skips on `<=0`, controller stays at previous task's value). Sticky semantics — document explicitly or route through YAML default — `set_controller_speed.cpp:86-88` + `run_tasks.xml` GetTaskDataDouble (Claude Adversarial)
-- [ ] (suggestion) Fast controller restart can defeat the dedup sentinel reset if `service_is_ready()` stays true across a quick restart and the BT tick falls outside the down-window. Consider rejection-based reset in `on_complete` as defense in depth — `set_controller_speed.cpp:145-167` (Claude Adversarial)
+- [x] (must-fix) `params_cb_handle_` registered in `configure()` but not reset in `cleanup()` — nav2 lifecycle hygiene; defensive against rclcpp callback-list ordering edge cases — `crabbing_path_follower.cpp:164-167` (Copilot Adversarial). **Addressed**: added `params_cb_handle_.reset();` to `cleanup()` with a comment explaining the pairing with `configure()`.
+- [ ] (suggestion) Per-pose timestamp override silently negates per-task speed when path poses have non-zero `header.stamp` — **deferred to #32** per user. The override is intentional design: planners that consider dynamic obstacles can encode timings, and the controller honors them; per-task / YAML speed applies only when timestamps are absent. Implementation worked in the field.
+- [ ] (suggestion) Task-without-speed inherits prior task's speed — **deferred to #32** (folded into the same precedence-design issue).
+- [ ] (suggestion) Fast controller restart can defeat the dedup-reset — **deferred to #32** (folded as the optional case 4).
+
+Follow-up issue: [rolker/unh_marine_navigation#32](https://github.com/rolker/unh_marine_navigation/issues/32) covers all three deferred suggestions plus the related concern that `speed_limit_` should also clamp timestamp-derived speeds.

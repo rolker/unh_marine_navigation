@@ -163,6 +163,15 @@ void CrabbingPathFollower::configure(
 
 void CrabbingPathFollower::cleanup()
 {
+  // Release the parameter callback registered in configure() so rclcpp's
+  // callback list no longer holds a lambda capturing `this`. Pairs with
+  // the registration above; without it the callback would only release
+  // at destructor time, which is fine in well-ordered teardown but
+  // leaves a small lifecycle window where a parameter SetParameters
+  // could trigger the callback against a plugin in the wrong lifecycle
+  // state. Aligns with the nav2 controller plugin idiom of mirroring
+  // configure()'s resource acquisition in cleanup().
+  params_cb_handle_.reset();
   RCLCPP_INFO(logger_, "Cleaning up controller plugin %s", plugin_name_.c_str());
 }
 
