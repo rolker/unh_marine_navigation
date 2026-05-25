@@ -41,12 +41,21 @@ private:
   // Resolved (absolute) target-node name, used as the cache key so the
   // AsyncParametersClient is rebuilt only when the resolved target changes.
   std::string cached_target_node_;
+  // Last full parameter path (`<controller_name>.<parameter_suffix>`) the
+  // dedup state corresponds to. When this changes between ticks — e.g.,
+  // ControllerSelector switches `selected_controller`, or the operator
+  // changes `parameter_suffix` — the dedup sentinel must be reset so the
+  // newly-targeted parameter actually gets the speed pushed to it.
+  std::string cached_parameter_name_;
 
   // Dedup across BT ticks. SyncActionNode is re-ticked at the BT loop
   // rate (~100 Hz) once it has returned SUCCESS; without dedup we'd
   // issue a SetParameters call every tick, accumulating pending
   // requests in rmw and flooding the controller's param-change log.
   // Sentinel -1.0 ensures the first valid speed always fires.
+  // The dedup is keyed implicitly on (cached_target_node_,
+  // cached_parameter_name_, last_pushed_speed_): whenever the first two
+  // change, this resets to -1.0 so the next compare triggers a SetParameters.
   double last_pushed_speed_ = -1.0;
 };
 

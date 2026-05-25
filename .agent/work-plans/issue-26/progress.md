@@ -157,4 +157,6 @@ Follow-up issue: [rolker/unh_marine_navigation#32](https://github.com/rolker/unh
 **CI**: all-pass
 
 ### Actions
-- [ ] Track `cached_parameter_name_` in `SetControllerSpeed`. Reset `last_pushed_speed_` to the sentinel whenever the composed `parameter_name` differs from the cached value (also reset on `target_node` change, which already rebuilds params_client_). Without this, R6's plumbing that routes `controller_name="{selected_controller}"` is correct for the *target* of the SetParameters call but dedup *state* doesn't follow — if ControllerSelector switches controllers while speed stays the same, the newly-selected controller silently keeps its old `default_speed` (Copilot R9 #1).
+- [x] Track `cached_parameter_name_` in `SetControllerSpeed`. Reset `last_pushed_speed_` to the sentinel whenever the composed `parameter_name` differs from the cached value (also reset on `target_node` change, which already rebuilds params_client_). Without this, R6's plumbing that routes `controller_name="{selected_controller}"` is correct for the *target* of the SetParameters call but dedup *state* doesn't follow — if ControllerSelector switches controllers while speed stays the same, the newly-selected controller silently keeps its old `default_speed` (Copilot R9 #1).
+
+Build clean; gtest 5/5 pass.

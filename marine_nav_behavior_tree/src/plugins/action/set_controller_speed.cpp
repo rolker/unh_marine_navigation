@@ -137,9 +137,27 @@ BT::NodeStatus SetControllerSpeed::tick()
   const std::string resolved_target =
     resolveTargetNode(target_node.value(), node->get_namespace());
 
-  if (!params_client_ || cached_target_node_ != resolved_target) {
+  // Cache invalidation: rebuild the params_client when the resolved
+  // target node changes; reset the dedup sentinel when EITHER the
+  // target node or the parameter name changes. Without the param-name
+  // case, R6's plumbing routes `controller_name="{selected_controller}"`
+  // correctly to the SetParameters call, but the dedup state still
+  // refers to the previous controller — so if ControllerSelector
+  // switches mid-mission and the requested speed happens to match
+  // last_pushed_speed_, the new controller silently keeps its old
+  // default_speed.
+  const bool target_changed =
+    !params_client_ || cached_target_node_ != resolved_target;
+  const bool param_changed = cached_parameter_name_ != parameter_name;
+  if (target_changed) {
     params_client_ = std::make_shared<rclcpp::AsyncParametersClient>(node, resolved_target);
     cached_target_node_ = resolved_target;
+  }
+  if (param_changed) {
+    cached_parameter_name_ = parameter_name;
+  }
+  if (target_changed || param_changed) {
+    last_pushed_speed_ = -1.0;
   }
 
   if (!params_client_->service_is_ready()) {
