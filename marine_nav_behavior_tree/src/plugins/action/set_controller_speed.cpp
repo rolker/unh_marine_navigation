@@ -1,5 +1,9 @@
 #include "marine_nav_behavior_tree/plugins/action/set_controller_speed.h"
 
+#include <cmath>
+
+#include <rcl_interfaces/msg/set_parameters_result.hpp>
+
 namespace marine_nav_behavior_tree
 {
 
@@ -49,16 +53,37 @@ BT::NodeStatus SetControllerSpeed::tick()
     throw BT::RuntimeError(name(), " missing required input [speed]: ", speed.error());
   }
 
+  // Non-finite (NaN/Inf) or non-positive: skip. `(NaN <= 0.0)` is false in
+  // IEEE 754, so without an explicit isfinite check NaN would pass the guard,
+  // be pushed through SetParameters, and poison desired_speed_ — producing
+  // NaN cmd_vel on an autonomous boat.
   // Tasks without a `speed` field land here with speed == default 0.0 (see
-  // GetTaskDataDouble usage in run_tasks.xml). Skip the update so the
-  // controller's existing default_speed stays in effect.
-  if (speed.value() <= 0.0) {
+  // GetTaskDataDouble usage in run_tasks.xml), which the second branch handles
+  // as "no update".
+  const double speed_value = speed.value();
+  if (!std::isfinite(speed_value)) {
+    // Bound the log: a stuck non-finite blackboard would otherwise WARN at BT
+    // tick rate. 5 s matches the service-not-ready throttle below.
+    auto node = config().blackboard->get<rclcpp::Node::SharedPtr>("node");
+    RCLCPP_WARN_THROTTLE(
+      node->get_logger(), *node->get_clock(), 5000,
+      "SetControllerSpeed: non-finite speed input (%f); skipping update",
+      speed_value);
+    return BT::NodeStatus::SUCCESS;
+  }
+  if (speed_value <= 0.0) {
     return BT::NodeStatus::SUCCESS;
   }
 
   auto target_node = getInput<std::string>("target_node");
   if (!target_node) {
     throw BT::RuntimeError(name(), " missing [target_node]: ", target_node.error());
+  }
+  if (target_node.value().empty()) {
+    throw BT::RuntimeError(
+      name(), " [target_node] is empty — relative resolution against the BT "
+      "node's namespace would yield an invalid name (e.g. '/<ns>/'). Set a "
+      "non-empty name in the XML or omit the port to use the default.");
   }
 
   auto parameter_name = getInput<std::string>("parameter_name");

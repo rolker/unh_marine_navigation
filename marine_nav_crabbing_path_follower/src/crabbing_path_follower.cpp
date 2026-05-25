@@ -1,4 +1,7 @@
 #include "marine_nav_crabbing_path_follower/crabbing_path_follower.h"
+
+#include <cmath>
+
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav2_util/node_utils.hpp"
 #include "marine_nav_utilities/gz4d/angles.hpp"
@@ -50,6 +53,21 @@ void CrabbingPathFollower::configure(
         if (p.get_name() == default_speed_name &&
             p.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE) {
           const double new_value = p.as_double();
+          // Reject non-finite or non-positive speeds at the parameter boundary.
+          // Without this guard NaN/Inf propagates into desired_speed_ and then
+          // into computeVelocityCommands' target_speed, commanding NaN cmd_vel
+          // on an autonomous boat. The BT-side SetControllerSpeed plugin has
+          // its own isfinite check; this is defense in depth (operators may
+          // also `ros2 param set` directly).
+          if (!std::isfinite(new_value) || new_value <= 0.0) {
+            result.successful = false;
+            result.reason =
+              "default_speed must be a finite positive value (m/s); got " +
+              std::to_string(new_value);
+            // Don't update desired_speed_; the operator's request is rejected
+            // and the controller stays at its prior value.
+            return result;
+          }
           const double prev_value = desired_speed_.load();
           if (new_value != prev_value) {
             desired_speed_.store(new_value);
