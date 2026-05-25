@@ -31,7 +31,8 @@ BT::PortsList SetControllerSpeed::providedPorts()
     BT::InputPort<double>(
       "speed",
       "Target speed (m/s). Values <= 0 are treated as 'no speed in task' "
-      "and skip the update."),
+      "and skip the update. Non-finite values (NaN/Inf) are also skipped "
+      "with a throttled WARN."),
     BT::InputPort<std::string>(
       "target_node",
       "controller_server",

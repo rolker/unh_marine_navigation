@@ -63,6 +63,8 @@ Build clean; gtest 5/5 still pass.
 **CI**: all-pass
 
 ### Actions
-- [ ] After `desired_speed_.store(1.0)` fallback in `CrabbingPathFollower::configure()`, also call `node->set_parameter(rclcpp::Parameter(plugin_name_ + ".default_speed", 1.0))` so the param service reflects the effective speed. Wrap in try/catch in case `set_parameter` throws during shutdown. Observability fix: `ros2 param get` will otherwise keep reporting the original NaN/Inf/<=0 value while the controller actually runs at the fallback (Copilot R4 #1).
-- [ ] Reword the snapshot comment at `crabbing_path_follower.cpp:175-177`. `desired_speed_` is `std::atomic<double>` so `load()` is already tear-free; the real reason to snapshot is consistency across the cycle (avoid a mid-cycle update between the speed-limit math and the DEBUG log) (Copilot R4 #2).
-- [ ] Extend the `speed` port description in `SetControllerSpeed::providedPorts()` to mention that non-finite values (NaN/Inf) are also skipped with a throttled WARN. Keeps the generated `marine_nav_behavior_tree_nodes.xml` in sync with the actual `isfinite` check landed in R3 (Copilot R4 #3).
+- [x] After `desired_speed_.store(1.0)` fallback in `CrabbingPathFollower::configure()`, also call `node->set_parameter(rclcpp::Parameter(plugin_name_ + ".default_speed", 1.0))` so the param service reflects the effective speed. Wrap in try/catch in case `set_parameter` throws during shutdown. Observability fix: `ros2 param get` will otherwise keep reporting the original NaN/Inf/<=0 value while the controller actually runs at the fallback (Copilot R4 #1).
+- [x] Reword the snapshot comment at `crabbing_path_follower.cpp:175-177`. `desired_speed_` is `std::atomic<double>` so `load()` is already tear-free; the real reason to snapshot is consistency across the cycle (avoid a mid-cycle update between the speed-limit math and the DEBUG log) (Copilot R4 #2).
+- [x] Extend the `speed` port description in `SetControllerSpeed::providedPorts()` to mention that non-finite values (NaN/Inf) are also skipped with a throttled WARN. Keeps the generated `marine_nav_behavior_tree_nodes.xml` in sync with the actual `isfinite` check landed in R3 (Copilot R4 #3).
+
+Build clean; gtest 5/5 pass; auto-generated nodes XML reflects the updated docstring; param-server write is in place with `RCLError` catch.

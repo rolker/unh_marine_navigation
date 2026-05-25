@@ -42,16 +42,34 @@ void CrabbingPathFollower::configure(
   // YAML/launch value (NaN/Inf/<=0) propagates into computeVelocityCommands
   // before any SetParameters update can correct it.
   {
-    const double initial_value = node->get_parameter(plugin_name_ + ".default_speed").as_double();
+    const std::string default_speed_param = plugin_name_ + ".default_speed";
+    const double initial_value = node->get_parameter(default_speed_param).as_double();
     if (std::isfinite(initial_value) && initial_value > 0.0) {
       desired_speed_.store(initial_value);
     } else {
+      constexpr double kFallback = 1.0;
       RCLCPP_WARN(
         logger_,
         "CrabbingPathFollower: configured default_speed=%.3f is invalid "
-        "(must be finite and > 0); falling back to 1.0 m/s",
-        initial_value);
-      desired_speed_.store(1.0);
+        "(must be finite and > 0); falling back to %.3f m/s",
+        initial_value, kFallback);
+      desired_speed_.store(kFallback);
+      // Write the fallback back to the parameter so the param service reports
+      // the effective value. Without this, `ros2 param get` would keep showing
+      // the original invalid value while the controller runs at the fallback,
+      // which is misleading at field-debug time. The on-set-parameters
+      // callback isn't registered yet at this point in configure(), so this
+      // doesn't re-trigger validation. Wrapped in try/catch defensively —
+      // set_parameter can throw if the node is being torn down concurrently.
+      try {
+        node->set_parameter(rclcpp::Parameter(default_speed_param, kFallback));
+      } catch (const rclcpp::exceptions::RCLError & e) {
+        RCLCPP_WARN(
+          logger_,
+          "CrabbingPathFollower: could not update default_speed parameter to "
+          "fallback %.3f (param service refused): %s",
+          kFallback, e.what());
+      }
     }
   }
 
@@ -173,8 +191,10 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
     return cmd_vel;
 
   // Snapshot the atomic once per cycle so the speed-limit math and the
-  // log line below see a consistent value (avoids a torn read between
-  // computations).
+  // DEBUG log below see the same value, even if a SetParameters update
+  // lands mid-cycle. (`desired_speed_` is `std::atomic<double>` so
+  // individual `load()`s are already tear-free; this is about
+  // intra-cycle consistency, not tearing.)
   const double desired_speed_snapshot = desired_speed_.load();
   double target_speed = desired_speed_snapshot;
   if (speed_limit_ > 0.0)
