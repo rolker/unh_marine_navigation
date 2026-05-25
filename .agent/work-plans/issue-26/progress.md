@@ -84,3 +84,15 @@ Build clean; gtest 5/5 pass; auto-generated nodes XML reflects the updated docst
 - [x] Complete dep declarations on `marine_nav_behavior_tree/package.xml`: 7 missing `<depend>` entries (`behaviortree_cpp`, `geometry_msgs`, `marine_nav_interfaces`, `nav2_behavior_tree`, `nav2_util`, `tf2_ros`, `std_msgs`). All 7 already have `find_package` and `ament_target_dependencies`; only the package.xml side is stale. Pre-existing gap (Copilot R5 #3).
 
 Build clean; gtest 5/5 pass.
+
+## External Review (round 6)
+**Status**: complete
+**When**: 2026-05-25 16:45 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**PR**: #27 at `97cba25`
+**Reviews**: 2 new inline comments at this head (same root cause); 1 valid (collapsed), 0 false positives
+**CI**: all-pass
+
+### Actions
+- [ ] Refactor `SetControllerSpeed` to follow the selected controller. Current default `parameter_name="FollowPath.default_speed"` is hardcoded, but the BT's `FollowPath` action uses `controller_id="{selected_controller}"` (driven by `ControllerSelector` from the `/controller_selector` topic). If a different controller is selected at runtime, the speed update targets the wrong plugin and the per-task speed silently fails. Split `parameter_name` into two ports — `controller_name` (default `"FollowPath"`) and `parameter_suffix` (default `"default_speed"`) — and construct `<controller_name>.<parameter_suffix>` in `tick()`. Update both `run_tasks.xml` insertions to pass `controller_name="{selected_controller}"`. Keep the cache key on the constructed full param name. Latent bug today (bizzy only has FollowPath registered), but per Quality Standard fix completely now (Copilot R6 #1+#2 collapsed).
