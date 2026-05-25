@@ -10,6 +10,8 @@
 
   <buildtool_depend>ament_cmake_ros</buildtool_depend>
   <depend>marine_nav_tasks</depend>
+  <depend>rcl_interfaces</depend>
+  <depend>rclcpp</depend>
 
   <test_depend>ament_cmake_gtest</test_depend>
   <test_depend>ament_lint_auto</test_depend>

@@ -16,6 +16,8 @@ find_package(marine_nav_interfaces REQUIRED)
 find_package(marine_nav_tasks REQUIRED)
 find_package(nav2_behavior_tree REQUIRED)
 find_package(nav2_util REQUIRED)
+find_package(rcl_interfaces REQUIRED)
+find_package(rclcpp REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(std_msgs REQUIRED)
 
@@ -103,6 +105,8 @@ ament_target_dependencies(${PROJECT_NAME}_bt_plugins
   behaviortree_cpp
   marine_nav_interfaces
   nav2_behavior_tree
+  rcl_interfaces
+  rclcpp
 )
 
 target_compile_definitions(${PROJECT_NAME}_bt_plugins PRIVATE BT_PLUGIN_EXPORT)

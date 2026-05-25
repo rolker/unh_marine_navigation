@@ -22,3 +22,18 @@ issue: 26
 - [ ] (Optional) Reply to Copilot #3 (`last_pushed_speed_` update timing) explaining the false-positive rationale: resetting on failure would flood the unthrottled rejection WARN on persistent validator rejection AND introduce a thread race against the BT thread's non-atomic read.
 
 All valid findings addressed in commit (pending). 5/5 gtest cases still pass; build clean; no new lint findings introduced.
+
+## External Review (round 2)
+**Status**: complete
+**When**: 2026-05-25 13:30
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**PR**: #27 — second Copilot review at `4a3bdf1`, 4 new inline findings (the 7 carried-forward comments are visually duplicated by GitHub but already fixed in the previous review-iteration).
+
+### Actions
+- [x] Reset `last_pushed_speed_` to the sentinel when `service_is_ready()` returns false (Copilot R2 #1). Different failure mode than the one I'd rejected as FP earlier: controller_server restart → service comes back at YAML default → BT was silently dedup-skipping the per-task speed. Clearing the sentinel on the not-ready branch lets the next post-recovery tick re-send.
+- [x] Add `find_package(rclcpp)` + `find_package(rcl_interfaces)` + `ament_target_dependencies(... rclcpp rcl_interfaces)` for `${PROJECT_NAME}_bt_plugins` in `marine_nav_behavior_tree/CMakeLists.txt` (Copilot R2 #2).
+- [x] Add `<depend>rclcpp</depend>` and `<depend>rcl_interfaces</depend>` to `marine_nav_behavior_tree/package.xml` (Copilot R2 #3).
+- [x] Add `find_package(rcl_interfaces)` + `ament_target_dependencies(... rcl_interfaces)` + `<depend>rcl_interfaces</depend>` to `marine_nav_crabbing_path_follower` CMakeLists + package.xml (Copilot R2 #4).
+
+Build clean on both packages; gtest 5/5 pass; no new lint findings.
