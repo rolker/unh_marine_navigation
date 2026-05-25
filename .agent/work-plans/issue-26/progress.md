@@ -52,3 +52,17 @@ Build clean on both packages; gtest 5/5 pass; no new lint findings.
 - [x] Rewrite the misleading comment block at `set_controller_speed.cpp:114-117`. The completion callback doesn't read/write `last_pushed_speed_` — it only inspects SetParameters results and logs. The real thread-safety story: `last_pushed_speed_` is only touched in `tick()`, which runs single-threaded on the BT loop (Copilot R3 #2).
 
 Build clean; gtest 5/5 still pass.
+
+## External Review (round 4)
+**Status**: complete
+**When**: 2026-05-25 15:00 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**PR**: #27 at `0bf4fae`
+**Reviews**: 3 new inline comments at this head; 3 valid, 0 false positives
+**CI**: all-pass
+
+### Actions
+- [ ] After `desired_speed_.store(1.0)` fallback in `CrabbingPathFollower::configure()`, also call `node->set_parameter(rclcpp::Parameter(plugin_name_ + ".default_speed", 1.0))` so the param service reflects the effective speed. Wrap in try/catch in case `set_parameter` throws during shutdown. Observability fix: `ros2 param get` will otherwise keep reporting the original NaN/Inf/<=0 value while the controller actually runs at the fallback (Copilot R4 #1).
+- [ ] Reword the snapshot comment at `crabbing_path_follower.cpp:175-177`. `desired_speed_` is `std::atomic<double>` so `load()` is already tear-free; the real reason to snapshot is consistency across the cycle (avoid a mid-cycle update between the speed-limit math and the DEBUG log) (Copilot R4 #2).
+- [ ] Extend the `speed` port description in `SetControllerSpeed::providedPorts()` to mention that non-finite values (NaN/Inf) are also skipped with a throttled WARN. Keeps the generated `marine_nav_behavior_tree_nodes.xml` in sync with the actual `isfinite` check landed in R3 (Copilot R4 #3).
