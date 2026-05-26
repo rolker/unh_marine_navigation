@@ -26,3 +26,23 @@ unregistered (palette-only); dead `<AlwaysSuccess/>` at `run_tasks.xml:60`;
 - [ ] Update cross-repo consumers/configs: per-platform `nav2_params.yaml` (ben_project11, seafloor_echoboat_project11, vrx sim, bizzy/izzy in unh_echoboats_project11 — own PRs per repo); verify `mission_manager` (unh_marine_autonomy) goal path still compiles; update `mission_manager/README.md` if goal shape changes.
 - [ ] Surface the `point_at_target=false` heading behavior (forward/reverse minimal-rotation; allow reverse?) to the operator before finalizing — UX choice.
 - [ ] State the on-water validation + dev-freeze plan in the PR; don't merge unvalidated by default. Validation depends on reverse/brake authority (unh_echoboats_project11#88/#86).
+
+## Plan Authored
+**Status**: complete
+**When**: 2026-05-26 19:56 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**Plan**: `.agent/work-plans/issue-33/plan.md` at `b0fa17e`
+**PR**: https://github.com/rolker/unh_marine_navigation/pull/34 (`[PLAN]` prefix)
+**Phases**: single PR, 2 commits (D1 stop-point projection + D2 live point_at_target)
+
+Decisions locked with user: one PR / two commits; deceleration via navigator-level
+`default_deceleration` param seeded onto the blackboard (robot_frame precedent), retire
+the vestigial `hover.deceleration`; `point_at_target=false` ⇒ min-rotation allow-reverse
+(LOIT_TYPE=0). PredictStoppingPose sources velocity from the existing (currently-dropped)
+`odom_smoother` + orientation from tf.
+
+### Open questions
+- [ ] Latent `hover_action` port-name mismatch (`minimum_distance` port vs `minimum_radius` getInput) — fix here or separate issue?
+- [ ] Frame consistency: PredictStoppingPose output frame must equal Hover `local_frame_` per platform — confirm.
+- [ ] Lockstep deploy: retiring `hover.deceleration` couples this PR to the 4 per-platform config PRs (undeclared-param load error otherwise) — confirm sequencing vs dev-freeze, or keep declaration one cycle as deprecated no-op.
