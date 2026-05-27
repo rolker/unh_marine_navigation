@@ -195,3 +195,27 @@ missing `catkin`) — unrelated to #25, pre-existing; flagged to Roland.
 - **Runtime tree-load verification needs a sim session** — no standalone harness loads the
   full `run_tasks.xml` (it references nav2 + marine nodes); xmllint only confirms
   well-formedness. This dovetails with the #35 Nav2-resend spike (same sim).
+
+## Implementation complete (code) — 2026-05-27 ~13:40 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+All #25 code landed on `feature/issue-25` (PR #37), built clean, **17 gtests pass**:
+- `d94d240` SetTaskFailed node + unit test.
+- `7ec798c` top-level NavigatorSequence Switch dispatch.
+- `57d0410` merge of `origin/jazzy` (incorporated #33; 1 trivial CMakeLists conflict resolved as union).
+- `2e607e6` RecoveryNode[FollowPath, Wait] at SurveyLine + nested Switch-ify (RunSurveyAreaSubTasks Switch + SurveyLineSetTask Fallback) — skip-and-continue, no unmatched-vs-failed conflation (review must-fix resolved).
+- `fa4043d` routing fixture (test_dispatch_routing) + SetTaskFailed Groot model entry.
+
+**Verified:** xmllint well-formed; builds clean (with the new-node LD_LIBRARY_PATH codegen
+workaround — needed until #25 merges); `test_dispatch_routing` proves matched-but-failed →
+SetTaskFailed and unmatched → clean-done catchall at runtime with stub leaves.
+
+**Lint note (not a regression):** unfiltered `colcon test` shows ~396 lint failures
+(cpplint 289/289, copyright 53/54, uncrustify 48/54) — pre-existing package-wide debt
+(#33 merged through it; package has no copyright headers / never passed cpplint). New files
+follow the package's no-header house style. Enforced gates are pre-commit + CI, which pass.
+Whole-package lint cleanup would be a separate issue.
+
+**Remaining before PR-ready:** (1) runtime full-tree load verification in sim (no standalone
+harness loads run_tasks.xml; dovetails with the #35 Nav2-resend spike); (2) /review-code
+pre-push; (3) flip PR #37 out of draft after sim verification.
