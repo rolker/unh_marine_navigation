@@ -62,7 +62,7 @@ TEST_F(SetTaskFailedTest, RecordsFailedStatusAndMarksDone)
   factory.registerNodeType<SetTaskFailed>("SetTaskFailed");
   auto tree = factory.createTreeFromText(
     R"(<root BTCPP_format="4"><BehaviorTree>)"
-    R"(<SetTaskFailed task="{task}" reason="follow_path_aborted" attempts="3"/>)"
+    R"(<SetTaskFailed task="{task}" reason="follow_path_aborted"/>)"
     R"(</BehaviorTree></root>)",
     makeBlackboard(task));
 
@@ -74,10 +74,9 @@ TEST_F(SetTaskFailedTest, RecordsFailedStatusAndMarksDone)
   YAML::Node status = YAML::Load(task->message().status);
   EXPECT_EQ(status["outcome"].as<std::string>(), "failed");
   EXPECT_EQ(status["reason"].as<std::string>(), "follow_path_aborted");
-  EXPECT_EQ(status["attempts"].as<int>(), 3);
 }
 
-TEST_F(SetTaskFailedTest, OmitsUnsetReasonAndAttempts)
+TEST_F(SetTaskFailedTest, OmitsUnsetReason)
 {
   auto task = makeTask("line_2");
 
@@ -94,7 +93,6 @@ TEST_F(SetTaskFailedTest, OmitsUnsetReasonAndAttempts)
   YAML::Node status = YAML::Load(task->message().status);
   EXPECT_EQ(status["outcome"].as<std::string>(), "failed");
   EXPECT_FALSE(status["reason"]);   // unset reason is not written
-  EXPECT_FALSE(status["attempts"]); // attempts=0 is not written
 }
 
 TEST_F(SetTaskFailedTest, NullTaskSucceedsWithoutDereference)

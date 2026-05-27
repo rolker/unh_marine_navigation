@@ -19,7 +19,6 @@ BT::PortsList SetTaskFailed::providedPorts()
   return {
     BT::InputPort<TaskPtr>("task", "{task}", "Task to record as attempted-but-failed"),
     BT::InputPort<std::string>("reason", "", "Short failure reason (e.g. follow_path error code)"),
-    BT::InputPort<int>("attempts", 0, "Number of attempts made before giving up (0 = unset)"),
   };
 }
 
@@ -39,8 +38,6 @@ BT::NodeStatus SetTaskFailed::tick()
 
   std::string reason;
   getInput<std::string>("reason", reason);
-  int attempts = 0;
-  getInput<int>("attempts", attempts);
 
   // Record attempted-but-failed in the task status. The status is a free-form YAML string
   // (TaskInformation.status) that rides the RunTasks heartbeat to the operator/camp; a
@@ -50,8 +47,6 @@ BT::NodeStatus SetTaskFailed::tick()
   status["outcome"] = "failed";
   if(!reason.empty())
     status["reason"] = reason;
-  if(attempts > 0)
-    status["attempts"] = attempts;
   task.value()->setStatus(status);
 
   // Mark done so the mission advances past this task (skip-and-continue); the status flags
