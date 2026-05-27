@@ -93,6 +93,18 @@ TEST(ComputeHoverSpeed, TurnFloorAppliesOutsideDeadbandDuringRotation)
   EXPECT_NEAR(s, 0.2 * kMaxSpeed, kTol);
 }
 
+TEST(ComputeHoverSpeed, MinSpeedFloorAppliesOnlyOutsideDeadband)
+{
+  // Aligned, just outside minimum_radius: the ramp gives a near-zero speed, but
+  // a positive minimum_speed floors it via the final std::max.
+  const double min_speed = 0.3;
+  EXPECT_NEAR(
+    computeHoverSpeed(kMinR + 0.01, 0.0, kMinR, kMaxR, min_speed, kMaxSpeed), min_speed, kTol);
+  // Inside minimum_radius the min-speed floor must NOT apply (boat settles).
+  EXPECT_NEAR(
+    computeHoverSpeed(0.75 * kMinR, 0.0, kMinR, kMaxR, min_speed, kMaxSpeed), 0.0, kTol);
+}
+
 // --- composition with chooseApproachHeading: the combined reverse path ---
 
 TEST(HoverCommand, ForwardApproachFarDrivesForwardAtMax)
