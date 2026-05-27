@@ -16,6 +16,9 @@ find_package(marine_nav_interfaces REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(visualization_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 add_library(marine_nav_hover_behavior SHARED
   src/hover.cpp
@@ -36,6 +39,9 @@ ament_target_dependencies(marine_nav_hover_behavior
   rclcpp
   rclcpp_lifecycle
   visualization_msgs
+  tf2
+  tf2_geometry_msgs
+  tf2_ros
 )
 
 pluginlib_export_plugin_description_file(nav2_core behavior_plugin.xml)
@@ -53,6 +59,25 @@ install(FILES behavior_plugin.xml
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
+
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_hover_heading
+    test/test_hover_heading.cpp
+  )
+  if(TARGET test_hover_heading)
+    target_include_directories(test_hover_heading PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    )
+  endif()
+
+  ament_add_gtest(test_hover_speed
+    test/test_hover_speed.cpp
+  )
+  if(TARGET test_hover_speed)
+    target_include_directories(test_hover_speed PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    )
+  endif()
 endif()
 
 ament_package()

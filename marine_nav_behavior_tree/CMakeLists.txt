@@ -18,6 +18,8 @@ find_package(nav2_behavior_tree REQUIRED)
 find_package(nav2_util REQUIRED)
 find_package(rcl_interfaces REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(std_msgs REQUIRED)
 
@@ -77,6 +79,7 @@ add_library(${PROJECT_NAME}_bt_plugins SHARED
   src/plugins/action/hover_action.cpp
   src/plugins/action/hover_cancel_node.cpp
   src/plugins/action/path_to_pose_vector.cpp
+  src/plugins/action/predict_stopping_pose.cpp
   src/plugins/action/set_controller_speed.cpp
   src/plugins/action/set_path_from_task.cpp
   src/plugins/action/set_polygon_from_task.cpp
@@ -103,10 +106,15 @@ target_link_libraries(${PROJECT_NAME}_bt_plugins
 
 ament_target_dependencies(${PROJECT_NAME}_bt_plugins
   behaviortree_cpp
+  geometry_msgs
   marine_nav_interfaces
   nav2_behavior_tree
+  nav2_util
   rcl_interfaces
   rclcpp
+  tf2
+  tf2_geometry_msgs
+  tf2_ros
 )
 
 target_compile_definitions(${PROJECT_NAME}_bt_plugins PRIVATE BT_PLUGIN_EXPORT)
@@ -178,6 +186,24 @@ if(BUILD_TESTING)
     ament_target_dependencies(test_set_controller_speed_resolve
       behaviortree_cpp
       rclcpp
+    )
+  endif()
+
+  ament_add_gtest(test_predict_stopping_pose
+    test/test_predict_stopping_pose.cpp
+  )
+  if(TARGET test_predict_stopping_pose)
+    target_include_directories(test_predict_stopping_pose PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    )
+    target_link_libraries(test_predict_stopping_pose
+      ${PROJECT_NAME}_bt_plugins
+    )
+    ament_target_dependencies(test_predict_stopping_pose
+      behaviortree_cpp
+      geometry_msgs
+      tf2
+      tf2_geometry_msgs
     )
   endif()
 endif()

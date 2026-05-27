@@ -13,16 +13,22 @@ HoverAction::HoverAction(
 
 void HoverAction::initialize()
 {
-  double minimum_radius;
+  double minimum_radius = 0.0;
   getInput("minimum_radius", minimum_radius);
-  double maximum_radius;
+  double maximum_radius = 0.0;
   getInput("maximum_radius", maximum_radius);
-  double maximum_speed;
+  double maximum_speed = 0.0;
   getInput("maximum_speed", maximum_speed);
 
   goal_.minimum_radius = minimum_radius;
   goal_.maximum_radius = maximum_radius;
   goal_.maximum_speed = maximum_speed;
+
+  // Optional hold pose. When the port is unset (e.g. the post-transit
+  // location branch never writes {hover_target}), leave target with an empty
+  // frame_id — the Hover behavior treats that as "hold the current pose".
+  goal_.target = geometry_msgs::msg::PoseStamped();
+  getInput("target", goal_.target);
 
 }
 

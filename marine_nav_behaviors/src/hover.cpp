@@ -1,5 +1,8 @@
 #include "marine_nav_behaviors/hover.h"
+#include "marine_nav_behaviors/hover_heading.h"
+#include "marine_nav_behaviors/hover_speed.h"
 #include "nav2_util/node_utils.hpp"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 namespace marine_nav_behaviors
 {
@@ -23,7 +26,7 @@ void Hover::onConfigure()
   nav2_util::declare_parameter_if_not_declared(
     node, behavior_name_+".maximum_rotation_speed", rclcpp::ParameterValue(maximum_rotation_speed_));
   nav2_util::declare_parameter_if_not_declared(
-    node, behavior_name_+".deceleration", rclcpp::ParameterValue(deceleration_));
+    node, behavior_name_+".point_at_target", rclcpp::ParameterValue(point_at_target_));
   nav2_util::declare_parameter_if_not_declared(
     node, behavior_name_+".generate_visualization", rclcpp::ParameterValue(generate_visualization_));
 }
@@ -36,7 +39,6 @@ nav2_behaviors::ResultStatus Hover::onRun(const std::shared_ptr<const HoverActio
   node->get_parameter(behavior_name_+".minimum_speed", minimum_speed_);
   node->get_parameter(behavior_name_+".maximum_speed", maximum_speed_);
   node->get_parameter(behavior_name_+".maximum_rotation_speed", maximum_rotation_speed_);
-  node->get_parameter(behavior_name_+".deceleration", deceleration_);
   node->get_parameter(behavior_name_+".generate_visualization", generate_visualization_);
 
   if(generate_visualization_)
@@ -58,7 +60,27 @@ nav2_behaviors::ResultStatus Hover::onRun(const std::shared_ptr<const HoverActio
     maximum_speed_ = goal->maximum_speed;
   }
 
-  if (!nav2_util::getCurrentPose(
+  // computeHoverSpeed needs 0 <= minimum_radius < maximum_radius (it divides by
+  // their span and by minimum_radius). Outside that it safely commands zero
+  // forward speed, but surface the misconfiguration so it doesn't look like the
+  // boat is silently refusing to drive to station.
+  if (maximum_radius_ <= minimum_radius_ || minimum_radius_ < 0.0)
+  {
+    RCLCPP_WARN(
+      this->logger_,
+      "Hover: invalid radii (minimum_radius=%.3f, maximum_radius=%.3f); expected "
+      "0 <= minimum_radius < maximum_radius. Forward speed held at zero until reconfigured.",
+      minimum_radius_, maximum_radius_);
+  }
+
+  // An empty target frame_id is the sentinel for "hold the current pose"
+  // (pre-target behavior). A set frame_id holds the supplied pose — e.g. the
+  // momentum-projected stop point from PredictStoppingPose.
+  if (!goal->target.header.frame_id.empty())
+  {
+    target_pose_ = goal->target;
+  }
+  else if (!nav2_util::getCurrentPose(
     target_pose_, *this->tf_, this->local_frame_, this->robot_base_frame_,
     this->transform_tolerance_))
   {
@@ -80,8 +102,38 @@ nav2_behaviors::ResultStatus Hover::onCycleUpdate()
     return nav2_behaviors::ResultStatus{nav2_behaviors::Status::FAILED, HoverAction::Result::TF_ERROR};
   }
 
-  double diff_x = target_pose_.pose.position.x - current_pose.pose.position.x;
-  double diff_y = target_pose_.pose.position.y - current_pose.pose.position.y;
+  // The hold target may be expressed in any frame (e.g. odom from
+  // PredictStoppingPose, or map for a geo-referenced station). Transform it
+  // into local_frame_ every cycle — keeping target_pose_ in its original frame
+  // — so a target held in a drifting frame keeps tracking that frame rather
+  // than being frozen at engagement. No-op copy when frames already match.
+  geometry_msgs::msg::PoseStamped target_local = target_pose_;
+  if (target_pose_.header.frame_id != local_frame_)
+  {
+    // Resolve the hold point at the latest available transform (stamp 0), not
+    // the target's engagement-time stamp. A station can be held for tens of
+    // seconds — well past the TF buffer — so a fixed old stamp would fall out
+    // of the cache and throw. Latest-time is also the correct semantics for
+    // tracking a fixed point in a frame that drifts relative to local_frame_.
+    geometry_msgs::msg::PoseStamped target_query = target_pose_;
+    target_query.header.stamp.sec = 0;
+    target_query.header.stamp.nanosec = 0;
+    try
+    {
+      target_local = tf_->transform(
+        target_query, local_frame_, tf2::durationFromSec(transform_tolerance_));
+    }
+    catch (const tf2::TransformException & ex)
+    {
+      RCLCPP_ERROR(
+        logger_, "Hover: could not transform target into %s: %s",
+        local_frame_.c_str(), ex.what());
+      return nav2_behaviors::ResultStatus{nav2_behaviors::Status::FAILED, HoverAction::Result::TF_ERROR};
+    }
+  }
+
+  double diff_x = target_local.pose.position.x - current_pose.pose.position.x;
+  double diff_y = target_local.pose.position.y - current_pose.pose.position.y;
   double current_range = hypot(diff_x, diff_y);
   double current_bearing = atan2(diff_y, diff_x);
 
@@ -96,67 +148,40 @@ nav2_behaviors::ResultStatus Hover::onCycleUpdate()
   else if (steering_angle < -M_PI)
     steering_angle += 2.0 * M_PI;
 
+  // Read the heading mode live so an operator can A/B it on the water with
+  // `ros2 param set /<ns>/behavior_server hover.point_at_target {true,false}`.
+  if (auto node = node_.lock())
+  {
+    node->get_parameter(behavior_name_ + ".point_at_target", point_at_target_);
+  }
+
+  // Default (point_at_target_ == true): always face the hold point. When false:
+  // approach forward or in reverse, whichever needs less rotation (ArduPilot
+  // LOIT_TYPE=0), spending less yaw thrust to hold station. The reverse choice
+  // is carried by drive_sign and applied to linear.x last, so the speed-
+  // magnitude logic below (including the v4 floor) is untouched and a negative
+  // speed is not clobbered by std::max.
+  const auto approach = chooseApproachHeading(steering_angle, point_at_target_);
+  steering_angle = approach.steering_angle;
+  const double drive_sign = approach.drive_sign;
+
   double steering_speed = (steering_angle/M_PI) * maximum_rotation_speed_;
 
   double steering_proportion = abs(steering_angle) / M_PI;
 
-  double current_target_speed = 0.0;
-
-  if (current_range >= maximum_radius_)
-  {
-    current_target_speed = maximum_speed_;
-  }
-  else if (current_range > minimum_radius_)
-  {
-    float p = (current_range-minimum_radius_)/(maximum_radius_-minimum_radius_);
-    current_target_speed = p*maximum_speed_;
-  }
-  else
-  {
-    if (current_range < minimum_radius_/2.0)
-    {
-      current_target_speed = 0.0;
-      float p = 0.1*(1.0-(current_range/minimum_radius_));
-      current_target_speed = -p*maximum_speed_; // apply some reverse, up to 10%
-    }
-    else
-    {
-      current_target_speed = 0.0;
-    }
-    // current_target_speed = 0.0;
-    // steering_speed = 0.0;
-  }
-
-  // Smooth taper: 1.0 at aligned, 0.0 at >= 45° heading error.
-  current_target_speed *= std::max(0.0, 1.0 - steering_proportion*4.0);
-
-  // Range-aware floor for vectored-thrust authority during heading
-  // correction. Tapers linearly from 0.5 * maximum_speed_ at
-  // maximum_radius down to 0.2 * maximum_speed_ at minimum_radius, then
-  // drops to zero inside minimum_radius so the boat can settle on
-  // station instead of orbiting at the kinematic radius v_min/yaw_rate.
-  // (v4 of field patch — v3 used a flat 0.2 floor everywhere, which
-  // produced a ~3 m stable orbital loop in field testing.)
-  if (steering_proportion > 0.1 && current_range >= minimum_radius_)
-  {
-    double range_factor = std::clamp(
-        (current_range - minimum_radius_) /
-        (maximum_radius_ - minimum_radius_),
-        0.0, 1.0);
-    double turn_min_speed = (0.2 + 0.3 * range_factor) * maximum_speed_;
-    current_target_speed = std::max(current_target_speed, turn_min_speed);
-  }
-
-  if (current_range > minimum_radius_)
-  {
-    current_target_speed = std::max(current_target_speed, minimum_speed_);
-  }
+  // Field-tuned v4 speed-magnitude logic (range bands + heading taper + turn
+  // floor) lives in computeHoverSpeed so it can be unit-tested without a ROS
+  // fixture. The returned magnitude is multiplied by drive_sign below, so a
+  // reverse approach negates it (including the inner-deadband back-off term).
+  double current_target_speed = computeHoverSpeed(
+    current_range, steering_proportion,
+    minimum_radius_, maximum_radius_, minimum_speed_, maximum_speed_);
 
   auto cmd_vel = std::make_unique<geometry_msgs::msg::TwistStamped>();
   cmd_vel->header.stamp = this->clock_->now();
   cmd_vel->header.frame_id = this->robot_base_frame_;
   cmd_vel->twist.angular.z = steering_speed;
-  cmd_vel->twist.linear.x = current_target_speed;
+  cmd_vel->twist.linear.x = drive_sign * current_target_speed;
 
   RCLCPP_DEBUG_STREAM(logger_, "Hover: " << diff_x << ","  << diff_y << " range: " << current_range << " angle: " << steering_angle << "\tOutput cmd_vel: " << cmd_vel->twist.linear.x << " " << cmd_vel->twist.angular.z);
 
