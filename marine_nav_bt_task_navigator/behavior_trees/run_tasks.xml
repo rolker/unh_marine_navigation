@@ -231,27 +231,47 @@
                      default_controller="{=}"
                      task_list="{survey_area_tasks}"
                      _autoremap="true"/>
-            <RetryUntilSuccessful num_attempts="3">
-              <Sequence>
-                <ReactiveFallback>
-                  <SubTree ID="SurveyLineTask"
-                           lead_in_distance="{survey_lead_in_distance}"
-                           survey_line_task="{current_survey_area_task}"
-                           server_timeout="{server_timeout}"
-                           bt_loop_duration="{bt_loop_duration}"
-                           wait_for_service_timeout="{wait_for_service_timeout}"
-                           current_task_type="{current_survey_area_task_type}"
-                           _failureIf="current_survey_area_task_type != &apos;survey_line&apos;"
-                           _autoremap="true"/>
-                  <SubTree ID="SurveyLineSetTask"
-                           name="SurveyAreaSurveyLineSetTask"
-                           survey_line_set_task="{current_survey_area_task}"
-                           _failureIf="current_survey_area_task_type != &apos;survey_line_set&apos;"
-                           _autoremap="true"/>
-                </ReactiveFallback>
-                <SetTaskDone task="{current_survey_area_task}"/>
-              </Sequence>
-            </RetryUntilSuccessful>
+            <!-- Dispatch sub-tasks by type with a Switch (mirrors the top-level fix): an
+                 UNMATCHED sub-task type hits the default SetTaskDone (skip, not failed) so
+                 the _failureIf routing can't conflate a type-mismatch with an execution
+                 failure (#25 review). A matched sub-task that fails after retries routes to
+                 SetTaskFailed, which records it failed and marks it done so the area
+                 CONTINUES its remaining lines (skip-and-continue) instead of being abandoned. -->
+            <Switch2 name="SelectSurveyAreaSubTask"
+                     variable="{current_survey_area_task_type}"
+                     case_1="survey_line"
+                     case_2="survey_line_set">
+              <Fallback name="SurveyAreaLineOrFailed">
+                <RetryUntilSuccessful num_attempts="3">
+                  <Sequence>
+                    <SubTree ID="SurveyLineTask"
+                             lead_in_distance="{survey_lead_in_distance}"
+                             survey_line_task="{current_survey_area_task}"
+                             server_timeout="{server_timeout}"
+                             bt_loop_duration="{bt_loop_duration}"
+                             wait_for_service_timeout="{wait_for_service_timeout}"
+                             current_task_type="{current_survey_area_task_type}"
+                             _autoremap="true"/>
+                    <SetTaskDone task="{current_survey_area_task}"/>
+                  </Sequence>
+                </RetryUntilSuccessful>
+                <SetTaskFailed task="{current_survey_area_task}" reason="survey_line_failed"/>
+              </Fallback>
+              <Fallback name="SurveyAreaLineSetOrFailed">
+                <RetryUntilSuccessful num_attempts="3">
+                  <Sequence>
+                    <SubTree ID="SurveyLineSetTask"
+                             name="SurveyAreaSurveyLineSetTask"
+                             survey_line_set_task="{current_survey_area_task}"
+                             _autoremap="true"/>
+                    <SetTaskDone task="{current_survey_area_task}"/>
+                  </Sequence>
+                </RetryUntilSuccessful>
+                <SetTaskFailed task="{current_survey_area_task}" reason="survey_line_set_failed"/>
+              </Fallback>
+              <SetTaskDone name="SkipUnknownSurveyAreaSubTaskType"
+                           task="{current_survey_area_task}"/>
+            </Switch2>
           </ReactiveSequence>
         </KeepRunningUntilFailure>
       </WhileDoElse>
@@ -329,13 +349,25 @@
                             selected_controller="{selected_controller}"/>
         <SetControllerSpeed speed="{target_speed}"
                             controller_name="{selected_controller}"/>
-        <FollowPath controller_id="{selected_controller}"
-                    path="{survey_path}"
-                    goal_checker_id=""
-                    progress_checker_id=""
-                    server_name="follow_path"
-                    server_timeout="{server_timeout}"
-                    error_code_id="{follow_path_error_code}"/>
+        <!-- Recover transient FollowPath ABORTs (e.g. a momentary progress-checker trip)
+             with a short Wait, then retry — up to 3 times. On persistent failure the
+             RecoveryNode FAILs up to the dispatch, which records the line failed
+             (SetTaskFailed) rather than silently marking it done (#25). CancelAllNavigation
+             above runs once on entry and is intentionally not re-run on retry. The Wait
+             behavior is the marine-appropriate recovery (spin/backup are not for boats). -->
+        <RecoveryNode number_of_retries="3"
+                      name="SurveyLineFollowRecovery">
+          <FollowPath controller_id="{selected_controller}"
+                      path="{survey_path}"
+                      goal_checker_id=""
+                      progress_checker_id=""
+                      server_name="follow_path"
+                      server_timeout="{server_timeout}"
+                      error_code_id="{follow_path_error_code}"/>
+          <Wait wait_duration="5.0"
+                server_name="wait"
+                server_timeout="{server_timeout}"/>
+        </RecoveryNode>
       </ReactiveSequence>
     </Sequence>
   </BehaviorTree>
@@ -364,19 +396,26 @@
                      default_controller="{=}"
                      task_list="{survey_line_set_sub_tasks}"
                      _autoremap="true"/>
-            <RetryUntilSuccessful num_attempts="3">
-              <Sequence>
-                <SubTree ID="SurveyLineTask"
-                         name="SurveyLineSetSurveyLineTask"
-                         survey_line_task="{survey_line_set_sub_task}"
-                         server_timeout="{server_timeout}"
-                         bt_loop_duration="{bt_loop_duration}"
-                         wait_for_service_timeout="{wait_for_service_timeout}"
-                         current_task_type="{survey_line_set_sub_task_type}"
-                         _autoremap="true"/>
-                <SetTaskDone task="{survey_line_set_sub_task}"/>
-              </Sequence>
-            </RetryUntilSuccessful>
+            <!-- Sub-tasks of a line set are all survey_line, so no type routing is needed
+                 here (unlike the survey-area loop). Wrap retry in a Fallback to SetTaskFailed
+                 so a sub-line that fails after retries is recorded failed and the set
+                 CONTINUES its remaining lines (skip-and-continue) rather than abandoning (#25). -->
+            <Fallback name="SurveyLineSetSubLineOrFailed">
+              <RetryUntilSuccessful num_attempts="3">
+                <Sequence>
+                  <SubTree ID="SurveyLineTask"
+                           name="SurveyLineSetSurveyLineTask"
+                           survey_line_task="{survey_line_set_sub_task}"
+                           server_timeout="{server_timeout}"
+                           bt_loop_duration="{bt_loop_duration}"
+                           wait_for_service_timeout="{wait_for_service_timeout}"
+                           current_task_type="{survey_line_set_sub_task_type}"
+                           _autoremap="true"/>
+                  <SetTaskDone task="{survey_line_set_sub_task}"/>
+                </Sequence>
+              </RetryUntilSuccessful>
+              <SetTaskFailed task="{survey_line_set_sub_task}" reason="survey_line_failed"/>
+            </Fallback>
           </ReactiveSequence>
         </KeepRunningUntilFailure>
       </WhileDoElse>
