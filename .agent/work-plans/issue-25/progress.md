@@ -146,3 +146,24 @@ simpler) reframed both fixes and reversed the merge:
   subtree levels down in `SurveyLine` (fixes the review's must-fix structural error).
 
 Plan rewritten to the standalone #25 scope.
+
+## Plan Review (post-redesign, standalone #25)
+**Status**: complete
+**When**: 2026-05-27 12:04 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context)) — independent fresh-context sub-agent review
+
+**Plan**: `.agent/work-plans/issue-25/plan.md` at `3c51499`
+**PR**: https://github.com/rolker/unh_marine_navigation/pull/37
+**Verdict**: changes-requested (ready-with-fixes — plan refinements, not approach rework)
+
+Verified correct against source: Switch-with-default structural fix; stock BT.CPP `Switch`
++ stock nav2 `RecoveryNode`/`Wait` availability (no plugin_lib additions); no `.msg` change
+(`TaskInformation.msg:32`); cross-repo camp path (`task_navigator.cpp:116` →
+`camp_interface.py:94-95`); ADR-0008/0002 alignment.
+
+### Findings
+- [ ] (must-fix) Nested-loop `SetTaskFailed` collides with the `_failureIf` routing gates in `RunSurveyAreaSubTasks` (`run_tasks.xml:205,210`): a blanket failure-fallback there would mark a *type-mismatched* (legitimately routed) sub-task as `failed`, re-conflating unmatched-vs-failed one level down. The nested edits must preserve the matched-vs-unmatched distinction — design against the real XML.
+- [ ] (must-fix) `RecoveryNode`-at-`SurveyLine` semantics under-specified (`run_tasks.xml:282-302`): (a) wrap only `FollowPath` vs the whole `ReactiveSequence` — retrying re-follows the *full* `{survey_path}`, re-covering surveyed trackline; (b) `CancelAllNavigation` + a `Hover` recovery + retry need cancel/start ordering; (c) a persistent stuck condition just re-trips the 10 s progress checker → retries exhaust → `SetTaskFailed` (intended terminal — state that recovery is for transient trips only).
+- [ ] (suggestion) Recovery is invoked via a BT *action node* (`Wait`, or the repo's custom `Hover` at `bt_register_nodes.cpp:52`), not the `behavior_server` plugin list — name the BT node in Open Q1.
+- [ ] (suggestion) The routing fixture must exercise a mid-run `current_task_type` change (Switch reactivity) AND a nested-loop failed-line → records-failed-and-loop-continues assertion (where Finding-1's bug lives).
+- [ ] (suggestion) Name a second-consumer search for the RunTasks-feedback `tasks[].status` beyond `camp_interface.py`; "structured status" is written but only `str()`-rendered today (not a consumed contract).
