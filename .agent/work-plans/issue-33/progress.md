@@ -113,8 +113,8 @@ map outage) and the stale-stamp expiry. Built clean; functional gtests pass
 **CI**: none reported (no checks on head)
 
 ### Findings
-- [ ] (valid, Copilot) `marine_nav_behaviors` uses `tf2`/`tf2_geometry_msgs` directly (`tf_->transform`, `tf2::durationFromSec`/`TransformException`/`getYaw`, the transform include) but declares neither in `package.xml`/`CMakeLists.txt` — relies on transitive nav2 exports. Add `find_package` + `ament_target_dependencies(marine_nav_hover_behavior … tf2 tf2_geometry_msgs tf2_ros)` + `<depend>` entries (mirror the BT package). — `marine_nav_behaviors/{CMakeLists.txt,package.xml}`, `src/hover.cpp:5`
-- [ ] (valid, Copilot) PredictStoppingPose output-port doc still says "in the navigator's global frame", but `tick()` now outputs the odom frame from `getTwistStamped()` (falls back to global only when empty) — stale after the frame fix. Update the `OutputPort` description. — `predict_stopping_pose.cpp:33`
+- [x] (valid, Copilot) `marine_nav_behaviors` uses `tf2`/`tf2_geometry_msgs` directly (`tf_->transform`, `tf2::durationFromSec`/`TransformException`/`getYaw`, the transform include) but declares neither in `package.xml`/`CMakeLists.txt` — relies on transitive nav2 exports. Add `find_package` + `ament_target_dependencies(marine_nav_hover_behavior … tf2 tf2_geometry_msgs tf2_ros)` + `<depend>` entries (mirror the BT package). — `marine_nav_behaviors/{CMakeLists.txt,package.xml}`, `src/hover.cpp:5` → resolved in `35d005c` (builds clean).
+- [x] (valid, Copilot) PredictStoppingPose output-port doc still says "in the navigator's global frame", but `tick()` now outputs the odom frame from `getTwistStamped()` (falls back to global only when empty) — stale after the frame fix. Update the `OutputPort` description. — `predict_stopping_pose.cpp:33` → resolved in `35d005c`.
 
 ### False positives
 (none — both Copilot comments are accurate; neither cross-confirmed, both single-source)
