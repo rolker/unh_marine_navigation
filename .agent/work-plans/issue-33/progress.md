@@ -101,3 +101,20 @@ to `global_frame` only before odom arrives; Hover resolves a differently-framed 
 the latest transform (stamp 0). Removes the map dependency (no more HoverTask abort on a
 map outage) and the stale-stamp expiry. Built clean; functional gtests pass
 (`projectStoppingPose` 6/6, `chooseApproachHeading` 6/6). Suggestions 3–5 left open.
+
+## Integrated Review
+**Status**: complete
+**When**: 2026-05-27 12:11 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**PR**: #34 at `9e39bd2`
+**Sources**: 2 — Copilot review @ `0e13583` (code current; head differs only by a progress note), Local Review (Pre-Push) timeline
+**Cross-source confirmations**: 0
+**CI**: none reported (no checks on head)
+
+### Findings
+- [ ] (valid, Copilot) `marine_nav_behaviors` uses `tf2`/`tf2_geometry_msgs` directly (`tf_->transform`, `tf2::durationFromSec`/`TransformException`/`getYaw`, the transform include) but declares neither in `package.xml`/`CMakeLists.txt` — relies on transitive nav2 exports. Add `find_package` + `ament_target_dependencies(marine_nav_hover_behavior … tf2 tf2_geometry_msgs tf2_ros)` + `<depend>` entries (mirror the BT package). — `marine_nav_behaviors/{CMakeLists.txt,package.xml}`, `src/hover.cpp:5`
+- [ ] (valid, Copilot) PredictStoppingPose output-port doc still says "in the navigator's global frame", but `tick()` now outputs the odom frame from `getTwistStamped()` (falls back to global only when empty) — stale after the frame fix. Update the `OutputPort` description. — `predict_stopping_pose.cpp:33`
+
+### False positives
+(none — both Copilot comments are accurate; neither cross-confirmed, both single-source)
