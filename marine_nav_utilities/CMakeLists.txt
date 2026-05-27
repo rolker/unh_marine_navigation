@@ -12,6 +12,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(rcl_interfaces REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
@@ -44,6 +45,7 @@ add_executable(costmap_window_node src/costmap_window_node.cpp)
 target_link_libraries(costmap_window_node
   ${PROJECT_NAME}
   ${nav_msgs_TARGETS}
+  ${rcl_interfaces_TARGETS}
   rclcpp::rclcpp
 )
 
@@ -77,6 +79,7 @@ ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
 ament_export_dependencies(
   geometry_msgs
   nav_msgs
+  rcl_interfaces
   tf2
   tf2_geometry_msgs
   rclcpp
