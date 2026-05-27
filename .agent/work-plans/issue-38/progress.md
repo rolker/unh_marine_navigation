@@ -61,9 +61,10 @@ The initial runtime check appeared to show the integer set still rejected; this 
 **CI**: all-pass (copilot reviewer check)
 
 ### Findings
-- [ ] (valid, Copilot R3) non-atomic param callback: on-set mutates `window_size_` before the request is known to succeed (and `continue`s on type failure); diverges from the store if a co-set param fails. Refactor to pre-set validate-only + `add_post_set_parameters_callback` apply — `costmap_window_node.h`
-- [ ] (valid, Copilot R3) `ament_export_dependencies` missing `tf2` (public header includes tf2, lib links tf2::tf2); breaks downstream find_package transitive deps — `marine_nav_utilities/CMakeLists.txt`
-- [ ] (valid-doc, Copilot R3) "coerced to double" wording misleading — stored param keeps integer type, only internal value is double; clarify descriptor + test comment — `costmap_window_node.h`, `test/test_costmap_window_node.cpp`
+All resolved in `8424050` (16 gtest cases pass; param behavior re-verified at runtime on a single clean node).
+- [x] (valid, Copilot R3) non-atomic param callback: on-set mutates `window_size_` before the request is known to succeed (and `continue`s on type failure); diverges from the store if a co-set param fails. Refactored to pre-set validate-only + `add_post_set_parameters_callback` apply — `costmap_window_node.h`
+- [x] (valid, Copilot R3) `ament_export_dependencies` missing `tf2` (public header includes tf2, lib links tf2::tf2); breaks downstream find_package transitive deps — `marine_nav_utilities/CMakeLists.txt`
+- [x] (valid-doc, Copilot R3) "coerced to double" wording misleading — stored param keeps integer type, only internal value is double; clarified descriptor + test name/comment — `costmap_window_node.h`, `test/test_costmap_window_node.cpp`
 
 ### False positives
 - (none this round)
