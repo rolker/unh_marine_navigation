@@ -1,10 +1,20 @@
 #ifndef MARINE_NAV_UTILITIES_COSTMAP_WINDOW_H
 #define MARINE_NAV_UTILITIES_COSTMAP_WINDOW_H
 
+#include <cmath>
+
 #include "nav_msgs/msg/occupancy_grid.hpp"
 
 namespace marine_nav_utilities
 {
+
+/// A window size (meters) is usable only if it is finite and positive. A NaN
+/// would otherwise slip past a bare `<= 0` test into std::clamp (undefined
+/// behavior). Shared by cropCostmapWindow() and the node's parameter validation.
+inline bool windowSizeIsValid(double window_size_meters)
+{
+  return std::isfinite(window_size_meters) && window_size_meters > 0.0;
+}
 
 /// Center-crop a square window out of an OccupancyGrid.
 ///

@@ -17,11 +17,10 @@ nav_msgs::msg::OccupancyGrid cropCostmapWindow(
   const double resolution = input.info.resolution;
 
   // Nothing meaningful to crop from a degenerate grid or a bad window size.
-  // Reject non-finite resolution/window explicitly: a NaN slips past a bare
-  // `<= 0.0` test and std::clamp with a NaN bound is undefined behavior (it
-  // would otherwise collapse to a 0x0 grid).
+  // Reject a non-finite resolution explicitly: a NaN slips past a bare `<= 0.0`
+  // test and std::clamp with a NaN bound is undefined behavior.
   if (!std::isfinite(resolution) || resolution <= 0.0 || width == 0 || height == 0 ||
-    !std::isfinite(window_size_meters) || window_size_meters <= 0.0)
+    !windowSizeIsValid(window_size_meters))
   {
     return input;
   }

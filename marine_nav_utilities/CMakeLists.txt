@@ -91,6 +91,13 @@ if(BUILD_TESTING)
     ${PROJECT_NAME}
     ${nav_msgs_TARGETS}
   )
+
+  ament_add_gtest(test_costmap_window_node test/test_costmap_window_node.cpp)
+  target_link_libraries(test_costmap_window_node
+    ${PROJECT_NAME}
+    ${nav_msgs_TARGETS}
+    rclcpp::rclcpp
+  )
 endif()
 
 ament_package()
