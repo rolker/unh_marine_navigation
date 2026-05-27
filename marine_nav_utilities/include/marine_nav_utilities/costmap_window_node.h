@@ -1,11 +1,13 @@
 #ifndef MARINE_NAV_UTILITIES_COSTMAP_WINDOW_NODE_H
 #define MARINE_NAV_UTILITIES_COSTMAP_WINDOW_NODE_H
 
+#include <atomic>
 #include <functional>
 #include <vector>
 
 #include "marine_nav_utilities/costmap_window.h"
 #include "nav_msgs/msg/occupancy_grid.hpp"
+#include "rcl_interfaces/msg/parameter_descriptor.hpp"
 #include "rcl_interfaces/msg/set_parameters_result.hpp"
 #include "rclcpp/rclcpp.hpp"
 
@@ -26,7 +28,15 @@ public:
   explicit CostmapWindowNode(const rclcpp::NodeOptions & options)
   : rclcpp::Node("costmap_window", options)
   {
-    window_size_ = declare_parameter("window_size", 200.0);
+    // Dynamic typing so a bare integer (`ros2 param set ... window_size 100`)
+    // reaches the callback to be coerced, rather than being rejected up front by
+    // static type checking. The callback enforces the type and value.
+    rcl_interfaces::msg::ParameterDescriptor descriptor;
+    descriptor.dynamic_typing = true;
+    descriptor.description =
+      "Side length in meters of the square window cropped from the costmap "
+      "(finite, > 0). Integer values are accepted and coerced to double.";
+    window_size_ = declare_parameter("window_size", 200.0, descriptor);
 
     param_callback_handle_ = add_on_set_parameters_callback(
       std::bind(&CostmapWindowNode::onSetParameters, this, std::placeholders::_1));
@@ -55,7 +65,19 @@ private:
     result.successful = true;
     for (const auto & parameter : parameters) {
       if (parameter.get_name() == "window_size") {
-        const double value = parameter.as_double();
+        double value;
+        switch (parameter.get_type()) {
+          case rclcpp::ParameterType::PARAMETER_DOUBLE:
+            value = parameter.as_double();
+            break;
+          case rclcpp::ParameterType::PARAMETER_INTEGER:
+            value = static_cast<double>(parameter.as_int());
+            break;
+          default:
+            result.successful = false;
+            result.reason = "window_size must be a number (double or integer)";
+            continue;
+        }
         if (!windowSizeIsValid(value)) {
           result.successful = false;
           result.reason = "window_size must be finite and > 0";
@@ -69,19 +91,20 @@ private:
 
   void costmapCallback(const nav_msgs::msg::OccupancyGrid & grid)
   {
-    const auto windowed = cropCostmapWindow(grid, window_size_);
+    const double window_size = window_size_.load();
+    const auto windowed = cropCostmapWindow(grid, window_size);
     if (!logged_) {
       RCLCPP_INFO(
         get_logger(),
         "Cropping costmap %ux%u @ %.3f m -> %ux%u (window %.1f m)",
         grid.info.width, grid.info.height, grid.info.resolution,
-        windowed.info.width, windowed.info.height, window_size_);
+        windowed.info.width, windowed.info.height, window_size);
       logged_ = true;
     }
     publisher_->publish(windowed);
   }
 
-  double window_size_{200.0};
+  std::atomic<double> window_size_{200.0};
   bool logged_{false};
   OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr subscription_;

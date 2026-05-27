@@ -106,6 +106,23 @@ TEST(CropCostmapWindow, RotatedOriginShiftsAlongGridAxes)
   EXPECT_NEAR(out.info.origin.position.y, 2.0, 1e-9);
 }
 
+TEST(CropCostmapWindow, InvalidOriginQuaternionTreatedAsIdentity)
+{
+  auto in = makeGrid(8, 8, 1.0);
+  in.info.origin.orientation.w = 0.0;  // all-zero quaternion -> invalid
+
+  const auto out = cropCostmapWindow(in, 4.0);
+
+  // Offset computed as if identity: x0 = y0 = 2 cells -> shift (2, 2).
+  EXPECT_DOUBLE_EQ(out.info.origin.position.x, 2.0);
+  EXPECT_DOUBLE_EQ(out.info.origin.position.y, 2.0);
+  // Output orientation sanitized to identity, so the result is a valid grid.
+  EXPECT_DOUBLE_EQ(out.info.origin.orientation.x, 0.0);
+  EXPECT_DOUBLE_EQ(out.info.origin.orientation.y, 0.0);
+  EXPECT_DOUBLE_EQ(out.info.origin.orientation.z, 0.0);
+  EXPECT_DOUBLE_EQ(out.info.origin.orientation.w, 1.0);
+}
+
 TEST(CropCostmapWindow, DegenerateGridReturnedUnchanged)
 {
   const auto zero_res = makeGrid(8, 8, 0.0);

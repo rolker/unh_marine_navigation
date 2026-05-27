@@ -54,21 +54,27 @@ nav_msgs::msg::OccupancyGrid cropCostmapWindow(
   // Shift the origin to the cropped corner. info.origin is the pose of cell
   // (0,0); the new corner is (x0, y0) cells away along the grid's local axes, so
   // rotate that offset by the origin orientation before adding it to the origin
-  // position. Orientation is unchanged. A zero/unset quaternion is treated as
-  // identity (no rotation).
+  // position. A zero/unset/non-finite quaternion is treated as identity (no
+  // rotation). The sanitized, unit-normalized orientation is written back so the
+  // output is a self-consistent, valid grid even for malformed input.
   tf2::Quaternion q(
     input.info.origin.orientation.x, input.info.origin.orientation.y,
     input.info.origin.orientation.z, input.info.origin.orientation.w);
   if (!std::isfinite(q.length2()) || q.length2() < 1e-9) {
     q = tf2::Quaternion::getIdentity();
   }
+  q.normalize();
+
   const tf2::Vector3 world_offset =
-    tf2::Matrix3x3(q.normalized()) *
-    tf2::Vector3(x0 * resolution, y0 * resolution, 0.0);
+    tf2::Matrix3x3(q) * tf2::Vector3(x0 * resolution, y0 * resolution, 0.0);
 
   output.info.origin.position.x += world_offset.x();
   output.info.origin.position.y += world_offset.y();
   output.info.origin.position.z += world_offset.z();
+  output.info.origin.orientation.x = q.x();
+  output.info.origin.orientation.y = q.y();
+  output.info.origin.orientation.z = q.z();
+  output.info.origin.orientation.w = q.w();
 
   // Copy the windowed cells row by row (row-major, row 0 at the origin).
   output.data.resize(static_cast<size_t>(side) * side);

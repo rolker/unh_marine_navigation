@@ -30,8 +30,10 @@ inline bool windowSizeIsValid(double window_size_meters)
 /// geometric center, which is not the robot.
 ///
 /// The window side in cells is `round(window_size_meters / resolution)`, clamped
-/// to `[1, min(width, height)]`. If \p input has a non-positive resolution or no
-/// cells, it is returned unchanged.
+/// to `[1, min(width, height)]`. \p input is returned unchanged when it can't be
+/// cropped meaningfully: non-finite or non-positive resolution, zero width or
+/// height, a non-finite or non-positive \p window_size_meters, or a `data` size
+/// that doesn't equal `width * height`.
 nav_msgs::msg::OccupancyGrid cropCostmapWindow(
   const nav_msgs::msg::OccupancyGrid & input,
   double window_size_meters);
