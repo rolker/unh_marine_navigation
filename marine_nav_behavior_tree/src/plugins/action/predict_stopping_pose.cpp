@@ -87,16 +87,28 @@ BT::NodeStatus PredictStoppingPose::tick()
   auto odom_smoother =
     config().blackboard->get<std::shared_ptr<nav2_util::OdomSmoother>>("odom_smoother");
   auto robot_frame = config().blackboard->get<std::string>("robot_frame");
-  auto global_frame = config().blackboard->get<std::string>("global_frame");
+
+  // Project the stop point in the odometry frame the velocity is reported in
+  // (this is the behavior_server's local_frame, e.g. <tf_prefix>/odom). Holding
+  // station there lets Hover consume the result directly with no per-cycle map
+  // transform, and avoids making Hover depend on a global (map) transform it
+  // never otherwise needs — an unavailable map would otherwise abort the whole
+  // HoverTask. Fall back to the navigator's global_frame only if no odom has
+  // arrived yet (zero velocity then ⇒ the projection holds the current pose).
+  std::string projection_frame = odom_smoother->getTwistStamped().header.frame_id;
+  if (projection_frame.empty())
+  {
+    projection_frame = config().blackboard->get<std::string>("global_frame");
+  }
 
   geometry_msgs::msg::PoseStamped current;
   if (!nav2_util::getCurrentPose(
-      current, *tf_buffer, global_frame, robot_frame, 0.1))
+      current, *tf_buffer, projection_frame, robot_frame, 0.1))
   {
     RCLCPP_ERROR(
       node->get_logger(),
       "PredictStoppingPose: current robot pose unavailable (%s -> %s)",
-      global_frame.c_str(), robot_frame.c_str());
+      projection_frame.c_str(), robot_frame.c_str());
     return BT::NodeStatus::FAILURE;
   }
 

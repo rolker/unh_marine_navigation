@@ -96,10 +96,18 @@ nav2_behaviors::ResultStatus Hover::onCycleUpdate()
   geometry_msgs::msg::PoseStamped target_local = target_pose_;
   if (target_pose_.header.frame_id != local_frame_)
   {
+    // Resolve the hold point at the latest available transform (stamp 0), not
+    // the target's engagement-time stamp. A station can be held for tens of
+    // seconds — well past the TF buffer — so a fixed old stamp would fall out
+    // of the cache and throw. Latest-time is also the correct semantics for
+    // tracking a fixed point in a frame that drifts relative to local_frame_.
+    geometry_msgs::msg::PoseStamped target_query = target_pose_;
+    target_query.header.stamp.sec = 0;
+    target_query.header.stamp.nanosec = 0;
     try
     {
       target_local = tf_->transform(
-        target_pose_, local_frame_, tf2::durationFromSec(transform_tolerance_));
+        target_query, local_frame_, tf2::durationFromSec(transform_tolerance_));
     }
     catch (const tf2::TransformException & ex)
     {
