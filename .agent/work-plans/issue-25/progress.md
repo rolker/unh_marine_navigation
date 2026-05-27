@@ -219,3 +219,27 @@ Whole-package lint cleanup would be a separate issue.
 **Remaining before PR-ready:** (1) runtime full-tree load verification in sim (no standalone
 harness loads run_tasks.xml; dovetails with the #35 Nav2-resend spike); (2) /review-code
 pre-push; (3) flip PR #37 out of draft after sim verification.
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-05-27 14:10 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+**Verdict**: approved (1 must-fix found + fixed)
+
+**Branch**: feature/issue-25 at `300fad7`
+**Mode**: pre-push (base origin/jazzy)
+**Depth**: Deep (reason: mission-critical autonomy BT control-flow — Switch halt, RecoveryNode retry/cancel, failure routing)
+**Specialists**: Claude Adversarial (Deep) ✓; Copilot Adversarial skipped (CLI auth error mid-run — needs `copilot` re-login); Static/Governance/Plan-Drift inline.
+**Must-fix**: 1 (fixed) | **Suggestions**: 3
+
+### Findings
+- [x] (must-fix) Null `current_task` deref in SetTaskDone/SetTaskFailed default catchall on the clear-mission path — guarded in `300fad7` (+ null-task test). `set_task_{done,failed}.cpp`
+- [ ] (suggestion) RecoveryNode retry re-follows the full `{survey_path}`, re-covering surveyed trackline — confirm acceptable in sim. `run_tasks.xml` SurveyLine
+- [ ] (suggestion) Stacked retries: RetryUntilSuccessful(3) × RecoveryNode(3) = up to 9 FollowPath attempts (with 5s Waits) on a persistently-stuck nested sub-line before skip — confirm the retry budget / time-to-skip is intended, or reduce a count. `run_tasks.xml` nested loops
+- [ ] (suggestion) `SetTaskFailed` `attempts` port is never wired (BT can't read RecoveryNode/Retry counters) — reserved for future use; drop or document. `set_task_failed.cpp`
+
+**Verified-correct (adversarial):** Switch halt on mid-run type change preserves clear→resend; Fallback+SetTaskFailed advances without infinite loop / re-exec; nested skip-and-continue terminates via AllTasksDone; all nav2/BT nodes resolve (no tree-load failure from node names); `wait` server configured; `_autoremap`/task-key wiring correct; tests faithfully model routing.
+
+**Governance:** Principles — transparency Pass (failures recorded+logged, no silent done), test-what-breaks Pass (node+routing fixtures; full-tree → #8), only-what's-needed Pass. ADR-0008/0002 Pass. Consequence: writing `TaskInformation.status` surfaces in camp via `unh_marine_autonomy/.../camp_interface.py` (cross-repo, no `.msg` change) — second-consumer grep still an open pre-merge item.
+**Plan drift:** Implementation matches plan (Switch + SetTaskFailed + RecoveryNode[Wait] + nested Switch-ify + routing fixture). The 3×3 stacked-retry interaction (suggestion 3) is an emergent gap the plan didn't call out.
+**Static:** package-wide pre-existing lint debt (cpplint/copyright/uncrustify); new files follow house style; pre-commit (enforced) passes. No new actionable static findings.
