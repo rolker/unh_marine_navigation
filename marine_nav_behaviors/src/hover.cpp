@@ -1,5 +1,6 @@
 #include "marine_nav_behaviors/hover.h"
 #include "nav2_util/node_utils.hpp"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 namespace marine_nav_behaviors
 {
@@ -23,8 +24,6 @@ void Hover::onConfigure()
   nav2_util::declare_parameter_if_not_declared(
     node, behavior_name_+".maximum_rotation_speed", rclcpp::ParameterValue(maximum_rotation_speed_));
   nav2_util::declare_parameter_if_not_declared(
-    node, behavior_name_+".deceleration", rclcpp::ParameterValue(deceleration_));
-  nav2_util::declare_parameter_if_not_declared(
     node, behavior_name_+".generate_visualization", rclcpp::ParameterValue(generate_visualization_));
 }
 
@@ -36,7 +35,6 @@ nav2_behaviors::ResultStatus Hover::onRun(const std::shared_ptr<const HoverActio
   node->get_parameter(behavior_name_+".minimum_speed", minimum_speed_);
   node->get_parameter(behavior_name_+".maximum_speed", maximum_speed_);
   node->get_parameter(behavior_name_+".maximum_rotation_speed", maximum_rotation_speed_);
-  node->get_parameter(behavior_name_+".deceleration", deceleration_);
   node->get_parameter(behavior_name_+".generate_visualization", generate_visualization_);
 
   if(generate_visualization_)
@@ -58,7 +56,14 @@ nav2_behaviors::ResultStatus Hover::onRun(const std::shared_ptr<const HoverActio
     maximum_speed_ = goal->maximum_speed;
   }
 
-  if (!nav2_util::getCurrentPose(
+  // An empty target frame_id is the sentinel for "hold the current pose"
+  // (pre-target behavior). A set frame_id holds the supplied pose — e.g. the
+  // momentum-projected stop point from PredictStoppingPose.
+  if (!goal->target.header.frame_id.empty())
+  {
+    target_pose_ = goal->target;
+  }
+  else if (!nav2_util::getCurrentPose(
     target_pose_, *this->tf_, this->local_frame_, this->robot_base_frame_,
     this->transform_tolerance_))
   {
@@ -80,8 +85,30 @@ nav2_behaviors::ResultStatus Hover::onCycleUpdate()
     return nav2_behaviors::ResultStatus{nav2_behaviors::Status::FAILED, HoverAction::Result::TF_ERROR};
   }
 
-  double diff_x = target_pose_.pose.position.x - current_pose.pose.position.x;
-  double diff_y = target_pose_.pose.position.y - current_pose.pose.position.y;
+  // The hold target may be expressed in any frame (e.g. odom from
+  // PredictStoppingPose, or map for a geo-referenced station). Transform it
+  // into local_frame_ every cycle — keeping target_pose_ in its original frame
+  // — so a target held in a drifting frame keeps tracking that frame rather
+  // than being frozen at engagement. No-op copy when frames already match.
+  geometry_msgs::msg::PoseStamped target_local = target_pose_;
+  if (target_pose_.header.frame_id != local_frame_)
+  {
+    try
+    {
+      target_local = tf_->transform(
+        target_pose_, local_frame_, tf2::durationFromSec(transform_tolerance_));
+    }
+    catch (const tf2::TransformException & ex)
+    {
+      RCLCPP_ERROR(
+        logger_, "Hover: could not transform target into %s: %s",
+        local_frame_.c_str(), ex.what());
+      return nav2_behaviors::ResultStatus{nav2_behaviors::Status::FAILED, HoverAction::Result::TF_ERROR};
+    }
+  }
+
+  double diff_x = target_local.pose.position.x - current_pose.pose.position.x;
+  double diff_y = target_local.pose.position.y - current_pose.pose.position.y;
   double current_range = hypot(diff_x, diff_y);
   double current_bearing = atan2(diff_y, diff_x);
 

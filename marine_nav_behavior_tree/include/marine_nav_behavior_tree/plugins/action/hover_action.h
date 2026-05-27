@@ -3,6 +3,7 @@
 
 #include "nav2_behavior_tree/bt_action_node.hpp"
 #include "marine_nav_interfaces/action/hover.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
 
 namespace marine_nav_behavior_tree
 {
@@ -31,6 +32,7 @@ public:
   {
     return providedBasicPorts(
     {
+      BT::InputPort<geometry_msgs::msg::PoseStamped>("target", "Pose to hold station at; an empty header.frame_id means hold the current pose"),
       BT::InputPort<double>("minimum_radius", 0.0, "Radius within which robot is deemed at the target and drifts"),
       BT::InputPort<double>("maximum_radius", 0.0, "Radius at which robot uses maximum speed to get to the target"),
       BT::InputPort<double>("maximum_speed", 0.0, "Maximum speed to use to get to the target"),

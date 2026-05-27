@@ -62,31 +62,38 @@ doubles** into the goal; masked only by `hover.cpp:52`'s `> 0.0` guard).
 2. **`hover.cpp` / `hover.h`** —
    - `onRun`: `target_pose_ = goal->target.header.frame_id.empty() ? <getCurrentPose> : goal->target;`
    - Remove the `deceleration_` member + its declare + its read (retired).
-   - `onCycleUpdate`: **at the top**, transform `target_pose_` **in place** into `local_frame_`
-     via `tf_` (frame-agnostic; identity when both are odom, real transform if a platform holds
-     in map). Wrap in try/catch on `tf2::TransformException` → return `TF_ERROR` (mirror the
-     existing `getCurrentPose` failure path, `hover.cpp:64-67`); don't let it propagate.
-     In-place keeps `publish_visualization`'s marker frame (`hover.cpp:181,202`) consistent.
-     The v4 speed/steering logic below is **untouched**.
+   - `onCycleUpdate`: **at the top**, transform the target into `local_frame_` **into a
+     per-cycle local copy** (keeping `target_pose_` in its received frame) via `tf_`
+     (frame-agnostic; identity when already in `local_frame_`, real transform if held in map).
+     Wrap in try/catch on `tf2::TransformException` → return `TF_ERROR` (mirror the existing
+     `getCurrentPose` failure path, `hover.cpp:64-67`); don't let it propagate. A local copy
+     (not in-place) is required so a target held in a drifting frame keeps tracking that frame
+     every cycle rather than being frozen at engagement — see Implementation Notes. The v4
+     speed/steering logic below is **untouched**.
 3. **New BT node `PredictStoppingPose`** (`BT::SyncActionNode`, ported from `1c5db5a^`):
    - Ports: input `deceleration` (double < 0), output `pose` (PoseStamped). Good port
      descriptions (they feed the auto-generated Groot nodes-XML — see step 7).
-   - Reads `tf_buffer`, `odom_smoother`, and `robot_frame` from the blackboard (all seeded by
-     the nav2 base / task_navigator). **No subscription** (BT node runs on the unspun client
-     node).
-   - Math: look up current pose (robot_frame → odom) via `tf_buffer` → position + orientation;
-     get smoothed body twist from `odom_smoother.getTwist()`; rotate twist → world **using the
-     orientation from that same tf lookup** (**the easy-to-miss gotcha**; full 2D velocity incl.
-     crabbing); `stop = position + v̂·|v|²/(2·|decel|)`. Output PoseStamped in the lookup frame
-     (odom). Zero velocity ⇒ pose == current.
+   - Reads `tf_buffer`, `odom_smoother`, `robot_frame`, and `global_frame` from the blackboard
+     (`tf_buffer`/`odom_smoother` seeded by the nav2 base; `robot_frame`/`global_frame` by
+     task_navigator). **No subscription** (BT node runs on the unspun client node).
+   - Math (static, unit-tested helper `projectStoppingPose`): look up current pose
+     (robot_frame → global_frame) via `tf_buffer` → position + orientation; get smoothed body
+     twist from `odom_smoother.getTwist()`; rotate twist → world **using the orientation from
+     that same tf lookup** (**the easy-to-miss gotcha**; full 2D velocity incl. crabbing);
+     `stop = position + v̂·|v|²/(2·|decel|)`. Output PoseStamped in `global_frame`. Zero velocity
+     or non-negative deceleration ⇒ pose == current.
    - Register in `bt_register_nodes.cpp`.
 4. **`task_navigator.cpp` / `.h`** — declare `default_deceleration` param (default `-0.45`);
-   seed it onto the blackboard in `configure()` (same pattern as `robot_frame:41`).
+   seed `default_deceleration` **and** `global_frame` onto the blackboard in `configure()`
+   (same pattern as the existing `robot_frame:41` seed).
 5. **`hover_action.cpp` / `.h`** — add input port `target` (PoseStamped) → `goal_.target`.
-6. **`run_tasks.xml` `HoverTask`** — replace `<AlwaysSuccess/>` with
-   `<PredictStoppingPose deceleration="{default_deceleration}" pose="{hover_target}"/>`; pass
-   `target="{hover_target}"` to `<Hover>`. The location branch (`GotoPose`) leaves
-   `hover_target` empty so Hover holds the post-transit pose.
+6. **`run_tasks.xml` `HoverTask`** — insert
+   `<PredictStoppingPose deceleration="{default_deceleration}" pose="{hover_target}"/>`
+   **after** the transit-resolution Fallback (it runs on both paths — `AlwaysSuccess` stays as
+   the no-transit marker), and pass `target="{hover_target}"` to `<Hover>`. Running it on every
+   entry — rather than only the no-location branch — keeps `{hover_target}` fresh (no stale
+   target leaking across hovers) and post-transit the boat is ~stopped so it ≈ the current pose.
+   See Implementation Notes.
 7. **Groot model** — the canonical node model is the **auto-generated**
    `marine_nav_behavior_tree_nodes.xml` (`CMakeLists.txt:151-153` POST_BUILD), driven by the
    new node's `providedPorts()` — so good port descriptions there are sufficient. The
@@ -118,13 +125,13 @@ doubles** into the goal; masked only by `hover.cpp:52`'s `> 0.0` guard).
 | File | Change | Commit |
 |------|--------|--------|
 | `marine_nav_behavior_tree/.../plugins/action/hover_action.{h,cpp}` | Rename ports `*_distance`→`*_radius`; zero-init; **(C2)** add `target` port | 1, 2 |
-| `marine_nav_bt_task_navigator/behavior_trees/run_tasks.xml` | Port-attr rename; HoverTask PredictStoppingPose branch + `target` to Hover | 1, 2 |
+| `marine_nav_bt_task_navigator/behavior_trees/run_tasks.xml` | Port-attr rename; PredictStoppingPose after the HoverTask Fallback + `target` to Hover; embedded `TreeNodesModel` updated (Hover `target` port, PredictStoppingPose entry) | 1, 2 |
 | `marine_nav_interfaces/action/Hover.action` | Add `geometry_msgs/PoseStamped target` **+ a comment documenting the empty-`frame_id`⇒hold-current sentinel** | 2 |
 | `marine_nav_behaviors/{include/.../hover.h,src/hover.cpp}` | onRun sentinel; remove `deceleration_`; onCycleUpdate target→local_frame_; **(C3)** live `point_at_target` + reverse | 2, 3 |
 | `marine_nav_behavior_tree/.../plugins/action/predict_stopping_pose.{h,cpp}` | **New** BT node (reads `tf_buffer` + `odom_smoother` from blackboard; no subscription) | 2 |
 | `marine_nav_behavior_tree/src/bt_register_nodes.cpp` | Register `PredictStoppingPose` | 2 |
 | `marine_nav_bt_task_navigator/{.../task_navigator.h,src/task_navigator.cpp}` | `default_deceleration` param + blackboard seed | 2 |
-| `marine_nav_bt_task_navigator/behavior_trees/nav2.btproj` | Update palette entry signature | 2 |
+| `marine_nav_bt_task_navigator/behavior_trees/nav2.btproj` | Left untouched — optional cosmetic; canonical model is the generated `*_nodes.xml` + the embedded `TreeNodesModel` (updated) | — |
 | `marine_nav_behavior_tree/CMakeLists.txt` + new `test/` | Add node to plugin lib + gtest | 2 |
 
 ## Principles Self-Check
@@ -165,3 +172,28 @@ reverse-sign interaction — both folded in above. Remaining items are **validat
 
 Single PR in `unh_marine_navigation` (3 commits) + 3 tiny config-cleanup PRs in 3 sibling
 repos (opened now). On-water re-validation required before relying on it operationally.
+
+## Implementation Notes
+
+- **PredictStoppingPose runs on both HoverTask paths, not just the no-location branch.** The
+  issue sketch replaced the dead `<AlwaysSuccess/>` (no-location branch) with the node. But
+  `{hover_target}` is a persistent blackboard key: if only the no-location branch wrote it, a
+  later *location* hover would read a stale projected point. Running PredictStoppingPose once
+  after the transit-resolution Fallback writes `{hover_target}` fresh on every hover entry;
+  post-transit the boat is ~stopped so the projection ≈ the current pose (the prior
+  "hold post-transit pose" behavior), and an arriving-at-speed no-location hover gets the
+  momentum projection. `HoverAction` also treats an unset/empty `target` as "hold current",
+  so the path is safe even if `{hover_target}` is never written.
+- **`onCycleUpdate` transforms the target into a per-cycle local copy, not in place.**
+  Transforming `target_pose_` in place would freeze it in `local_frame_` after cycle 1 (the
+  `frame_id == local_frame_` guard would skip subsequent transforms), defeating drift-tracking
+  for a target held in a slowly-drifting frame (e.g. map). Keeping `target_pose_` in its
+  received frame and transforming into a local copy each cycle preserves that tracking; the
+  visualization marker therefore renders in the target's original frame (RViz resolves it).
+- **Build-env gotcha (not a code issue):** building a single overlay package in the worktree
+  picks up the **stale main `core_ws/install`** (it predates these source changes), shadowing
+  the freshly-built interfaces/plugin libs — symptoms were an `undefined SetControllerSpeed::
+  providedPorts` at the nodes-XML codegen step and `Hover::Goal has no member target`. Fixed
+  by building `marine_nav_interfaces` first, sourcing the worktree `core_ws/install` so it
+  precedes main, and prepending the plugin build dir to `LD_LIBRARY_PATH` for the codegen. The
+  durable fix is a fresh main `core_ws` build; flagged to the user separately.

@@ -24,6 +24,12 @@ void HoverAction::initialize()
   goal_.maximum_radius = maximum_radius;
   goal_.maximum_speed = maximum_speed;
 
+  // Optional hold pose. When the port is unset (e.g. the post-transit
+  // location branch never writes {hover_target}), leave target with an empty
+  // frame_id — the Hover behavior treats that as "hold the current pose".
+  goal_.target = geometry_msgs::msg::PoseStamped();
+  getInput("target", goal_.target);
+
 }
 
 void HoverAction::on_tick()

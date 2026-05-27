@@ -13,6 +13,7 @@
 #include "marine_nav_behavior_tree/plugins/action/sonar_coverage_action.h"
 #include "marine_nav_behavior_tree/plugins/action/sonar_coverage_cancel_node.h"
 #include "marine_nav_behavior_tree/plugins/action/path_to_pose_vector.h"
+#include "marine_nav_behavior_tree/plugins/action/predict_stopping_pose.h"
 #include "marine_nav_behavior_tree/plugins/action/set_controller_speed.h"
 #include "marine_nav_behavior_tree/plugins/action/set_path_from_task.h"
 #include "marine_nav_behavior_tree/plugins/action/set_polygon_from_task.h"
@@ -75,6 +76,7 @@ BT_REGISTER_NODES(factory)
   factory.registerBuilder<marine_nav_behavior_tree::SonarCoverageCancel>("CancelSonarCoverage", multibeam_coverage_cancel_builder);
 
   factory.registerNodeType<marine_nav_behavior_tree::PathToPoseVector>("PathToPoseVector");
+  factory.registerNodeType<marine_nav_behavior_tree::PredictStoppingPose>("PredictStoppingPose");
   factory.registerNodeType<marine_nav_behavior_tree::SetControllerSpeed>("SetControllerSpeed");
   factory.registerNodeType<marine_nav_behavior_tree::SetPathFromTask>("SetPathFromTask");
   factory.registerNodeType<marine_nav_behavior_tree::SetPolygonFromTask>("SetPolygonFromTask");

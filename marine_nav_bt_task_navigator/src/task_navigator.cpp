@@ -28,6 +28,15 @@ bool TaskNavigator::configure(
     node, getName()+".debug", rclcpp::ParameterValue(false));
   debug_ = node->get_parameter(getName()+".debug").as_bool();
 
+  // Vehicle deceleration capability (m/s^2, < 0) used by PredictStoppingPose to
+  // project the Hover stop point. Seeded onto the blackboard below so the BT
+  // node can read it via {default_deceleration}. Default is boat-realistic;
+  // per-hull overrides live in each platform's navigator params.
+  nav2_util::declare_parameter_if_not_declared(
+    node, getName()+".default_deceleration", rclcpp::ParameterValue(-0.45));
+  const double default_deceleration =
+    node->get_parameter(getName()+".default_deceleration").as_double();
+
   clock_ = node->get_clock();
 
   marine_nav_behavior_tree::registerJsonDefinitions();
@@ -39,6 +48,8 @@ bool TaskNavigator::configure(
   }
 
   bt_action_server_->getBlackboard()->set("robot_frame", feedback_utils_.robot_frame);
+  bt_action_server_->getBlackboard()->set("global_frame", feedback_utils_.global_frame);
+  bt_action_server_->getBlackboard()->set("default_deceleration", default_deceleration);
 
   return true;
 }
