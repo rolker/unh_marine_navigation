@@ -93,3 +93,28 @@ Plan rewritten to the combined scope (Parts A–D). Central risk: the Part C
 preempt-vs-fail seam (a legitimate switch must not burn the retry budget or be flagged
 `failed`) — pinned by the re-entry test fixture. `unh_marine_navigation#35` plan is
 superseded by this combined plan.
+
+## Plan Review
+**Status**: complete
+**When**: 2026-05-27 10:33 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context)) — independent fresh-context sub-agent review (same agent identity, but no access to author reasoning)
+
+**Plan**: `.agent/work-plans/issue-25/plan.md` at `ebb2da9`
+**PR**: https://github.com/rolker/unh_marine_navigation/pull/37
+**Verdict**: changes-requested
+
+Diagnosis, merge rationale, the Switch-vs-default structural fix, and principle/ADR
+alignment are sound. But Part C (the central design artifact) was built on a wrong model
+of the tree, and the status→operator path was misattributed. All findings below verified
+against source before persisting.
+
+### Findings
+- [ ] (must-fix) Part C `SurveyLineTask` structure wrong: the survey `FollowPath` is two subtree levels down (`SurveyLineTask → TransitAndSurveyLine → SurveyLine`), behind a transit leg (`NavigateThroughWaypoints`). The plan's diagram places `FollowPath` directly under the identity gate — not implementable as drawn. — `run_tasks.xml:347,362,282`; `plan.md` Part C
+- [ ] (must-fix) Identity gate can't halt a RUNNING `FollowPath` from inside `SurveyLineTask`'s memory `Sequence`; the reactive wrapper already exists inside `SurveyLine` (around `FollowPath`) — the gate must live there (and likely use `CancelAllNavigation` on re-latch). — `run_tasks.xml:282-302`
+- [ ] (must-fix) Part C retry-budget concern under-characterized: real risks are no-halt/re-latch loop, transit-leg replay on re-entry, and `SetPathFromTask` (SyncAction) re-emitting the path every tick if placed above a reactive gate. Redesign against the real two-level nesting. — `set_path_from_task.cpp:60-71`
+- [ ] (must-fix) Status→operator path misattributed: it is `task_navigator.cpp:116` (`taskMessages()` feedback) → `unh_marine_autonomy/.../camp_interface.py:listTasks` (`if len(task.status): ' status: ' + str(task.status)`), NOT `bt_types.cpp:245`. Writing `status` for the first time changes camp text TODAY — a cross-repo consequence the table reduces to "audit." (`.msg`-unchanged conclusion still holds.) — `camp_interface.py:94-95`
+- [ ] (suggestion) "Structured status as a stable contract for camp" overstated — `camp_interface.py` renders `str(task.status)`; no consumer parses `{outcome,reason,attempts}` today.
+- [ ] (suggestion) `Switch` is not reactive across ticks like the current `ReactiveFallback`; confirm the top-level `ReactiveSequence` re-tick of `UpdateCurrentTaskData` still drives re-selection on a mid-run type change.
+- [ ] (suggestion) "Mirror at all three levels" is three *different* edits — nested levels use `_failureIf` + `RetryUntilSuccessful` already; not one repeated edit.
+- [ ] (suggestion) gtest infra already exists (`test_set_controller_speed_resolve.cpp`) — "extend," not "add"; the re-entry fixture must model the real two-level `FollowPath` placement or it validates a tree that isn't shipped.
+- [ ] (suggestion) `path_task_id`/`current_task_id` resolution across the three `SurveyLineTask` call sites (different id keys + `_autoremap`) is a correctness item, not just validation.
