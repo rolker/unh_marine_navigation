@@ -49,3 +49,21 @@ All resolved in `b5ef231` (16 gtest cases pass; integer/double/invalid param beh
 
 ### Note
 The initial runtime check appeared to show the integer set still rejected; this was an **orphaned stale node** from a `ros2 run … &` + `kill <wrapper-pid>` pattern (killed the wrapper, the node lingered). After clearing orphans and running the binary directly, integer coercion works as designed. Reinforces the workspace rule against backgrounded `ros2 run`/`launch` for lifecycle.
+
+## Integrated Review
+**Status**: complete
+**When**: 2026-05-27 13:19 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**PR**: #39 at `c09d45a`
+**Sources**: 2 (Copilot R3 @ `c09d45a`, prior Integrated Review @ `ad1106c`)
+**Cross-source confirmations**: 0 (all R3 comments are new, about the round-1 fixes)
+**CI**: all-pass (copilot reviewer check)
+
+### Findings
+- [ ] (valid, Copilot R3) non-atomic param callback: on-set mutates `window_size_` before the request is known to succeed (and `continue`s on type failure); diverges from the store if a co-set param fails. Refactor to pre-set validate-only + `add_post_set_parameters_callback` apply — `costmap_window_node.h`
+- [ ] (valid, Copilot R3) `ament_export_dependencies` missing `tf2` (public header includes tf2, lib links tf2::tf2); breaks downstream find_package transitive deps — `marine_nav_utilities/CMakeLists.txt`
+- [ ] (valid-doc, Copilot R3) "coerced to double" wording misleading — stored param keeps integer type, only internal value is double; clarify descriptor + test comment — `costmap_window_node.h`, `test/test_costmap_window_node.cpp`
+
+### False positives
+- (none this round)
