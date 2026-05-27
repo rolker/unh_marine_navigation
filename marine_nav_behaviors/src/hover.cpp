@@ -1,4 +1,5 @@
 #include "marine_nav_behaviors/hover.h"
+#include "marine_nav_behaviors/hover_heading.h"
 #include "nav2_util/node_utils.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
@@ -23,6 +24,8 @@ void Hover::onConfigure()
     node, behavior_name_+".maximum_speed", rclcpp::ParameterValue(maximum_speed_));
   nav2_util::declare_parameter_if_not_declared(
     node, behavior_name_+".maximum_rotation_speed", rclcpp::ParameterValue(maximum_rotation_speed_));
+  nav2_util::declare_parameter_if_not_declared(
+    node, behavior_name_+".point_at_target", rclcpp::ParameterValue(point_at_target_));
   nav2_util::declare_parameter_if_not_declared(
     node, behavior_name_+".generate_visualization", rclcpp::ParameterValue(generate_visualization_));
 }
@@ -123,6 +126,23 @@ nav2_behaviors::ResultStatus Hover::onCycleUpdate()
   else if (steering_angle < -M_PI)
     steering_angle += 2.0 * M_PI;
 
+  // Read the heading mode live so an operator can A/B it on the water with
+  // `ros2 param set /<ns>/behavior_server hover.point_at_target {true,false}`.
+  if (auto node = node_.lock())
+  {
+    node->get_parameter(behavior_name_ + ".point_at_target", point_at_target_);
+  }
+
+  // Default (point_at_target_ == true): always face the hold point. When false:
+  // approach forward or in reverse, whichever needs less rotation (ArduPilot
+  // LOIT_TYPE=0), spending less yaw thrust to hold station. The reverse choice
+  // is carried by drive_sign and applied to linear.x last, so the speed-
+  // magnitude logic below (including the v4 floor) is untouched and a negative
+  // speed is not clobbered by std::max.
+  const auto approach = chooseApproachHeading(steering_angle, point_at_target_);
+  steering_angle = approach.steering_angle;
+  const double drive_sign = approach.drive_sign;
+
   double steering_speed = (steering_angle/M_PI) * maximum_rotation_speed_;
 
   double steering_proportion = abs(steering_angle) / M_PI;
@@ -183,7 +203,7 @@ nav2_behaviors::ResultStatus Hover::onCycleUpdate()
   cmd_vel->header.stamp = this->clock_->now();
   cmd_vel->header.frame_id = this->robot_base_frame_;
   cmd_vel->twist.angular.z = steering_speed;
-  cmd_vel->twist.linear.x = current_target_speed;
+  cmd_vel->twist.linear.x = drive_sign * current_target_speed;
 
   RCLCPP_DEBUG_STREAM(logger_, "Hover: " << diff_x << ","  << diff_y << " range: " << current_range << " angle: " << steering_angle << "\tOutput cmd_vel: " << cmd_vel->twist.linear.x << " " << cmd_vel->twist.angular.z);
 

@@ -117,8 +117,10 @@ doubles** into the goal; masked only by `hover.cpp:52`'s `> 0.0` guard).
      `linear.x` back to positive and defeat reverse mode. The reverse branch must bypass or
      sign-mirror those `std::max` floors. This is the most likely place D2 silently fights
      itself — handle it explicitly.
-10. **Validation** — `onCycleUpdate` needs a behavior fixture; cover the forward-vs-reverse
-    selection as a pure helper unit test if extractable, else on-water A/B (toggle live).
+10. **Test** — the forward-vs-reverse choice is extracted into a pure, dependency-free helper
+    `chooseApproachHeading` (`hover_heading.h`) and unit-tested (6 gtests covering the
+    point_at_target bypass, the reverse threshold, the 90° tie, and directly-behind). The
+    `onCycleUpdate` integration + v4-floor reconciliation is verified on-water (A/B the toggle).
 
 ## Files to Change
 
@@ -127,7 +129,8 @@ doubles** into the goal; masked only by `hover.cpp:52`'s `> 0.0` guard).
 | `marine_nav_behavior_tree/.../plugins/action/hover_action.{h,cpp}` | Rename ports `*_distance`→`*_radius`; zero-init; **(C2)** add `target` port | 1, 2 |
 | `marine_nav_bt_task_navigator/behavior_trees/run_tasks.xml` | Port-attr rename; PredictStoppingPose after the HoverTask Fallback + `target` to Hover; embedded `TreeNodesModel` updated (Hover `target` port, PredictStoppingPose entry) | 1, 2 |
 | `marine_nav_interfaces/action/Hover.action` | Add `geometry_msgs/PoseStamped target` **+ a comment documenting the empty-`frame_id`⇒hold-current sentinel** | 2 |
-| `marine_nav_behaviors/{include/.../hover.h,src/hover.cpp}` | onRun sentinel; remove `deceleration_`; onCycleUpdate target→local_frame_; **(C3)** live `point_at_target` + reverse | 2, 3 |
+| `marine_nav_behaviors/{include/.../hover.h,src/hover.cpp}` | onRun sentinel; remove `deceleration_`; onCycleUpdate target→local_frame_; **(C3)** live `point_at_target` + reverse via `chooseApproachHeading` | 2, 3 |
+| `marine_nav_behaviors/include/marine_nav_behaviors/hover_heading.h` + `test/` + CMakeLists/package.xml | **(C3, new)** pure `chooseApproachHeading` helper + gtest (adds gtest infra to the package) | 3 |
 | `marine_nav_behavior_tree/.../plugins/action/predict_stopping_pose.{h,cpp}` | **New** BT node (reads `tf_buffer` + `odom_smoother` from blackboard; no subscription) | 2 |
 | `marine_nav_behavior_tree/src/bt_register_nodes.cpp` | Register `PredictStoppingPose` | 2 |
 | `marine_nav_bt_task_navigator/{.../task_navigator.h,src/task_navigator.cpp}` | `default_deceleration` param + blackboard seed | 2 |

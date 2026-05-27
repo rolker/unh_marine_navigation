@@ -53,6 +53,16 @@ install(FILES behavior_plugin.xml
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
+
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_hover_heading
+    test/test_hover_heading.cpp
+  )
+  if(TARGET test_hover_heading)
+    target_include_directories(test_hover_heading PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    )
+  endif()
 endif()
 
 ament_package()

@@ -3,9 +3,9 @@
 // rotation (the easy-to-miss gotcha), the crabbing term, the v^2/(2|a|) stop
 // distance, and the no-projection guards.
 
-#include <cmath>
-
 #include <gtest/gtest.h>
+
+#include <cmath>
 
 #include <tf2/LinearMath/Quaternion.h>  // NOLINT(build/include_order)
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
