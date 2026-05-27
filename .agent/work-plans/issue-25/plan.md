@@ -57,28 +57,50 @@ Single PR on `feature/issue-25`.
    `ReactiveSequence` still re-ticks `UpdateCurrentTaskData` so a type change mid-run is
    still observed (the existing clear→resend path relies on this).
 2. **Marine recovery wrapper (centralized at `SurveyLine`).** Wrap the survey-line
-   `FollowPath` (in `SurveyLine`, the shared unit) in a Nav2 `RecoveryNode num_retries=3`
-   with a **marine recovery** (candidate: `Wait`, or the custom `hover` behavior — see
-   Open Questions) as the recovery branch. A transient ABORT triggers recover-then-retry.
-   Because `SurveyLine` is reused at all three call sites, this is **one edit, not three**
-   — superseding the earlier "mirror at three levels" framing for the *retry* axis.
-3. **New `SetTaskFailed` node + record-failed exits.** When recovery is exhausted the
-   subtree FAILs. `SetTaskFailed` (sibling of `SetTaskDone`) writes
-   `status` (a short structured map, e.g. `{outcome: failed, reason: <error_code>,
-   attempts: N}`; rendered stringified by camp today) + `setDone()` so the mission
-   advances + `RCLCPP_ERROR`. Wire it so a matched-but-failed case records-failed rather
-   than clean-done, at the top-level `Switch` case **and** at the nested loops
-   (`RunSurveyAreaSubTasks` `:198`, `SurveyLineSetTask` `:330`) so a failed sub-line is
-   recorded and the area/set **continues** its remaining lines (skip-and-continue). This
-   *record/advance* axis genuinely is three edits (different surrounding structures).
+   `FollowPath` (the last child of `SurveyLine`'s inner `ReactiveSequence`,
+   `run_tasks.xml:286-302`) in a Nav2 `RecoveryNode num_retries=3` whose recovery branch
+   is the stock **`Wait` BT action node** (a short dwell → behavior_server `wait`). Note:
+   the recovery is invoked via a *BT action node* (`Wait`, or the repo's custom `Hover`
+   node at `bt_register_nodes.cpp:52`), **not** the `behavior_server` plugin list — there
+   is no stock `hover` BT node, so `Wait` is the default (Open Q1). Because `SurveyLine` is
+   the shared unit, this is **one edit, not three** for the *retry* axis. Wrap scope =
+   `FollowPath` only (not the whole `ReactiveSequence`), so the one-time
+   `CancelAllNavigation` at `SurveyLine` entry (`:284`) is **not** re-run on retry.
+   Caveats to honor (from review): (a) on retry the controller re-follows the **full**
+   `{survey_path}` — `CrabbingPathFollower` resumes from the nearest path point, so
+   re-coverage is minimal, but **validate in sim**; (b) recovery only rescues *transient*
+   trips — a persistent stuck condition just re-trips the 10 s progress checker, exhausts
+   the 3 retries, and falls through to `SetTaskFailed` (the intended terminal behavior).
+3. **New `SetTaskFailed` node + record-failed exits — only on matched-but-failed.** When
+   recovery is exhausted the subtree FAILs. `SetTaskFailed` (sibling of `SetTaskDone`)
+   writes `status` (a short structured map, e.g. `{outcome: failed, reason: <error_code>,
+   attempts: N}`; only `str()`-rendered by camp today — written structured for future use,
+   not a consumed contract) + `setDone()` so the mission advances + `RCLCPP_ERROR`, and
+   returns SUCCESS so a containing loop keeps running.
+   - **Top level:** the `Switch` already separates unmatched (→ default catchall) from a
+     matched case's FAILURE → route the matched FAILURE to `SetTaskFailed`.
+   - **Nested loops (`RunSurveyAreaSubTasks` `:195`, `SurveyLineSetTask` `:330`) —
+     must preserve the matched-vs-unmatched distinction (review must-fix).** These route
+     sub-tasks with `_failureIf` inside a `ReactiveFallback`, where a *type-mismatch*
+     legitimately FAILs a branch as the dispatch mechanism. A blanket failure-fallback
+     here would mark a correctly-routed, type-mismatched sub-task as `failed` —
+     re-conflating unmatched-vs-failed one level down. **Fix: convert each nested loop's
+     dispatch to the same `Switch`-on-(sub-task-type) + default-catchall shape** as the top
+     level, wrapping matched cases with the recovery+`SetTaskFailed`. A mismatched type then
+     hits the default (not recorded failed); only a matched-but-failed sub-line reaches
+     `SetTaskFailed` and the loop **continues** (skip-and-continue). Structurally parallel
+     to the top-level fix, not a blanket fallback.
 4. **Observability.** The failed `status` already reaches camp (fact above) + the
    `RCLCPP_ERROR`. No `DiagnosticStatus` publisher (none exists). A richer camp
    mission-status display is a separate `unh_marine_autonomy`/camp follow-up.
 5. **Tests** (extend the existing `ament_cmake_gtest` infra — `test_set_controller_speed_resolve.cpp`
    already present): `SetTaskFailed` node gtest (sets `done` + writes non-empty
-   `status`); a minimal BT-XML **routing fixture** (matched-but-failed → `SetTaskFailed`;
-   unmatched → catchall; recovery exhaustion → `SetTaskFailed`, not clean-done). Full-tree
-   integration deferred to #8's harness.
+   `status`); a minimal BT-XML **routing fixture** asserting: (a) matched-but-failed →
+   `SetTaskFailed`, not the catchall; (b) unmatched type → catchall; (c) a **mid-run
+   `current_task_type` change** re-routes via the `Switch` (exercises Switch reactivity,
+   not just a static value); (d) **nested loop**: a failed sub-line records `failed` AND
+   the loop continues to the next line without abandoning the area (where Finding-1's bug
+   lives). Full-tree integration deferred to #8's harness.
 
 ## Files to Change
 
@@ -116,11 +138,14 @@ Single PR on `feature/issue-25`.
 
 ## Open Questions
 
-- [ ] **Which recovery behavior** in the `RecoveryNode` — `Wait` (simple dwell) or the
-  custom `hover` (station-keep)? Lean `Wait` for transient progress-checker trips; `hover`
-  if station-keeping during recovery is preferred. Confirm with Roland.
-- [ ] **`num_retries` count** for the marine `RecoveryNode` (default 3, mirroring the
-  nested loops). Tunable.
+- [x] **Which recovery node** — resolved with Roland: **`Wait`** (stock BT node; simple
+  dwell for transient progress-checker trips). The custom `Hover` node remains an
+  alternative if station-keeping during recovery is later preferred.
+- [ ] **`num_retries` count** for the `RecoveryNode` (default 3, mirroring the nested
+  loops). Tunable; revisit if field behavior suggests otherwise.
+- [ ] **Status second-consumer search** — before merge, grep the workspace for other
+  consumers of the RunTasks feedback/result `tasks[].status` beyond `camp_interface.py`
+  (e.g. `rqt_*`, logging) that might assume it stays empty.
 
 ## Estimated Scope
 
