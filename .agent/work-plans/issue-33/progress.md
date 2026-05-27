@@ -32,17 +32,20 @@ unregistered (palette-only); dead `<AlwaysSuccess/>` at `run_tasks.xml:60`;
 **When**: 2026-05-26 19:56 -04:00
 **By**: Claude Code Agent (Claude Opus 4.7 (1M context))
 
-**Plan**: `.agent/work-plans/issue-33/plan.md` at `b0fa17e`
+**Plan**: `.agent/work-plans/issue-33/plan.md` (revised after open-question triage)
 **PR**: https://github.com/rolker/unh_marine_navigation/pull/34 (`[PLAN]` prefix)
-**Phases**: single PR, 2 commits (D1 stop-point projection + D2 live point_at_target)
+**Phases**: single PR, **3 commits** (C1 port-name fix, C2 D1 stop-point projection, C3 D2 live point_at_target)
 
-Decisions locked with user: one PR / two commits; deceleration via navigator-level
+Decisions locked with user: one PR / 3 commits; deceleration via navigator-level
 `default_deceleration` param seeded onto the blackboard (robot_frame precedent), retire
 the vestigial `hover.deceleration`; `point_at_target=false` ⇒ min-rotation allow-reverse
-(LOIT_TYPE=0). PredictStoppingPose sources velocity from the existing (currently-dropped)
-`odom_smoother` + orientation from tf.
+(LOIT_TYPE=0). PredictStoppingPose **subscribes to odom directly** (faithful `1c5db5a^`
+port — `OdomSmoother` lacks pose), outputs in `odom.header.frame_id`; no tf/smoother needed.
 
 ### Open questions
-- [ ] Latent `hover_action` port-name mismatch (`minimum_distance` port vs `minimum_radius` getInput) — fix here or separate issue?
-- [ ] Frame consistency: PredictStoppingPose output frame must equal Hover `local_frame_` per platform — confirm.
-- [ ] Lockstep deploy: retiring `hover.deceleration` couples this PR to the 4 per-platform config PRs (undeclared-param load error otherwise) — confirm sequencing vs dev-freeze, or keep declaration one cycle as deprecated no-op.
+All three planning forks resolved with the user:
+- [x] Port-name mismatch → **fix here, naming-consistent** (rename BT ports `*_distance`→`*_radius`, own commit C1).
+- [x] Frame consistency → **harden `onCycleUpdate`** to transform target into `local_frame_` (frame-agnostic); node outputs odom frame by construction.
+- [x] Retiring `hover.deceleration` → confirmed **safe standalone** (rclcpp ignores stale undeclared overrides; no crash, no lockstep). 3 config-cleanup PRs (ben/seafloor/vrx) opened **now**, ref #33.
+
+Remaining = validation only: confirm odom `header.frame_id` per platform; on-water re-validation (reverse/brake authority, `unh_echoboats_project11#88`/`#86`); A/B `point_at_target` live.
