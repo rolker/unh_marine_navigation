@@ -30,7 +30,9 @@ BT::PortsList PredictStoppingPose::providedPorts()
       "point. Typically wired to the navigator's {default_deceleration}."),
     BT::OutputPort<geometry_msgs::msg::PoseStamped>(
       "pose",
-      "Predicted momentum-coasting stop pose, in the navigator's global frame.")
+      "Predicted momentum-coasting stop pose, in the odometry frame the velocity "
+      "is reported in (the behavior_server's local_frame); falls back to the "
+      "navigator's global frame only before any odometry has arrived.")
   };
 }
 
