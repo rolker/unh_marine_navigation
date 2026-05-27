@@ -55,3 +55,28 @@ Open questions from the review were resolved interactively before plan-task:
 - [ ] #25's final dispatch shape (Switch vs IfThenElse) sets where the identity condition attaches and confirms the re-entry FAILURE is contained — finalize plan after #25 lands.
 - [ ] Survey-area reuse: does the identity gate also fix mid-line switches inside a survey area, and is that desired, or scope the new condition to the top-level path only?
 - [ ] Test mechanism deferred to #8's harness shape; revisit at implementation.
+
+## Redesign — in-place switch; un-merged from #25
+**When**: 2026-05-27 11:25 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context)) — decided with Roland
+
+Superseded the identity-gate / transit-to-start approach above. Roland relaxed the
+transit-to-start decision (review walkthrough, 2026-05-26) to **in-place switch**: on a
+mid-line re-send the controller transitions onto the new line from the current position.
+
+This collapses the fix. Verified facts: `SetPathFromTask` is a pure node; `UpdateCurrentTask`
+re-selects `current_task` every tick; Nav2 `FollowPath` resends its goal on a path change
+while RUNNING (`BtActionNode goal_updated_`/`send_new_goal` — `FollowPathAction.cpp` path
+comparison pending a sim spike). So #35 = **make `{survey_path}` track `current_task`
+reactively** (replace the one-time latch with a per-tick refresh at the shared `SurveyLine`
+node). No identity gate, no `path_task_id`, no halt, no FAILURE → **decoupled from #25**.
+
+Consequences of the un-merge:
+- This issue is **standalone again** on `feature/issue-35`; PR #36 reopened (was closed as
+  superseded). #25 reverts to PR #37, closing #25 only.
+- Earlier "blocked on #25" and "ride #8's harness" framings drop: #35 no longer touches
+  #25's dispatch, and gets its own re-entry fixture (modelling the real `SurveyLine`/
+  `FollowPath` placement).
+- Accepted trade: in-place switch may join the re-sent line partway (not from its start).
+
+Plan rewritten to the in-place-switch scope.
