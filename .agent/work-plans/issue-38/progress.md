@@ -35,13 +35,17 @@ issue: 38
 **CI**: all-pass (copilot reviewer check; no build/test CI on this repo yet — issue #9)
 
 ### Findings
-- [ ] (valid, Copilot R1+R2) package.xml missing `tf2` / `tf2_geometry_msgs` `<depend>` (linked + included, undeclared) — `marine_nav_utilities/package.xml`
-- [ ] (valid, Copilot R2) `window_size_` data race under a MultiThreadedExecutor + non-default callback group; make `std::atomic<double>` — `marine_nav_utilities/include/marine_nav_utilities/costmap_window_node.h`
-- [ ] (valid, Copilot R1+R2) docstring omits non-finite-resolution/window and data.size-mismatch no-op cases — `marine_nav_utilities/include/marine_nav_utilities/costmap_window.h`
-- [ ] (valid-low, Copilot R1) invalid origin quaternion: offset uses identity but output orientation left as invalid input; write identity on guard — `marine_nav_utilities/src/costmap_window.cpp`
-- [ ] (test-gap, Copilot R1) no test for invalid-quaternion→identity path — `marine_nav_utilities/test/test_costmap_window.cpp`
-- [ ] (decision, from Copilot R2 FP) bare-integer `param set` is rejected by static typing; decide whether to support ints via dynamic typing + coercion — `marine_nav_utilities/include/marine_nav_utilities/costmap_window_node.h`
+All resolved in `b5ef231` (16 gtest cases pass; integer/double/invalid param behavior verified at runtime on a single clean node).
+- [x] (valid, Copilot R1+R2) package.xml missing `tf2` / `tf2_geometry_msgs` `<depend>` (linked + included, undeclared) — `marine_nav_utilities/package.xml`
+- [x] (valid, Copilot R2) `window_size_` data race under a MultiThreadedExecutor + non-default callback group; make `std::atomic<double>` — `marine_nav_utilities/include/marine_nav_utilities/costmap_window_node.h`
+- [x] (valid, Copilot R1+R2) docstring omits non-finite-resolution/window and data.size-mismatch no-op cases — `marine_nav_utilities/include/marine_nav_utilities/costmap_window.h`
+- [x] (valid-low, Copilot R1) invalid origin quaternion: offset uses identity but output orientation left as invalid input; write identity on guard — `marine_nav_utilities/src/costmap_window.cpp`
+- [x] (test-gap, Copilot R1) no test for invalid-quaternion→identity path — `marine_nav_utilities/test/test_costmap_window.cpp`
+- [x] (decision→resolved, Copilot R2) bare-integer `param set`: user chose to support it — enabled dynamic typing + int→double coercion in the on-set callback — `marine_nav_utilities/include/marine_nav_utilities/costmap_window_node.h`
 
 ### False positives
 - (Copilot R2) `OnSetParametersCallbackHandle::SharedPtr` "likely to fail to compile" — false: `rclcpp::Node` aliases it (node.hpp:1014), resolves via base-class lookup; executable is built.
-- (Copilot R2) `as_double()` "will throw and can crash" on integer set — false: static parameter typing rejects a non-double with "Wrong parameter type" before the on-set callback runs; verified at runtime, node stayed alive.
+- (Copilot R2) `as_double()` "will throw and can crash" on integer set — false: static parameter typing rejected a non-double with "Wrong parameter type" before the on-set callback ran; verified at runtime, node stayed alive. Now mooted — dynamic typing + coercion accepts integers.
+
+### Note
+The initial runtime check appeared to show the integer set still rejected; this was an **orphaned stale node** from a `ros2 run … &` + `kill <wrapper-pid>` pattern (killed the wrapper, the node lingered). After clearing orphans and running the binary directly, integer coercion works as designed. Reinforces the workspace rule against backgrounded `ros2 run`/`launch` for lifecycle.
