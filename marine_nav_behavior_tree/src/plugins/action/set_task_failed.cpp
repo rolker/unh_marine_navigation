@@ -30,6 +30,12 @@ BT::NodeStatus SetTaskFailed::tick()
   {
     throw BT::RuntimeError("missing required input [task]: ", task.error() );
   }
+  if(!task.value())
+  {
+    // No current task (e.g. mission cleared) — nothing to record. Succeed rather
+    // than dereferencing a null Task pointer. Mirrors SetTaskDone's guard.
+    return BT::NodeStatus::SUCCESS;
+  }
 
   std::string reason;
   getInput<std::string>("reason", reason);

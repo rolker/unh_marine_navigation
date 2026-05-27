@@ -97,6 +97,25 @@ TEST_F(SetTaskFailedTest, OmitsUnsetReasonAndAttempts)
   EXPECT_FALSE(status["attempts"]); // attempts=0 is not written
 }
 
+TEST_F(SetTaskFailedTest, NullTaskSucceedsWithoutDereference)
+{
+  // The dispatch catchall can tick SetTaskFailed/SetTaskDone with a null current_task
+  // (e.g. mission cleared / all done). It must not dereference the null pointer.
+  auto bb = BT::Blackboard::create();
+  bb->set("node", node_);
+  bb->set("task", marine_nav_tasks::TaskPtr{});  // null
+
+  BT::BehaviorTreeFactory factory;
+  factory.registerNodeType<SetTaskFailed>("SetTaskFailed");
+  auto tree = factory.createTreeFromText(
+    R"(<root BTCPP_format="4"><BehaviorTree>)"
+    R"(<SetTaskFailed task="{task}"/>)"
+    R"(</BehaviorTree></root>)",
+    bb);
+
+  EXPECT_EQ(tree.tickWhileRunning(), BT::NodeStatus::SUCCESS);
+}
+
 TEST_F(SetTaskFailedTest, DistinctFromSetTaskDone)
 {
   // A clean SetTaskDone marks the task done but leaves status empty — the

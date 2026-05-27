@@ -27,6 +27,13 @@ BT::NodeStatus SetTaskDone::tick()
   {
     throw BT::RuntimeError("missing required input [task]: ", task.error() );
   }
+  if(!task.value())
+  {
+    // No current task (e.g. mission cleared, or all tasks done and the dispatch
+    // catchall ran with a null current_task) — nothing to mark done. Succeed
+    // rather than dereferencing a null Task pointer.
+    return BT::NodeStatus::SUCCESS;
+  }
   task.value()->setDone();
   auto blackboard = config().blackboard;
   auto node = blackboard->get<rclcpp::Node::SharedPtr>("node");
