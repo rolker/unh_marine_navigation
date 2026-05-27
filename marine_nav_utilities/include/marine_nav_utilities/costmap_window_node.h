@@ -35,11 +35,18 @@ public:
     descriptor.dynamic_typing = true;
     descriptor.description =
       "Side length in meters of the square window cropped from the costmap "
-      "(finite, > 0). Integer values are accepted and coerced to double.";
+      "(finite, > 0). An integer value is accepted and used as a double "
+      "internally; the stored parameter keeps its original type.";
     window_size_ = declare_parameter("window_size", 200.0, descriptor);
 
+    // Validate in the pre-set callback (no side effects) and apply only in the
+    // post-set callback, which fires after the whole atomic request commits.
+    // This keeps window_size_ in sync with the parameter store even when a
+    // co-set parameter in the same request is rejected.
     param_callback_handle_ = add_on_set_parameters_callback(
       std::bind(&CostmapWindowNode::onSetParameters, this, std::placeholders::_1));
+    post_param_callback_handle_ = add_post_set_parameters_callback(
+      std::bind(&CostmapWindowNode::onPostSetParameters, this, std::placeholders::_1));
 
     // Nav2 publishes the costmap reliable + transient-local (latched). Use
     // best-available for both policies so we attach and receive the streamed
@@ -58,35 +65,60 @@ public:
   }
 
 private:
+  // Read a window_size parameter as a double, accepting INTEGER or DOUBLE.
+  // Returns false (leaving \p value untouched) for any other type.
+  static bool windowSizeFromParameter(const rclcpp::Parameter & parameter, double & value)
+  {
+    switch (parameter.get_type()) {
+      case rclcpp::ParameterType::PARAMETER_DOUBLE:
+        value = parameter.as_double();
+        return true;
+      case rclcpp::ParameterType::PARAMETER_INTEGER:
+        value = static_cast<double>(parameter.as_int());
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  // Pre-set: validate only, with no side effects. A SetParameters request is
+  // atomic — returning unsuccessful means none of its parameters are applied —
+  // so mutating state here would risk diverging from the parameter store.
   rcl_interfaces::msg::SetParametersResult onSetParameters(
     const std::vector<rclcpp::Parameter> & parameters)
   {
     rcl_interfaces::msg::SetParametersResult result;
     result.successful = true;
     for (const auto & parameter : parameters) {
-      if (parameter.get_name() == "window_size") {
-        double value;
-        switch (parameter.get_type()) {
-          case rclcpp::ParameterType::PARAMETER_DOUBLE:
-            value = parameter.as_double();
-            break;
-          case rclcpp::ParameterType::PARAMETER_INTEGER:
-            value = static_cast<double>(parameter.as_int());
-            break;
-          default:
-            result.successful = false;
-            result.reason = "window_size must be a number (double or integer)";
-            continue;
-        }
-        if (!windowSizeIsValid(value)) {
-          result.successful = false;
-          result.reason = "window_size must be finite and > 0";
-        } else {
-          window_size_ = value;
-        }
+      if (parameter.get_name() != "window_size") {
+        continue;
+      }
+      double value;
+      if (!windowSizeFromParameter(parameter, value)) {
+        result.successful = false;
+        result.reason = "window_size must be a number (double or integer)";
+        break;
+      }
+      if (!windowSizeIsValid(value)) {
+        result.successful = false;
+        result.reason = "window_size must be finite and > 0";
+        break;
       }
     }
     return result;
+  }
+
+  // Post-set: apply the validated value, called only after the request commits.
+  void onPostSetParameters(const std::vector<rclcpp::Parameter> & parameters)
+  {
+    for (const auto & parameter : parameters) {
+      double value;
+      if (parameter.get_name() == "window_size" &&
+        windowSizeFromParameter(parameter, value))
+      {
+        window_size_ = value;
+      }
+    }
   }
 
   void costmapCallback(const nav_msgs::msg::OccupancyGrid & grid)
@@ -107,6 +139,7 @@ private:
   std::atomic<double> window_size_{200.0};
   bool logged_{false};
   OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
+  PostSetParametersCallbackHandle::SharedPtr post_param_callback_handle_;
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr subscription_;
   rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr publisher_;
 };

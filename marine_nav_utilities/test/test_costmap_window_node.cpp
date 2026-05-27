@@ -50,10 +50,11 @@ TEST_F(CostmapWindowNodeTest, InvalidWindowSizeRejectedAndValueUnchanged)
   }
 }
 
-TEST_F(CostmapWindowNodeTest, IntegerWindowSizeAcceptedAndCoerced)
+TEST_F(CostmapWindowNodeTest, IntegerWindowSizeAcceptedAndUsedAsDouble)
 {
   // A bare integer (`ros2 param set ... window_size 150`) is accepted via dynamic
-  // typing and coerced to double, rather than rejected as a type mismatch.
+  // typing rather than rejected as a type mismatch, and used as a double
+  // internally. The stored parameter keeps its integer type.
   const auto result = node_->set_parameter(rclcpp::Parameter("window_size", 150));
   EXPECT_TRUE(result.successful);
   EXPECT_EQ(node_->get_parameter("window_size").as_int(), 150);

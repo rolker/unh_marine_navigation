@@ -77,6 +77,7 @@ ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
 ament_export_dependencies(
   geometry_msgs
   nav_msgs
+  tf2
   tf2_geometry_msgs
   rclcpp
 )
