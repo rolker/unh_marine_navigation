@@ -1,3 +1,8 @@
+# pose to hold station at. An empty header.frame_id is a sentinel meaning
+# "hold the robot's current pose" (preserves the pre-target behavior); a set
+# frame_id holds this pose (e.g. the momentum-projected stop point).
+geometry_msgs/PoseStamped target
+
 # distance within which speed is zero
 float32 minimum_radius
 

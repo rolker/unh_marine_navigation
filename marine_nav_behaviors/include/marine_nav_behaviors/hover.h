@@ -30,8 +30,12 @@ protected:
   double maximum_radius_ = 2.0;
   double minimum_speed_ = 0.0;
   double maximum_speed_ = 1.0;
-  double deceleration_ = -0.5;
   double maximum_rotation_speed_ = 0.5;
+  // Virtual-anchor heading mode. true (default): always yaw to face the hold
+  // point. false: approach forward or in reverse, whichever needs less rotation
+  // (ArduPilot LOIT_TYPE=0). Read live in onCycleUpdate so it can be toggled on
+  // the water via `ros2 param set`.
+  bool point_at_target_ = true;
   geometry_msgs::msg::PoseStamped target_pose_;
 
   bool generate_visualization_ = false;
