@@ -41,3 +41,17 @@ Open questions from the review were resolved interactively before plan-task:
    structure. Complementary, not redundant: a `Switch` keyed on
    `current_task_type` still won't re-tick on survey_line→survey_line, so #35 is
    needed regardless. (#28 also edits this file — same-region awareness applies.)
+
+## Plan Authored
+**Status**: complete
+**When**: 2026-05-26 14:42 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**Plan**: `.agent/work-plans/issue-35/plan.md` at `1f644a6`
+**PR**: https://github.com/rolker/unh_marine_navigation/pull/36 (`[PLAN]` prefix)
+**Phases**: single PR, blocked on #25
+
+### Open questions
+- [ ] #25's final dispatch shape (Switch vs IfThenElse) sets where the identity condition attaches and confirms the re-entry FAILURE is contained — finalize plan after #25 lands.
+- [ ] Survey-area reuse: does the identity gate also fix mid-line switches inside a survey area, and is that desired, or scope the new condition to the top-level path only?
+- [ ] Test mechanism deferred to #8's harness shape; revisit at implementation.
