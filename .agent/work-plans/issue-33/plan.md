@@ -73,15 +73,19 @@ doubles** into the goal; masked only by `hover.cpp:52`'s `> 0.0` guard).
 3. **New BT node `PredictStoppingPose`** (`BT::SyncActionNode`, ported from `1c5db5a^`):
    - Ports: input `deceleration` (double < 0), output `pose` (PoseStamped). Good port
      descriptions (they feed the auto-generated Groot nodes-XML — see step 7).
-   - Reads `tf_buffer`, `odom_smoother`, `robot_frame`, and `global_frame` from the blackboard
-     (`tf_buffer`/`odom_smoother` seeded by the nav2 base; `robot_frame`/`global_frame` by
-     task_navigator). **No subscription** (BT node runs on the unspun client node).
-   - Math (static, unit-tested helper `projectStoppingPose`): look up current pose
-     (robot_frame → global_frame) via `tf_buffer` → position + orientation; get smoothed body
-     twist from `odom_smoother.getTwist()`; rotate twist → world **using the orientation from
-     that same tf lookup** (**the easy-to-miss gotcha**; full 2D velocity incl. crabbing);
-     `stop = position + v̂·|v|²/(2·|decel|)`. Output PoseStamped in `global_frame`. Zero velocity
-     or non-negative deceleration ⇒ pose == current.
+   - Reads `tf_buffer`, `odom_smoother`, and `robot_frame` from the blackboard
+     (`tf_buffer`/`odom_smoother` seeded by the nav2 base; `robot_frame` by task_navigator);
+     `global_frame` is read only as a pre-odom fallback (below). **No subscription** (BT node
+     runs on the unspun client node).
+   - Math (static, unit-tested helper `projectStoppingPose`): look up current pose in the
+     **odom frame the OdomSmoother reports** (`getTwistStamped().header.frame_id`, == the
+     behavior_server's `local_frame`), falling back to `global_frame` only before any odom has
+     arrived; via `tf_buffer` → position + orientation; get smoothed body twist from
+     `odom_smoother.getTwist()`; rotate twist → world **using the orientation from that same tf
+     lookup** (**the easy-to-miss gotcha**; full 2D velocity incl. crabbing);
+     `stop = position + v̂·|v|²/(2·|decel|)`. Output PoseStamped in that odom frame, so Hover holds
+     it directly with no per-cycle map transform and no dependency on a map transform it never
+     otherwise needs. Zero velocity or non-negative deceleration ⇒ pose == current.
    - Register in `bt_register_nodes.cpp`.
 4. **`task_navigator.cpp` / `.h`** — declare `default_deceleration` param (default `-0.45`);
    seed `default_deceleration` **and** `global_frame` onto the blackboard in `configure()`

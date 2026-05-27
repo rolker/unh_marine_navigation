@@ -130,7 +130,7 @@ map outage) and the stale-stamp expiry. Built clean; functional gtests pass
 **CI**: none reported (no checks on head)
 
 ### Findings
-- [ ] (valid, Copilot @ head) `plan.md` Deliverable-1 step 3 still describes the node reading pose `robot_frame → global_frame` and outputting in `global_frame` — stale after the odom-first frame fix (`35d005c`). Per CLAUDE.md § Plan-first workflow the plan must stay in sync (this is the "recurring plan-drift flags from Copilot" case the convention anticipates), so update rather than dismiss. — `.agent/work-plans/issue-33/plan.md:76-83`
+- [x] (valid, Copilot @ head) `plan.md` Deliverable-1 step 3 still describes the node reading pose `robot_frame → global_frame` and outputting in `global_frame` — stale after the odom-first frame fix (`35d005c`). Per CLAUDE.md § Plan-first workflow the plan must stay in sync (this is the "recurring plan-drift flags from Copilot" case the convention anticipates), so update rather than dismiss. — `.agent/work-plans/issue-33/plan.md:76-83` → synced to odom-first description.
 
 ### Already addressed (prior round @ `0e13583`)
 - (Copilot) `marine_nav_behaviors` missing tf2 deps — resolved in `35d005c`; GitHub thread still open (code fixed, thread not resolved).
