@@ -49,3 +49,21 @@ All three planning forks resolved with the user:
 - [x] Retiring `hover.deceleration` → confirmed **safe standalone** (rclcpp ignores stale undeclared overrides; no crash, no lockstep). 3 config-cleanup PRs (ben/seafloor/vrx) opened **now**, ref #33.
 
 Remaining = validation only: confirm odom `header.frame_id` per platform; on-water re-validation (reverse/brake authority, `unh_echoboats_project11#88`/`#86`); A/B `point_at_target` live.
+
+## Plan Review
+**Status**: complete
+**When**: 2026-05-26 20:18 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context)) (fresh-context sub-agent review; author orchestrated)
+
+**Plan**: `.agent/work-plans/issue-33/plan.md` at `f2d2b3a` (reviewed state)
+**PR**: https://github.com/rolker/unh_marine_navigation/pull/34
+**Verdict**: changes-requested → addressed inline (see follow-up plan commit)
+
+Independent review run via fresh-context sub-agent; all structural claims re-verified by
+the author against nav2 source before acting.
+
+### Findings
+- [x] (must-fix) PredictStoppingPose "subscribe to odom" data path is dead — BT client node is unspun (`bt_action_node.hpp:55-58,266`). Fix: read `tf_buffer` (pose) + `odom_smoother` (twist) from the blackboard, both seeded by the nav2 base (`behavior_tree_navigator.hpp:223,226`). Reverses the Q2 subscription sub-decision (frame-hardening part of Q2 stands). Corrects my earlier wrong "odom_smoother is dropped" finding — the base class seeds it.
+- [x] (must-fix) Groot model is auto-generated (`marine_nav_behavior_tree_nodes.xml`, CMakeLists POST_BUILD) from `providedPorts()`; `nav2.btproj` is stale hand-file → optional cosmetic. Plan updated.
+- [x] (must-fix) v4 speed floor (`hover.cpp:140-153`, positive `std::max`) clobbers D2's reverse `linear.x<0`; reverse branch must bypass/sign-mirror. Added to commit 3.
+- [x] (suggestion) onCycleUpdate transform: in-place + try/catch→TF_ERROR; rotation quaternion from same tf lookup as pose; empty-frame sentinel comment lands in `Hover.action`; mission_manager doesn't build the goal (no break) and its README is ROS1-stale → defer. All folded in.
