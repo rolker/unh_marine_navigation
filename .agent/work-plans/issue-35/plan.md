@@ -1,5 +1,12 @@
 # Plan: Mission re-send mid-line doesn't take effect — BT latches FollowPath path on same-type task switch
 
+> **SUPERSEDED — merged into #25.** This work was merged with #25 (2026-05-27): the
+> identity-gate FAILURE here and #25's new retry/`SetTaskFailed` machinery collide on the
+> same FAILURE signal, so they share one dispatch rewrite. The combined plan (closing both
+> #25 and #35) lives at `unh_marine_navigation` `feature/issue-25` → PR #37. Implement
+> there, not on this branch. Kept for reference (the identity-gate design below feeds the
+> combined plan's Part B/C).
+
 ## Issue
 
 https://github.com/rolker/unh_marine_navigation/issues/35
