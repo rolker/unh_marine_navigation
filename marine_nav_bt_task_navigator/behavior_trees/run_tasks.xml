@@ -710,6 +710,17 @@
                   default="{task}"
                   type="std::shared_ptr&lt;marine_nav_tasks::Task&gt;">Task to set as done</input_port>
     </Action>
+    <Action ID="SetTaskFailed">
+      <input_port name="task"
+                  default="{task}"
+                  type="std::shared_ptr&lt;marine_nav_tasks::Task&gt;">Task to record as attempted-but-failed</input_port>
+      <input_port name="reason"
+                  default=""
+                  type="std::string">Short failure reason (e.g. follow_path error code)</input_port>
+      <input_port name="attempts"
+                  default="0"
+                  type="int">Number of attempts made before giving up (0 = unset)</input_port>
+    </Action>
     <Action ID="SonarCoverage">
       <input_port name="survey_area"
                   default="{survey_area}"

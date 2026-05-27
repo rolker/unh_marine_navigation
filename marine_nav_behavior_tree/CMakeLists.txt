@@ -208,6 +208,24 @@ if(BUILD_TESTING)
     )
   endif()
 
+  ament_add_gtest(test_dispatch_routing
+    test/test_dispatch_routing.cpp
+  )
+  if(TARGET test_dispatch_routing)
+    target_include_directories(test_dispatch_routing PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    )
+    target_link_libraries(test_dispatch_routing
+      ${PROJECT_NAME}_bt_plugins
+      marine_nav_tasks::marine_nav_tasks
+    )
+    ament_target_dependencies(test_dispatch_routing
+      behaviortree_cpp
+      marine_nav_interfaces
+      rclcpp
+    )
+  endif()
+
   ament_add_gtest(test_predict_stopping_pose
     test/test_predict_stopping_pose.cpp
   )
