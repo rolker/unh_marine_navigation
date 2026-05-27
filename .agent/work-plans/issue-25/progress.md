@@ -66,3 +66,30 @@ Settled the open questions from the Issue Review so plan-task can proceed:
 
 ### Plan-time scope revision
 - Decisions note said record-semantics "likely needs a task-status addition in `marine_nav_interfaces`." Investigation: `TaskInformation.status` (free-form YAML) already exists, has C++/Python `setStatus`/`status`, and is already serialized onto the heartbeat (`bt_types.cpp:245`) — but is never written today. So **no `.msg` change / no downstream rebuild** is required; this removes the main scope risk in the recorded decisions.
+
+## Open Questions Resolved + Merge with #35
+**When**: 2026-05-27 09:30 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context)) — decided with Roland
+
+Resolved the four plan open questions and merged #25 with #35:
+
+- **Q1 (observability)** → write a **structured** `TaskInformation.status`
+  (`{outcome, reason, attempts}`) + `RCLCPP_ERROR`. It rides the heartbeat to **camp**,
+  which renders mission status — so the existing field is the operator's eyes; no
+  `DiagnosticStatus` publisher. Separate follow-up (camp repo): improve camp's
+  mission-status display. No `.msg` change.
+- **Q2 (test depth)** → node gtest **+** a minimal BT-XML **routing fixture**
+  (matched-but-failed → `SetTaskFailed`; unmatched → catchall). No #8 dependency;
+  full-tree integration still deferred to #8.
+- **Q3 (scope across levels)** → mirror retry + `SetTaskFailed` at **all three** levels
+  (`NavigatorSequence`, `RunSurveyAreaSubTasks`, `SurveyLineSetTask`). Nested levels gain
+  skip-bad-line-and-continue instead of abandon-area-on-one-abort.
+- **Q4 (#35 coupling)** → **merge #25 + #35** into this PR. The retry/`SetTaskFailed`
+  machinery and #35's identity-gate FAILURE collide on the same signal (preemption vs
+  execution failure); the seam belongs where the machinery lives. `feature/issue-25` /
+  **PR #37** is canonical and closes both; PR #36 closed as superseded.
+
+Plan rewritten to the combined scope (Parts A–D). Central risk: the Part C
+preempt-vs-fail seam (a legitimate switch must not burn the retry budget or be flagged
+`failed`) — pinned by the re-entry test fixture. `unh_marine_navigation#35` plan is
+superseded by this combined plan.
