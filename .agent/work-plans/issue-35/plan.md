@@ -49,25 +49,48 @@ Accepted trade: the re-sent line may be joined partway rather than from its star
 Single PR on `feature/issue-35`.
 
 1. **Spike (first): confirm Nav2 `FollowPath` auto-resends on a path-input change.** In
-   sim, start a survey line, change `current_task` to a different line mid-follow, and
-   observe whether the controller picks up the new path without an ABORT/halt. This decides
-   step 2's mechanism. (10-min spike; do not build the plan past this without the answer.)
-2. **Make `{survey_path}` track `current_task` reactively.** Replace the one-time
+   sim, start a survey line, change the current task to a different line mid-follow, and
+   confirm the controller picks up the new path **without** an ABORT/halt. Confirm
+   *positively* via the goal UUID / BT log (`send_new_goal` resends a new goal handle) —
+   not merely from boat motion, which could be a stale follow. This decides step 2's
+   mechanism. (Source note: `BtActionNode::on_tick` reads ports only at goal-send; during
+   RUNNING only `FollowPathAction::on_wait_for_result` can set `goal_updated_`, and its
+   `.cpp` isn't shipped — hence the spike. Do not build past this without the answer.)
+2. **Make `{survey_path}` track the current task reactively.** Replace the one-time
    `SetPathFromTask` latch with a per-tick refresh so `{survey_path}` always equals the
-   current task's path. Candidate placement: a reactive `SetPathFromTask` co-located with
-   `FollowPath` in `SurveyLine`'s existing `ReactiveSequence` (it already re-ticks). When
-   the operator re-sends, `{survey_path}` updates and `FollowPath` re-sends its goal in
-   place. **Exact wiring confirmed against the live tree during implementation** (per the
-   Part C lesson — no asserted structure here). If Step 1 shows no auto-resend, instead add
-   a tick-level "path changed?" check that cancels + re-enters `FollowPath`.
+   current task's path; `FollowPath` then re-sends its goal in place when the operator
+   re-sends. **The task key is `survey_line_task`, not `{current_task}`** — and the
+   reactive `SetPathFromTask` must sit where that key is in scope. `SetPathFromTask`'s
+   `task` input is `survey_line_task` (`run_tasks.xml:354`); to place a reactive refresh
+   inside `SurveyLine`'s `ReactiveSequence` (`:286-302`, which re-ticks), the task pointer
+   must reach `SurveyLine`'s blackboard — it does, via the `_autoremap="true"` chain
+   `SurveyLineTask → TransitAndSurveyLine (:372) → SurveyLine (:372-376)`, so a
+   `SetPathFromTask task="{survey_line_task}"` added inside `SurveyLine` resolves up to
+   `SurveyLineTask`'s `survey_line_task`. (This dependency on the autoremap chain + key
+   name is stated up front — the prior version's failure was leaving exactly this implicit.)
+   The exact node position within the `ReactiveSequence` is confirmed against the live tree
+   when wiring, but the key and the autoremap dependency are pinned here. If Step 1 shows
+   no auto-resend, instead add a tick-level "path changed?" check that cancels + re-enters
+   `FollowPath`.
    - The initial transit leg (`NavigateThroughWaypoints` in `TransitAndSurveyLine`) runs
      once on first entry and is **not** re-run on a switch — that is the in-place behavior.
-3. **Verify the three call sites.** `SurveyLine`/`SurveyLineTask` are instantiated at the
-   top level, inside `RunSurveyAreaSubTasks`, and inside `SurveyLineSetTask`, each with its
-   own autoremapped current-task key. Confirm the reactive refresh derives the path from
-   the correct task at each site (it reads the autoremapped `{current_task}`).
-4. **Observability.** Log (INFO) when the followed path is re-sent due to a task change, so
-   the reported task and executed path stay visibly coupled.
+3. **Verify the three call sites — each passes a different key into `survey_line_task`.**
+   Top level: `survey_line_task="{current_task}"` (`:150`); `RunSurveyAreaSubTasks`:
+   `survey_line_task="{current_survey_area_task}"` (`:200`, re-selected each tick by that
+   loop's own `UpdateCurrentTaskData` `:181-194`); `SurveyLineSetTask`:
+   `survey_line_task="{survey_line_set_sub_task}"` (`:332`). The reactive refresh reads
+   `survey_line_task` (autoremapped), so it derives the path from the correct task at each
+   site — confirm during wiring (do **not** wire `{current_task}` directly, which is not
+   what `SetPathFromTask` uses below the top level).
+4. **Observability.** Verify whether Nav2 already logs the goal resend (`send_new_goal`
+   emits a log); if it does, rely on that — no new node. Only if it doesn't, add a small
+   log node (and adjust the "no new node" framing accordingly).
+5. **Regression test — explicitly deferred to #8.** No BT-task-navigator harness exists
+   today (the only BT test is `marine_nav_behavior_tree/test/test_set_controller_speed_resolve.cpp`,
+   a pure-helper unit test). Decision (with Roland): **defer the re-entry regression test to
+   #8's harness** rather than bootstrap a parallel one here; #35 ships with the Step-1 sim
+   spike + manual on-water/sim verification of a mid-line re-send. Recorded here so it is a
+   stated deferral, not a silently-dropped fixture.
 
 ## Files to Change
 
@@ -82,7 +105,7 @@ Single PR on `feature/issue-35`.
 |---|---|
 | Human control & transparency | Followed path re-couples to the reported task; re-send is logged. |
 | A change includes its consequences | Reuses pure existing nodes; three call sites verified; spike de-risks the load-bearing Nav2 assumption before building on it. |
-| Test what breaks | The break is "path doesn't update mid-follow" — the re-entry fixture asserts `{survey_path}` and the followed goal track a mid-line task change. |
+| Test what breaks | The break is "path doesn't update mid-follow" — verified by the Step-1 sim spike + manual mid-line re-send; the automated regression fixture is **deferred to #8** (no BT-navigator harness exists today), recorded as a stated deferral. |
 | Only what's needed | No identity gate, no `path_task_id`, no new dispatch machinery — just make an existing input live. |
 | Capture decisions | In-place-vs-transit-to-start rationale here + `progress.md` + PR. |
 
@@ -98,7 +121,7 @@ Single PR on `feature/issue-35`.
 | If we change... | Also update... | In this PR? |
 |---|---|---|
 | `{survey_path}` becomes per-tick reactive | Confirm `GetSubPath`/transit reads stay correct (transit uses index 0 once); confirm re-deriving each tick is side-effect-free (it is) | Yes |
-| In-place switch (no transit-to-start) | Operator expectation: re-sent line may be joined partway. Note in PR; revisit only if coverage gaps observed | Documented, not coded |
+| In-place switch (no transit-to-start) | Operator expectation: re-sent line may be joined partway; **and** a re-sent line far away or running the opposite direction is joined at an arbitrary nearest point with no lead-in (possible sharp turn / undesired traversal direction). Note in PR; revisit only if field use shows it matters | Documented, not coded |
 | Behavior depends on Nav2 `FollowPath` resend | Step-1 spike result; fallback path if absent | Yes |
 
 ## Open Questions
