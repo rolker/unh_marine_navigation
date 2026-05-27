@@ -167,3 +167,31 @@ Verified correct against source: Switch-with-default structural fix; stock BT.CP
 - [ ] (suggestion) Recovery is invoked via a BT *action node* (`Wait`, or the repo's custom `Hover` at `bt_register_nodes.cpp:52`), not the `behavior_server` plugin list — name the BT node in Open Q1.
 - [ ] (suggestion) The routing fixture must exercise a mid-run `current_task_type` change (Switch reactivity) AND a nested-loop failed-line → records-failed-and-loop-continues assertion (where Finding-1's bug lives).
 - [ ] (suggestion) Name a second-consumer search for the RunTasks-feedback `tasks[].status` beyond `camp_interface.py`; "structured status" is written but only `str()`-rendered today (not a consumed contract).
+
+## Implementation (in progress)
+**When**: 2026-05-27 13:00 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**Landed on `feature/issue-25` (PR #37):**
+- `d94d240` — `SetTaskFailed` node (+ registration, CMakeLists, unit test). Builds clean;
+  3 gtest cases pass (records failed status; omits unset optional fields; contrast with
+  `SetTaskDone` leaving status empty).
+- `7ec798c` — top-level `NavigatorSequence` dispatch: `ReactiveFallback` → `Switch5` on
+  `current_task_type`; default child = the existing `SetTaskDone` catchall; each matched
+  case wrapped `Fallback[<task>, SetTaskFailed]`. XML well-formed (xmllint). Generalizes
+  the fix to all task types (the silent-mark-done bug applied to hover/goto too).
+
+**Env note:** main `core_ws` rebuilt via `make build` (core layer ✅, so the stale-install
+codegen gotcha is cleared). `make build` overall fails at the **ui layer** (`image_warper`
+missing `catkin`) — unrelated to #25, pre-existing; flagged to Roland.
+
+**Remaining:**
+- `RecoveryNode[FollowPath, Wait]` at the shared `SurveyLine` node.
+- Nested-loop Switch-ify (`RunSurveyAreaSubTasks`, `SurveyLineSetTask`) preserving the
+  matched-vs-unmatched distinction (review must-fix) — i.e. same Switch+default shape, not
+  a blanket failure-fallback.
+- Routing fixture test (matched-failed → SetTaskFailed; unmatched → catchall; mid-run type
+  change; nested skip-and-continue).
+- **Runtime tree-load verification needs a sim session** — no standalone harness loads the
+  full `run_tasks.xml` (it references nav2 + marine nodes); xmllint only confirms
+  well-formedness. This dovetails with the #35 Nav2-resend spike (same sim).
