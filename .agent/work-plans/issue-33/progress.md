@@ -87,6 +87,13 @@ the author against nav2 source before acting.
 - [x] (suggestion) No test covers the combined reverse path (`point_at_target=false` + reverse-selected + inside-deadband negative term + v4 floor + `drive_sign`); pieces are individually correct but sign-subtle. Add a focused test or document the on-water A/B. — `hover.cpp:129-206` → resolved in `bf4a43d`: extracted the v4 speed logic to a pure `computeHoverSpeed()` (behavior-identical) and added `test_hover_speed.cpp` (11/11) covering range bands, taper, turn floor, and the forward/reverse composition — incl. the reverse-inside-deadband case that pushes the boat away from the point.
 - [ ] (suggestion) The 3 sibling-repo config-cleanup PRs (ben/seafloor/vrx) to retire `hover.deceleration`, which the plan states were "opened now", do not exist; stale `hover.deceleration:` lines remain as undeclared overrides (safe only under lenient param handling). Open them or confirm the param is absent from deployed YAML. — sibling configs (confirmed still present: seafloor `nav2_params.yaml` behavior_server.hover.deceleration: -0.45)
 
+### Div-by-zero guard — `3ca7e77`
+Re-review of the fixes surfaced a pre-existing latent bug: `computeHoverSpeed` divides by the
+radius span and by `minimum_radius`, so `minimum_radius >= maximum_radius` (clearest: `max==min`
+→ turn-floor `0/0`) or a negative `minimum_radius` put NaN/inf on `cmd_vel.linear.x`. Guarded the
+pure helper to return 0.0 (hold) on invalid/NaN radii; `Hover::onRun` warns once per engagement.
+Tests cover max==min / max<min / negative min (finite zero, never NaN). Built clean; 13/13 gtests.
+
 ### Review fixes applied — `82a5546`
 Both must-fix items resolved: PredictStoppingPose now projects in the OdomSmoother's
 odom frame (`getTwistStamped().header.frame_id`, = behavior `local_frame`), falling back
