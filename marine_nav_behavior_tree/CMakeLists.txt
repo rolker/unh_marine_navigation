@@ -81,6 +81,7 @@ add_library(${PROJECT_NAME}_bt_plugins SHARED
   src/plugins/action/set_path_from_task.cpp
   src/plugins/action/set_polygon_from_task.cpp
   src/plugins/action/set_task_done.cpp
+  src/plugins/action/set_task_failed.cpp
   src/plugins/action/sonar_coverage_action.cpp
   src/plugins/action/sonar_coverage_cancel_node.cpp
   src/plugins/action/update_current_task.cpp
@@ -177,6 +178,24 @@ if(BUILD_TESTING)
     )
     ament_target_dependencies(test_set_controller_speed_resolve
       behaviortree_cpp
+      rclcpp
+    )
+  endif()
+
+  ament_add_gtest(test_set_task_failed
+    test/test_set_task_failed.cpp
+  )
+  if(TARGET test_set_task_failed)
+    target_include_directories(test_set_task_failed PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    )
+    target_link_libraries(test_set_task_failed
+      ${PROJECT_NAME}_bt_plugins
+      marine_nav_tasks::marine_nav_tasks
+    )
+    ament_target_dependencies(test_set_task_failed
+      behaviortree_cpp
+      marine_nav_interfaces
       rclcpp
     )
   endif()
