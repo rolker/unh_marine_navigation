@@ -19,3 +19,18 @@ issue: 28
 - [ ] Land a command-continuity test with the fix (timing-dependent bug → deterministic repro on the `unh_echoboats_project11#186` dry-run/sim bed; assert no >Ns zero-command window across a line transition).
 - [ ] Coordinate `run_tasks.xml` edits with #25 (PR #37) and verify no regression with #23 (stale per-line goal `header.stamp`); refresh the embedded `TreeNodesModel` if node usage changes.
 - [ ] Honor "keep way, not zero" — note velocity_smoother/cmd_vel filters are disabled on BizzyBoat, so controller-output continuity is the whole fix (no smoothing layer to mask a gap).
+
+## Plan Authored
+**Status**: complete
+**When**: 2026-05-27 13:50 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**Plan**: `.agent/work-plans/issue-28/plan.md` at `4e20532`
+**PR**: https://github.com/rolker/unh_marine_navigation/pull/40 (`[PLAN]` prefix)
+**Phases**: single PR (BT-only + sim continuity test)
+**Scope**: Option A only (band-aid); B2 look-ahead pre-plan + coverage-planner redesign excluded by user direction.
+
+### Open questions
+- [ ] Q1 (gating): does `follow_path` preempt a RUNNING goal without a zero-command blip? = the #35/#36 spike; implementation should follow/co-run it.
+- [ ] Q2: target transit `RateController hz` + planner retry cap vs the 3 s margin.
+- [ ] Q3: split a hover-only exit out of the shared `CancelAllNavigation` (vs parameterize) — confirm GotoPose unaffected.
