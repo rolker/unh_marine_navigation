@@ -14,8 +14,30 @@ issue: 35
 **Scope verdict**: well-scoped
 
 ### Actions
-- [ ] A change includes its consequences / Test what breaks: add a regression test reproducing the N→N+1 same-type mid-line interrupt; coordinate with #7 / #8 (no BT-navigator test harness exists yet).
-- [ ] Surface the behavioral choice before implementing: identity-gated re-entry vs. goal preempt/cancel (and whether the new line restarts from a fresh transit-to-start) is operator-facing — confirm intended interrupt semantics first.
 - [ ] Make the preemption observable (log the `FollowPath` halt/restart) so reported task and executed path stay coupled.
-- [ ] Sequence with #25 / #28 — all three edit `run_tasks.xml`.
 - [ ] Capture the fix-direction rationale in the PR (no project ADR system exists).
+
+### Decisions (review walkthrough with Roland, 2026-05-26)
+Open questions from the review were resolved interactively before plan-task:
+
+1. **Interrupt semantics — transit to N+1's start.** On a mid-line Execute of
+   N+1, abandon N, navigate to N+1's start point, then survey from the start.
+   Matches today's clear→resend behavior and gives cleanest coverage of N+1.
+2. **Fix mechanism — identity-gated BT re-entry.** Latch the task id at entry;
+   a `ReactiveSequence` condition fails when `current_task_id` changes, halting
+   the running `FollowPath` and re-entering the `Sequence` fresh so
+   `SetPathFromTask` + `TransitAndSurveyLine` recompute for N+1 (which yields
+   decision #1's transit-to-start). Localized to `run_tasks.xml`. Goal-preempt/
+   cancel at the nav2 level was rejected (still needs id-change detection and
+   doesn't re-run the transit leg by itself).
+3. **Regression test — deferred, reevaluate at implementation.** No BT-navigator
+   test harness exists yet and an agent is actively working #8. Plan to ride on
+   that harness once it lands rather than bootstrap a parallel one; revisit the
+   test mechanism when implementing.
+4. **Sequencing — #25 first, then #35 on top.** #25 restructures the same
+   dispatch region (`ReactiveFallback` → likely `Switch`/`IfThenElse`, lines
+   ~126–168) that #35 builds on, and changes how `SurveyLineTask` is reached.
+   Let #25's dispatch shape settle, then attach #35's id-gating to the new
+   structure. Complementary, not redundant: a `Switch` keyed on
+   `current_task_type` still won't re-tick on survey_line→survey_line, so #35 is
+   needed regardless. (#28 also edits this file — same-region awareness applies.)
