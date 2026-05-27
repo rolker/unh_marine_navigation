@@ -1,176 +1,137 @@
-# Plan: Hardened task dispatch — contain matched-but-failed + identity-gated line re-entry
+# Plan: Contain matched-but-failed task dispatch (no silent mark-done)
 
-**Closes #25 and #35** (merged: both rewrite the same survey-line dispatch path; see
-"Why merged"). Supersedes the standalone plans/PR #36.
+**Closes #25.** Standalone again — #35 was un-merged after the design simplified (see
+"History / un-merge" below). This plan covers only #25.
 
-## Issues
+## Issue
 
-- https://github.com/rolker/unh_marine_navigation/issues/25 — SkipUnknownTaskType catchall silently marks tracklines done on subtree FAILURE
-- https://github.com/rolker/unh_marine_navigation/issues/35 — Mission re-send mid-line doesn't take effect — BT latches FollowPath path on same-type task switch
-
-## Why merged
-
-#35's fix makes `SurveyLineTask` return FAILURE on a mid-line task switch (identity
-gate). #25 adds `RetryUntilSuccessful` + `SetTaskFailed` around the same `survey_line`
-case. The two intents flow through the *same* FAILURE signal — preemption ("re-enter
-the new line") vs execution failure ("retry, then flag + skip"). Resolving that
-collision *is* the work, and it lives in one stretch of dispatch XML + `SurveyLineTask`.
-Doing them separately would stack a footgun for #35 to defuse. Merged per Q4.
+https://github.com/rolker/unh_marine_navigation/issues/25 — SkipUnknownTaskType catchall
+silently marks tracklines done on subtree FAILURE
 
 ## Context
 
 `NavigatorSequence` (`run_tasks.xml:127-170`) dispatches via a `ReactiveFallback` whose
 children are per-type subtrees gated by a first-child
 `ScriptCondition(current_task_type == '<type>')`, with a trailing
-`SetTaskDone "SkipUnknownTaskType"` catchall. Unmatched-type and matched-but-failed
-share that one exit, so a `FollowPath` ABORT inside a matched `survey_line` falls
-through to the catchall and the trackline is recorded clean-done (#25). Separately,
-`SurveyLineTask` latches `{survey_path}` via `SetPathFromTask` once and re-enters only
-on a `current_task_type` change — so a `survey_line → survey_line` switch updates the
-heartbeat task but never the followed path (#35).
+`SetTaskDone "SkipUnknownTaskType"` catchall. **Unmatched-type and matched-but-failed
+share that one exit**, so a `FollowPath` ABORT inside a matched `survey_line` falls
+through to the catchall and the trackline is recorded clean-done. Field-observed.
 
-Findings that shape the approach (verified in this worktree):
-- **Record surface already exists.** `TaskInformation.msg` has `string status`;
-  `Task::setStatus`/`status()` exist in C++ (`task.cpp:98`) and Python (`task.py:128`);
-  `bt_types.cpp:245` already serializes `status` onto the feedback/heartbeat JSON that
-  **camp** renders. `setStatus` is never called today. So attempted-but-failed needs
-  **no `.msg` change and no downstream rebuild** — just write the existing field (Q1).
-- **No diagnostics infra exists.** Observability rides the existing status→heartbeat→camp
-  path + `RCLCPP_ERROR`, not a new `DiagnosticStatus` publisher (Q1). Camp gaining a
-  richer mission-status display is a separate camp-repo follow-up, not this PR.
-- **Retry pattern is in-repo.** `RunSurveyAreaSubTasks` (`:198`) and `SurveyLineSetTask`
-  (`:330`) already wrap line execution in `RetryUntilSuccessful num_attempts="3"`; both
-  currently mark the parent done on exhausted retry (the same #25 bug, one level down).
-- BT is `BTCPP_format="4"` (#21) → stock `Switch` available.
+Verified facts shaping the approach:
+- **No recovery is wired today.** `run_tasks.xml` has no `RecoveryNode`; a `FollowPath`
+  ABORT propagates straight up. The deployed `nav2_params.yaml`
+  (`seafloor_echoboat_project11/echoboat_project11/config`) sets controller
+  `failure_tolerance: 0.3` + a `SimpleProgressChecker` (no 0.5 m movement in 10 s →
+  ABORT), so ABORTs are a real event. `behavior_server` *does* configure recoveries
+  `[spin, backup, drive_on_heading, assisted_teleop, wait, hover]`, but nothing invokes
+  them — and `spin`/`backup` are inappropriate for a boat; `hover`/`wait` are the
+  marine-sensible ones.
+- **The record surface exists.** `TaskInformation.msg` has `string status`;
+  `Task::setStatus`/`status()` exist in C++ (`task.cpp:98`) and Python (`task.py:128`),
+  and are **never written today**. So recording "failed" needs **no `.msg` change**.
+- **The operator path for `status` is cross-repo.** `task_navigator.cpp:116` publishes
+  `taskMessages()` (raw `TaskInformation`) as RunTasks feedback → consumed by
+  `unh_marine_autonomy/.../mission_manager/camp_interface.py:listTasks`, which renders
+  `if len(task.status): kv.value += ' status: ' + str(task.status)` into the camp
+  heartbeat (stringified — not parsed). So writing `status` for the first time **changes
+  camp's task line today**: `type: survey_line (done) status: <…>`. (NOT `bt_types.cpp`,
+  which feeds Groot/JSON logging — corrected from an earlier draft.)
+- BT is `BTCPP_format="4"` (#21) → stock `Switch` and `RecoveryNode` available.
+- The survey `FollowPath` is **two subtree levels** below `SurveyLineTask`:
+  `SurveyLineTask → TransitAndSurveyLine (run_tasks.xml:362) → SurveyLine (282)`, and the
+  `FollowPath` sits inside `SurveyLine`'s own `ReactiveSequence` (`:286-302`), behind a
+  transit leg (`NavigateThroughWaypoints`). `SurveyLine` is the shared survey-line
+  execution unit, reused at all three dispatch sites.
 
-Decisions locked with Roland: retry then skip + flag, not halt (out-of-comms autonomy);
-record attempted-but-failed distinctly from done; structurally distinct exits;
-mirror at all three dispatch levels (Q3); merge with #35 (Q4).
+Decision (with Roland): keep the retry-then-flag intent, implemented **properly** as a
+Nav2 `RecoveryNode` invoking a marine recovery — not a bare `RetryUntilSuccessful`.
 
 ## Approach
 
 Single PR on `feature/issue-25`.
 
-### Part A — contain matched-but-failed (#25)
-
 1. **`Switch` dispatch.** Replace `NavigatorSequence`'s `ReactiveFallback` + per-subtree
    `ScriptCondition` gates with a `Switch` on `current_task_type`; the **default branch**
    is the existing `SetTaskDone "SkipUnknownTaskType"`. A matched case that FAILS no
-   longer reaches the default — the core structural fix.
-2. **New `SetTaskFailed` node** (sibling of `SetTaskDone`): writes a **structured**
-   `status` (`{outcome: failed, reason: <follow_path_error_code>, attempts: N}` — a
-   stable contract for camp), calls `setDone()` so the mission advances, and
-   `RCLCPP_ERROR`s. Registered in `bt_register_nodes.cpp`.
-3. **Per-case retry + flag at all three levels (Q3).** Wrap each matched case in
-   `RetryUntilSuccessful num_attempts="3"` with a `SetTaskFailed` fallback, at:
-   `NavigatorSequence`, `RunSurveyAreaSubTasks`, and `SurveyLineSetTask`. Effect at the
-   nested levels: an aborted sub-line is recorded individually and the area/set
-   **continues its remaining lines** (skip-and-continue) instead of abandoning the parent.
-
-### Part B — identity-gated line re-entry (#35)
-
-4. **`SetPathFromTask`** — add `OutputPort<std::string>("path_task_id")` emitting
-   `task->message().id`, latched alongside `{survey_path}`. C++ latch, immune to
-   blackboard-remap quirks.
-5. **`SurveyLineTask` identity gate** — re-entry detector
-   `ScriptCondition(current_task_id == path_task_id)` as a sibling of `FollowPath` inside
-   a `ReactiveSequence`, re-evaluated each tick. On a mid-line switch it fails → halts
-   `FollowPath` → re-latch → restart on the new line's path. First-entry guard for empty
-   `path_task_id`. Log an INFO on halt/restart (transparency).
-6. **Survey-area / line-set reuse** — `SurveyLineTask` is also instantiated under
-   `RunSurveyAreaSubTasks` (id = `current_survey_area_task_id`) and `SurveyLineSetTask`
-   (id = `current_survey_line_set_sub_task_id`). Wire the identity comparison to resolve
-   to the correct id at each call site, or scope the gate so those paths stay correct.
-
-### Part C — the preempt-vs-fail seam (Q4, the hard core)
-
-7. **Preemption must not consume the retry budget or trip `SetTaskFailed`.** Candidate
-   structure for the `survey_line` case:
-
-   ```
-   Fallback                                  # SetTaskFailed only on genuine exhaustion
-     RetryUntilSuccessful num_attempts=3
-       Sequence (memory)
-         SetPathFromTask( survey_path, path_task_id := current_task_id )   # re-latches each (re)entry
-         ReactiveSequence
-           ScriptCondition( current_task_id == path_task_id )              # preemption detector
-           FollowPath( survey_path )
-         SetTaskDone
-     SetTaskFailed
-   ```
-
-   A switch fails the inner `ScriptCondition` → `FollowPath` halted → memory `Sequence`
-   FAILS → `RetryUntilSuccessful` re-ticks → `SetPathFromTask` re-latches the new line →
-   `FollowPath` restarts on the new path. **Known subtlety (validate, don't hand-wave):**
-   this consumes one of the 3 attempts per switch, so ≥3 rapid switches could trip
-   `SetTaskFailed` on a non-failure. If the re-entry fixture (below) shows that matters,
-   separate the preemption path from the retry counter (e.g. reset on id-change, or route
-   preemption above the retry). This is the PR's central design risk and what the
-   re-entry test exists to pin down.
-
-### Part D — tests (Q2; minimal inline now, no #8 dependency)
-
-8. **`SetTaskFailed` node gtest** — asserts it sets `done` **and** writes a non-empty
-   structured `status`; contrast `SetTaskDone` leaving status empty. Adds
-   `ament_cmake_gtest` infra to `marine_nav_behavior_tree`.
-9. **Routing fixture** — minimal BT-XML: a matched case forced to FAILURE routes to
-   `SetTaskFailed` (status set, not clean-done); an unmatched type hits the default
-   catchall. Self-contained in BT.CPP with stub task nodes.
-10. **Re-entry fixture** — tick `survey_line` with a mid-line `current_task_id` change;
-    assert `{survey_path}`/`path_task_id` re-latch to the new line and the line is **not**
-    recorded `failed` (the Part C seam). Drives resolution of the retry-budget subtlety.
-
-Full-tree integration (loading the real `run_tasks.xml` under a running navigator) is
-deferred to #8's launch_testing harness.
+   longer reaches the default — the core structural fix. Confirm the top-level
+   `ReactiveSequence` still re-ticks `UpdateCurrentTaskData` so a type change mid-run is
+   still observed (the existing clear→resend path relies on this).
+2. **Marine recovery wrapper (centralized at `SurveyLine`).** Wrap the survey-line
+   `FollowPath` (in `SurveyLine`, the shared unit) in a Nav2 `RecoveryNode num_retries=3`
+   with a **marine recovery** (candidate: `Wait`, or the custom `hover` behavior — see
+   Open Questions) as the recovery branch. A transient ABORT triggers recover-then-retry.
+   Because `SurveyLine` is reused at all three call sites, this is **one edit, not three**
+   — superseding the earlier "mirror at three levels" framing for the *retry* axis.
+3. **New `SetTaskFailed` node + record-failed exits.** When recovery is exhausted the
+   subtree FAILs. `SetTaskFailed` (sibling of `SetTaskDone`) writes
+   `status` (a short structured map, e.g. `{outcome: failed, reason: <error_code>,
+   attempts: N}`; rendered stringified by camp today) + `setDone()` so the mission
+   advances + `RCLCPP_ERROR`. Wire it so a matched-but-failed case records-failed rather
+   than clean-done, at the top-level `Switch` case **and** at the nested loops
+   (`RunSurveyAreaSubTasks` `:198`, `SurveyLineSetTask` `:330`) so a failed sub-line is
+   recorded and the area/set **continues** its remaining lines (skip-and-continue). This
+   *record/advance* axis genuinely is three edits (different surrounding structures).
+4. **Observability.** The failed `status` already reaches camp (fact above) + the
+   `RCLCPP_ERROR`. No `DiagnosticStatus` publisher (none exists). A richer camp
+   mission-status display is a separate `unh_marine_autonomy`/camp follow-up.
+5. **Tests** (extend the existing `ament_cmake_gtest` infra — `test_set_controller_speed_resolve.cpp`
+   already present): `SetTaskFailed` node gtest (sets `done` + writes non-empty
+   `status`); a minimal BT-XML **routing fixture** (matched-but-failed → `SetTaskFailed`;
+   unmatched → catchall; recovery exhaustion → `SetTaskFailed`, not clean-done). Full-tree
+   integration deferred to #8's harness.
 
 ## Files to Change
 
 | File | Change |
 |------|--------|
-| `marine_nav_bt_task_navigator/behavior_trees/run_tasks.xml` | `Switch` dispatch; retry + `SetTaskFailed` at 3 levels; `SurveyLineTask` identity gate + re-latch structure (Part C); INFO log; embedded `TreeNodesModel` for `SetTaskFailed` |
+| `marine_nav_bt_task_navigator/behavior_trees/run_tasks.xml` | `Switch` dispatch; `RecoveryNode` + marine recovery around `SurveyLine`'s `FollowPath`; `SetTaskFailed` on exhausted-failure at top `Switch` case + the two nested loops; embedded `TreeNodesModel` for `SetTaskFailed` |
 | `marine_nav_behavior_tree/.../action/set_task_failed.{h,cpp}` | **New** node: structured `setStatus` + `setDone` + `RCLCPP_ERROR` |
-| `marine_nav_behavior_tree/.../action/set_path_from_task.{h,cpp}` | Add `path_task_id` output port; emit `task->message().id` |
 | `marine_nav_behavior_tree/src/bt_register_nodes.cpp` | Register `SetTaskFailed` |
-| `marine_nav_behavior_tree/CMakeLists.txt` + new `test/` | Add node to plugin lib; gtest infra; node + routing + re-entry tests |
+| `marine_nav_behavior_tree/CMakeLists.txt` + `test/` | Add node to plugin lib; extend gtest infra; node + routing fixtures |
 
 ## Principles Self-Check
 
 | Principle | Consideration |
 |---|---|
-| Human control & transparency | Failures recorded (structured status) + logged + on camp heartbeat; preemption logged. No silent mark-done. |
-| A change includes its consequences | Reuses existing `status` (no interface/downstream ripple); all three dispatch levels fixed; survey-area/line-set reuse covered; tests land with the code. |
-| Test what breaks | The break is dispatch routing + path re-latch — both get focused BT fixtures, not just node tests. |
-| Only what's needed | No new `.msg`, no diagnostics publisher; stock `Switch`/`Retry` + one node + one port. |
-| Capture decisions | Q1–Q4 rationale here + `progress.md` + PR body (no `docs/decisions/` in repo). |
+| Human control & transparency | Failures recovered, then recorded (`status` → camp) + logged. No silent mark-done. |
+| A change includes its consequences | Reuses existing `status` (no `.msg`/rebuild ripple); cross-repo camp consumer named; recovery centralized at the shared `SurveyLine`; tests land with code. |
+| Test what breaks | Routing + recovery-exhaustion exits get BT fixtures, not just a node test. |
+| Only what's needed | One new node; stock `Switch`/`RecoveryNode`; recovery wrapper at one shared node. |
+| Capture decisions | Recovery-not-bare-retry, marine recovery choice, camp path correction — here + `progress.md` + PR. |
 
 ## ADR Compliance
 
 | ADR | Triggered | How addressed |
 |---|---|---|
-| 0002 — Worktree isolation | Yes | `feature/issue-25` worktree; PR into `jazzy`; no direct default-branch commits. |
-| 0008 — ROS 2 conventions | Yes | Stock BT.CPP4 `Switch`/`RetryUntilSuccessful`; new node/port follow existing `SetTaskDone`/`SetPathFromTask` idioms; reuses the existing `status` channel. |
+| 0002 — Worktree isolation | Yes | `feature/issue-25`; PR into `jazzy`. |
+| 0008 — ROS 2 conventions | Yes | Stock BT.CPP4 `Switch`/`RecoveryNode`; new node follows `SetTaskDone` idiom; reuses behavior_server recoveries + the `status` channel. |
 
 ## Consequences
 
 | If we change... | Also update... | In this PR? |
 |---|---|---|
-| Write `TaskInformation.status` for the first time | Cross-repo grep (`mission_manager`, `rqt_*`, camp) for any consumer assuming `status` stays empty | Audit before merge; no `.msg` change |
-| `Switch` dispatch + retry at 3 levels | `TreeNodesModel` / generated `*_nodes.xml`; verify each level's `SetTaskDone` still fires on success | Yes |
-| `SetPathFromTask` ports | Every `run_tasks.xml` call site of `SetPathFromTask` | Yes — audit call sites |
-| Mid-line preemption semantics | README BT-flow docs if present | Yes if present |
+| Write `TaskInformation.status` first time | `unh_marine_autonomy/.../camp_interface.py:listTasks` already renders it → camp text changes; verify no other consumer assumes empty | Audit; no `.msg` change. camp display polish = separate follow-up |
+| `Switch` dispatch + `SetTaskFailed` at 3 record sites | `TreeNodesModel`/generated `*_nodes.xml`; confirm each level's success-path `SetTaskDone` still fires | Yes |
+| Invoke a behavior_server recovery from the task BT | Confirm the chosen recovery (`wait`/`hover`) is registered + marine-appropriate | Yes |
 
 ## Open Questions
 
-All four planning questions resolved with Roland (Q1 status-field+log; Q2 routing
-fixture now; Q3 all three levels; Q4 merge with #35). Remaining items are
-**implementation/validation**, not design forks:
-- [ ] Retry-budget vs preemption (Part C step 7) — confirm via the re-entry fixture whether
-  a switch consuming a retry attempt is acceptable, or separate the counter.
-- [ ] `current_task_id` resolution at the survey-area / line-set call sites (step 6) — verify under each remapping.
+- [ ] **Which recovery behavior** in the `RecoveryNode` — `Wait` (simple dwell) or the
+  custom `hover` (station-keep)? Lean `Wait` for transient progress-checker trips; `hover`
+  if station-keeping during recovery is preferred. Confirm with Roland.
+- [ ] **`num_retries` count** for the marine `RecoveryNode` (default 3, mirroring the
+  nested loops). Tunable.
 
 ## Estimated Scope
 
-Single PR in `unh_marine_navigation`, closing #25 + #35. Moderate: one new node + one
-new port, a `Switch`-based dispatch rewrite, retry/flag at three levels, the identity
-re-entry structure, three BT test fixtures. **No interface change, no downstream
-rebuild.** Central risk is the Part C preempt-vs-fail seam, pinned by the re-entry test.
+Single PR, #25 only. Moderate: one new node + gtest, a `Switch` dispatch rewrite, a
+`RecoveryNode` wrapper at the shared `SurveyLine`, `SetTaskFailed` at three record sites.
+No interface change, no downstream rebuild.
+
+## History / un-merge
+
+This was briefly merged with #35 (PR #37 closed both; PR #36 closed). After revisiting the
+mid-line-switch behavior, #35 moved to **in-place path switch** (reactive `{survey_path}`;
+Nav2 `FollowPath` auto-resends on path change), which produces no FAILURE and **decouples
+from #25** — so the two were un-merged. #35 is standalone again on `feature/issue-35` / PR
+#36; this PR (#37) reverts to closing #25 only.

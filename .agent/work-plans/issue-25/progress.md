@@ -118,3 +118,31 @@ against source before persisting.
 - [ ] (suggestion) "Mirror at all three levels" is three *different* edits — nested levels use `_failureIf` + `RetryUntilSuccessful` already; not one repeated edit.
 - [ ] (suggestion) gtest infra already exists (`test_set_controller_speed_resolve.cpp`) — "extend," not "add"; the re-entry fixture must model the real two-level `FollowPath` placement or it validates a tree that isn't shipped.
 - [ ] (suggestion) `path_task_id`/`current_task_id` resolution across the three `SurveyLineTask` call sites (different id keys + `_autoremap`) is a correctness item, not just validation.
+
+## Redesign + Un-merge from #35
+**When**: 2026-05-27 11:20 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context)) — decided with Roland
+
+A clean-slate design pass (prompted by Roland asking whether a fresh design would be
+simpler) reframed both fixes and reversed the merge:
+
+- **#35 → in-place path switch.** Roland chose to relax the earlier "transit-to-start"
+  decision. #35 becomes: re-derive `{survey_path}` reactively from `current_task` so Nav2
+  `FollowPath` auto-resends on a path change (mechanism confirmed in `BtActionNode`
+  `goal_updated_`/`send_new_goal`; the `FollowPathAction.cpp` path-comparison still needs a
+  sim spike). No identity gate, no halt, no FAILURE → **decoupled from #25**. So the two
+  are **un-merged**: #35 standalone on `feature/issue-35` / PR #36 (reopened); this PR (#37)
+  closes #25 only. The earlier preempt-vs-fail seam (the Part C risk) is gone.
+- **#25 → Switch + marine recovery wrapper.** Recovery investigation: no `RecoveryNode`
+  is wired today (FollowPath ABORT is unhandled — the bug); `behavior_server` configures
+  recoveries but nothing invokes them, and `spin`/`backup` are wrong for a boat. Roland
+  chose to keep the retry intent, done properly as a Nav2 `RecoveryNode` invoking a marine
+  recovery (`wait`/`hover` TBD), centralized at the shared `SurveyLine` node (one edit, not
+  three). On exhausted recovery, `SetTaskFailed` records `status` + advances; record/advance
+  is wired at the top `Switch` case + the two nested loops (skip-and-continue).
+- **Corrected from the prior plan:** the `status`→operator path is
+  `task_navigator.cpp:116` → `camp_interface.py:listTasks` (`unh_marine_autonomy`), NOT
+  `bt_types.cpp`; writing `status` changes camp text today. The survey `FollowPath` is two
+  subtree levels down in `SurveyLine` (fixes the review's must-fix structural error).
+
+Plan rewritten to the standalone #25 scope.
