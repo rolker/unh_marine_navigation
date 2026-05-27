@@ -105,6 +105,25 @@ TEST(ComputeHoverSpeed, MinSpeedFloorAppliesOnlyOutsideDeadband)
     computeHoverSpeed(0.75 * kMinR, 0.0, kMinR, kMaxR, min_speed, kMaxSpeed), 0.0, kTol);
 }
 
+TEST(ComputeHoverSpeed, InvalidRadiiHoldZeroNeverNaN)
+{
+  // max == min divides by a zero span in the ramp and turn-floor terms; max <
+  // min and a negative minimum_radius are nonsensical. All must yield a finite
+  // zero command, never NaN/inf onto cmd_vel. The max==min case uses a heading
+  // error and range >= radius to drive the turn-floor 0/0 that would NaN.
+  const double s_eq = computeHoverSpeed(2.5, 0.5, 2.5, 2.5, 0.0, 1.0);
+  EXPECT_FALSE(std::isnan(s_eq));
+  EXPECT_NEAR(s_eq, 0.0, kTol);
+
+  const double s_lt = computeHoverSpeed(5.0, 0.0, 10.0, 2.5, 0.0, 1.0);  // max < min
+  EXPECT_FALSE(std::isnan(s_lt));
+  EXPECT_NEAR(s_lt, 0.0, kTol);
+
+  const double s_neg = computeHoverSpeed(1.0, 0.0, -1.0, 2.0, 0.0, 1.0);  // min < 0
+  EXPECT_FALSE(std::isnan(s_neg));
+  EXPECT_NEAR(s_neg, 0.0, kTol);
+}
+
 // --- composition with chooseApproachHeading: the combined reverse path ---
 
 TEST(HoverCommand, ForwardApproachFarDrivesForwardAtMax)

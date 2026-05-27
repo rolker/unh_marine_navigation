@@ -60,6 +60,19 @@ nav2_behaviors::ResultStatus Hover::onRun(const std::shared_ptr<const HoverActio
     maximum_speed_ = goal->maximum_speed;
   }
 
+  // computeHoverSpeed needs 0 <= minimum_radius < maximum_radius (it divides by
+  // their span and by minimum_radius). Outside that it safely commands zero
+  // forward speed, but surface the misconfiguration so it doesn't look like the
+  // boat is silently refusing to drive to station.
+  if (maximum_radius_ <= minimum_radius_ || minimum_radius_ < 0.0)
+  {
+    RCLCPP_WARN(
+      this->logger_,
+      "Hover: invalid radii (minimum_radius=%.3f, maximum_radius=%.3f); expected "
+      "0 <= minimum_radius < maximum_radius. Forward speed held at zero until reconfigured.",
+      minimum_radius_, maximum_radius_);
+  }
+
   // An empty target frame_id is the sentinel for "hold the current pose"
   // (pre-target behavior). A set frame_id holds the supplied pose — e.g. the
   // momentum-projected stop point from PredictStoppingPose.

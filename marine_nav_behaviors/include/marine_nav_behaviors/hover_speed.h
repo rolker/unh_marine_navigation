@@ -23,6 +23,12 @@ namespace marine_nav_behaviors
 // then: a heading-error taper (zero past ~45 deg error), a range-aware turn
 // floor (only at/outside minimum_radius), and a minimum_speed floor (only
 // outside minimum_radius).
+//
+// Precondition: 0 <= minimum_radius < maximum_radius. If it does not hold, the
+// span divisions below (and current_range/minimum_radius) would emit inf/NaN
+// straight onto cmd_vel. On a violation — including NaN radii, since NaN fails
+// every comparison — this commands zero forward speed (hold) rather than a
+// garbage velocity; Hover::onRun logs the misconfiguration once per engagement.
 inline double computeHoverSpeed(
   double current_range,
   double steering_proportion,
@@ -31,6 +37,10 @@ inline double computeHoverSpeed(
   double minimum_speed,
   double maximum_speed)
 {
+  if (!(maximum_radius > minimum_radius) || minimum_radius < 0.0) {
+    return 0.0;
+  }
+
   double current_target_speed = 0.0;
 
   if (current_range >= maximum_radius) {
