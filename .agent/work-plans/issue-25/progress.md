@@ -243,3 +243,24 @@ pre-push; (3) flip PR #37 out of draft after sim verification.
 **Governance:** Principles — transparency Pass (failures recorded+logged, no silent done), test-what-breaks Pass (node+routing fixtures; full-tree → #8), only-what's-needed Pass. ADR-0008/0002 Pass. Consequence: writing `TaskInformation.status` surfaces in camp via `unh_marine_autonomy/.../camp_interface.py` (cross-repo, no `.msg` change) — second-consumer grep still an open pre-merge item.
 **Plan drift:** Implementation matches plan (Switch + SetTaskFailed + RecoveryNode[Wait] + nested Switch-ify + routing fixture). The 3×3 stacked-retry interaction (suggestion 3) is an emergent gap the plan didn't call out.
 **Static:** package-wide pre-existing lint debt (cpplint/copyright/uncrustify); new files follow house style; pre-commit (enforced) passes. No new actionable static findings.
+
+## Integrated Review
+**Status**: complete
+**When**: 2026-05-27 17:38 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**PR**: #37 at `79b7a24`
+**Sources**: 2 (Copilot R1 @ `79b7a24`, Local Review (Pre-Push) @ `300fad7` — same code state)
+**Cross-source confirmations**: 2
+**CI**: copilot-pull-request-reviewer success; no build/test CI wired on this repo
+
+### Findings
+- [ ] (cross-confirmed, needs-decision) Stacked retries: nested survey-area (`run_tasks.xml:245`) and survey-line-set (`:404`) loops wrap `SurveyLineTask` in `RetryUntilSuccessful num_attempts=3`, while `SurveyLine` already wraps `FollowPath` in `RecoveryNode number_of_retries=3` + 5s `Wait` (`:358-370`) → up to 9 attempts (~minutes dwell) before `SetTaskFailed` on a stuck nested sub-line; top-level `survey_line` (`:178-184`) caps at 3 (no outer retry) — inconsistent. Recommend dropping the nested outer `RetryUntilSuccessful` (recovery now centralized in `SurveyLine`); time-to-skip budget is operator's call. — `run_tasks.xml` (Copilot lines 269, 418)
+- [ ] (cross-confirmed, suggestion) Dead `attempts` port: declared+read but never wired at any of 8 call sites; BT can't read RecoveryNode/Retry counters so it's always 0 and `status["attempts"]` always omitted. Drop the port or relabel "reserved — not yet populated." — `set_task_failed.h:21` / `set_task_failed.cpp:22,43,53`
+- [ ] (carried, Local Review) RecoveryNode retry re-follows the full `{survey_path}`, re-covering surveyed trackline — confirm acceptable in sim. — `run_tasks.xml` SurveyLine
+
+### Resolved (prior round)
+- (must-fix, Local Review @ `300fad7`) Null `current_task` deref in SetTaskDone/SetTaskFailed default catchall — fixed in `300fad7` (guard + null-task test); Copilot did not re-flag.
+
+### False positives
+- None. All three Copilot inline comments are valid (its two `run_tasks.xml` comments are the same finding at lines 269 and 418).
