@@ -63,6 +63,15 @@ if(BUILD_TESTING)
       "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     )
   endif()
+
+  ament_add_gtest(test_hover_speed
+    test/test_hover_speed.cpp
+  )
+  if(TARGET test_hover_speed)
+    target_include_directories(test_hover_speed PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    )
+  endif()
 endif()
 
 ament_package()

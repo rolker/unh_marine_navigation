@@ -1,5 +1,6 @@
 #include "marine_nav_behaviors/hover.h"
 #include "marine_nav_behaviors/hover_heading.h"
+#include "marine_nav_behaviors/hover_speed.h"
 #include "nav2_util/node_utils.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
@@ -155,57 +156,13 @@ nav2_behaviors::ResultStatus Hover::onCycleUpdate()
 
   double steering_proportion = abs(steering_angle) / M_PI;
 
-  double current_target_speed = 0.0;
-
-  if (current_range >= maximum_radius_)
-  {
-    current_target_speed = maximum_speed_;
-  }
-  else if (current_range > minimum_radius_)
-  {
-    float p = (current_range-minimum_radius_)/(maximum_radius_-minimum_radius_);
-    current_target_speed = p*maximum_speed_;
-  }
-  else
-  {
-    if (current_range < minimum_radius_/2.0)
-    {
-      current_target_speed = 0.0;
-      float p = 0.1*(1.0-(current_range/minimum_radius_));
-      current_target_speed = -p*maximum_speed_; // apply some reverse, up to 10%
-    }
-    else
-    {
-      current_target_speed = 0.0;
-    }
-    // current_target_speed = 0.0;
-    // steering_speed = 0.0;
-  }
-
-  // Smooth taper: 1.0 at aligned, 0.0 at >= 45° heading error.
-  current_target_speed *= std::max(0.0, 1.0 - steering_proportion*4.0);
-
-  // Range-aware floor for vectored-thrust authority during heading
-  // correction. Tapers linearly from 0.5 * maximum_speed_ at
-  // maximum_radius down to 0.2 * maximum_speed_ at minimum_radius, then
-  // drops to zero inside minimum_radius so the boat can settle on
-  // station instead of orbiting at the kinematic radius v_min/yaw_rate.
-  // (v4 of field patch — v3 used a flat 0.2 floor everywhere, which
-  // produced a ~3 m stable orbital loop in field testing.)
-  if (steering_proportion > 0.1 && current_range >= minimum_radius_)
-  {
-    double range_factor = std::clamp(
-        (current_range - minimum_radius_) /
-        (maximum_radius_ - minimum_radius_),
-        0.0, 1.0);
-    double turn_min_speed = (0.2 + 0.3 * range_factor) * maximum_speed_;
-    current_target_speed = std::max(current_target_speed, turn_min_speed);
-  }
-
-  if (current_range > minimum_radius_)
-  {
-    current_target_speed = std::max(current_target_speed, minimum_speed_);
-  }
+  // Field-tuned v4 speed-magnitude logic (range bands + heading taper + turn
+  // floor) lives in computeHoverSpeed so it can be unit-tested without a ROS
+  // fixture. The returned magnitude is multiplied by drive_sign below, so a
+  // reverse approach negates it (including the inner-deadband back-off term).
+  double current_target_speed = computeHoverSpeed(
+    current_range, steering_proportion,
+    minimum_radius_, maximum_radius_, minimum_speed_, maximum_speed_);
 
   auto cmd_vel = std::make_unique<geometry_msgs::msg::TwistStamped>();
   cmd_vel->header.stamp = this->clock_->now();
