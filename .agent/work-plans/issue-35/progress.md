@@ -80,3 +80,27 @@ Consequences of the un-merge:
 - Accepted trade: in-place switch may join the re-sent line partway (not from its start).
 
 Plan rewritten to the in-place-switch scope.
+
+## Plan Review (post-redesign, in-place switch)
+**Status**: complete
+**When**: 2026-05-27 12:04 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context)) — independent fresh-context sub-agent review
+
+**Plan**: `.agent/work-plans/issue-35/plan.md` at `0a681d6`
+**PR**: https://github.com/rolker/unh_marine_navigation/pull/36
+**Verdict**: changes-requested (ready-with-fixes — plan refinements, not approach rework)
+
+Verified correct against source: root cause (latch + type-only re-entry); `SetPathFromTask`
+pure SyncAction (`set_path_from_task.cpp:73`); `UpdateCurrentTask` re-selects each tick;
+transit-leg-not-re-run; clean #25 decoupling (no FAILURE produced); the Nav2 resend
+assumption is correctly located and honestly flagged (BtActionNode reads ports only at
+goal-send; RUNNING resend depends solely on `FollowPathAction::on_wait_for_result`, whose
+`.cpp` isn't shipped — spike+fallback is the right de-risk).
+
+### Findings
+- [ ] (must-fix) Name the actual wiring, don't defer it: the reactive `SetPathFromTask` inside `SurveyLine` (`run_tasks.xml:282-302`) reads the task via the key `survey_line_task` carried down through the `_autoremap` chain (`TransitAndSurveyLine`→`SurveyLine`), NOT `{current_task}` directly. State the key + the autoremap dependency in the plan — leaving placement to "confirm during implementation" is the same class of gap that sank the prior version one layer up.
+- [ ] (must-fix) Schedule the regression test or explicitly mark it deferred: no BT-task-navigator harness exists (only `marine_nav_behavior_tree/test/test_set_controller_speed_resolve.cpp`). The plan references a re-entry fixture in the Principles table but no Approach/Files step creates it, and the "ride #8's harness" framing was dropped without replacement. Commit to a minimal fixture (mock follow_path server, switch task mid-RUNNING, assert `{survey_path}` + dispatched goal track the new task) or state the deferral + why.
+- [ ] (suggestion) Step-3 prose says "autoremapped `{current_task}`" but the real port is `survey_line_task` (top: `{current_task}`@150; area: `{current_survey_area_task}`@200; set: `{survey_line_set_sub_task}`@332) — name the real key to avoid wiring `{current_task}`.
+- [ ] (suggestion) Step-4 "INFO log on path re-send" has no log node in this tree (no `LogText`); resolve to "Nav2 already logs the goal resend" (verify) or accept a tiny node and adjust the "no new node" framing.
+- [ ] (suggestion) Spike should record the goal-UUID/BT-log change to positively confirm a resend (vs silently following a stale goal), not infer from boat motion.
+- [ ] (suggestion) In-place-switch edge cases: a re-sent line far away / opposite-direction means FollowPath joins at an arbitrary nearest point with no lead-in (possible sharp turn / wrong traversal direction). Add one sentence to Consequences before field use.
