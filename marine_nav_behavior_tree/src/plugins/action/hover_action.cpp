@@ -13,11 +13,11 @@ HoverAction::HoverAction(
 
 void HoverAction::initialize()
 {
-  double minimum_radius;
+  double minimum_radius = 0.0;
   getInput("minimum_radius", minimum_radius);
-  double maximum_radius;
+  double maximum_radius = 0.0;
   getInput("maximum_radius", maximum_radius);
-  double maximum_speed;
+  double maximum_speed = 0.0;
   getInput("maximum_speed", maximum_speed);
 
   goal_.minimum_radius = minimum_radius;

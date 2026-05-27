@@ -31,8 +31,8 @@ public:
   {
     return providedBasicPorts(
     {
-      BT::InputPort<double>("minimum_distance", 0.0, "Distance within which robot is deemed at the target and drifts"),
-      BT::InputPort<double>("maximum_distance", 0.0, "Distance at which robot uses maximum speed to get to the target"),
+      BT::InputPort<double>("minimum_radius", 0.0, "Radius within which robot is deemed at the target and drifts"),
+      BT::InputPort<double>("maximum_radius", 0.0, "Radius at which robot uses maximum speed to get to the target"),
       BT::InputPort<double>("maximum_speed", 0.0, "Maximum speed to use to get to the target"),
       BT::OutputPort<Action::Result::_error_code_type>("error_code_id", "The hover server error code")
     });

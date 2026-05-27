@@ -63,11 +63,11 @@
           </IfThenElse>
         </Fallback>
         <Script code="navigation_state := &apos;hover&apos;"/>
-        <Hover maximum_distance="0.000000"
+        <Hover maximum_radius="0.000000"
                maximum_speed="0.000000"
                error_code_id="{hover_error_code}"
                server_timeout="1000"
-               minimum_distance="0.000000"
+               minimum_radius="0.000000"
                server_name="hover"/>
       </SequenceWithMemory>
     </ReactiveSequence>
@@ -530,9 +530,9 @@
                   type="std::shared_ptr&lt;marine_nav_tasks::Task&gt;">Task to check for sub-tasks</input_port>
     </Condition>
     <Action ID="Hover">
-      <input_port name="maximum_distance"
+      <input_port name="maximum_radius"
                   default="0.000000"
-                  type="double">Distance at which robot uses maximum speed to get to the target</input_port>
+                  type="double">Radius at which robot uses maximum speed to get to the target</input_port>
       <input_port name="maximum_speed"
                   default="0.000000"
                   type="double">Maximum speed to use to get to the target</input_port>
@@ -540,9 +540,9 @@
                    type="unsigned short">The hover server error code</output_port>
       <input_port name="server_timeout"
                   type="std::chrono::milliseconds"/>
-      <input_port name="minimum_distance"
+      <input_port name="minimum_radius"
                   default="0.000000"
-                  type="double">Distance within which robot is deemed at the target</input_port>
+                  type="double">Radius within which robot is deemed at the target</input_port>
       <input_port name="server_name"
                   type="std::string">Action server name</input_port>
     </Action>
