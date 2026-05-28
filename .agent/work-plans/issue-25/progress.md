@@ -268,3 +268,22 @@ Both cross-confirmed findings resolved in `cba7f49`. Verified: `marine_nav_behav
 
 ### False positives
 - None. All three Copilot inline comments are valid (its two `run_tasks.xml` comments are the same finding at lines 269 and 418).
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-05-27 21:00 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+**Verdict**: approved
+
+**Branch**: feature/issue-25 at `d592d18`
+**Mode**: pre-push (base origin/jazzy)
+**Depth**: Standard (small delta on mission-critical BT control-flow)
+**Scope**: round-1 review-fix delta (`cba7f49` + comment reword `d592d18`)
+**Specialists**: Claude Adversarial (fresh-context) ✓; Copilot Adversarial ✓ (cross-model); Static covered by colcon ament-lint + pre-commit.
+**Must-fix**: 0 | **Suggestions**: 1 (fixed)
+
+### Findings
+- [x] (suggestion, cross-confirmed Claude+Copilot) Comments said failures route to SetTaskFailed "after retries"/"after RecoveryNode exhausts"; the Fallback now catches ALL line-subtree failures (transit/path-setup/TF), not just FollowPath retry-exhaustion. Broadened both comments in `d592d18`. — `run_tasks.xml:237,398`
+
+**Verified-correct (both reviewers, independent):** port removal complete (no lingering `attempts` ref / no dangling getInput); retry removal structurally valid (all three nested sites mirror the unchanged top-level Fallback[Sequence,SetTaskFailed]; only the unrelated `:114` num_attempts=20 transit retry remains); no non-termination (KeepRunningUntilFailure bounded by AllTasksDoneCondition; both SetTaskDone/SetTaskFailed call setDone()); tests track the change.
+**Note:** accepted trade-off — non-FollowPath transient failures on nested lines now skip after one attempt (consistent with top-level dispatch); retrying the transit leg would need its own RecoveryNode in TransitAndSurveyLine, not a blanket outer retry.
