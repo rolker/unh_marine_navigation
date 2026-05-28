@@ -287,3 +287,23 @@ Both cross-confirmed findings resolved in `cba7f49`. Verified: `marine_nav_behav
 
 **Verified-correct (both reviewers, independent):** port removal complete (no lingering `attempts` ref / no dangling getInput); retry removal structurally valid (all three nested sites mirror the unchanged top-level Fallback[Sequence,SetTaskFailed]; only the unrelated `:114` num_attempts=20 transit retry remains); no non-termination (KeepRunningUntilFailure bounded by AllTasksDoneCondition; both SetTaskDone/SetTaskFailed call setDone()); tests track the change.
 **Note:** accepted trade-off — non-FollowPath transient failures on nested lines now skip after one attempt (consistent with top-level dispatch); retrying the transit leg would need its own RecoveryNode in TransitAndSurveyLine, not a blanket outer retry.
+
+## Integrated Review
+**Status**: complete
+**When**: 2026-05-27 22:04 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**PR**: #37 at `9c0dcc5`
+**Sources**: Copilot R2 @ `9c0dcc5` (current) + Copilot R1 @ `79b7a24` (stale, prior round) + local timeline
+**Cross-source confirmations**: 0 (new finding is Copilot-only; prior local pre-push reviews — incl. both adversarial passes — missed it)
+**CI**: copilot-pull-request-reviewer success; no build/test CI wired
+
+### Findings
+- [ ] (must-fix, Copilot R2) `SurveyLineSetTask` SubTree call in the survey-area loop (`run_tasks.xml:262-265`) lacks the explicit `current_task_type="{current_survey_area_task_type}"` remap its sibling case_1 has (`:254`). Verified autoremap chain: `SurveyAreaTask` gated on `current_task_type=='survey_area'` (`:316`) → autoremaps into `RunSurveyAreaSubTasks`; `UpdateCurrentTaskData` writes the sub-task type to `current_survey_area_task_type` (`:228`), NOT `current_task_type`; so `SurveyLineSetTask.current_task_type` autoremaps to the inherited `"survey_area"`, its entry guard `ScriptCondition current_task_type=='survey_line_set'` (`:375`) fails → FAILURE → Fallback → SetTaskFailed. Net: every survey_line_set sub-task within a survey_area is falsely recorded failed + skipped. Re-introduces the unmatched-vs-failed conflation #25 removes, one level down. Fix: add the explicit remap mirroring case_1. — `run_tasks.xml:262-265`
+
+### Resolved (R1, stale @ `79b7a24` — prior round)
+- (Copilot R1) Dead `attempts` port (`set_task_failed.h:21`) — removed in `cba7f49`.
+- (Copilot R1) Stacked retries survey-area (`run_tasks.xml:269`) + line-set (`:416`) — outer RetryUntilSuccessful removed in `cba7f49`.
+
+### False positives
+- None.
