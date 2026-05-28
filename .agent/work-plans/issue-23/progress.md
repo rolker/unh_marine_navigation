@@ -19,3 +19,21 @@ issue: 23
 - [ ] Pull the 2026-04-27 bag from gabby (`~/data/logs/bizzyboat/`); use the line-3 transition as the canonical offline repro for fix validation before deployment.
 - [ ] Mirror the in-repo precedent for the fix idiom (`marine_nav_behavior_tree/src/plugins/action/path_to_pose_vector.cpp:33`, zero-stamp = "latest" in TF lookups) and the GTest fixture style from `test_dispatch_routing.cpp` / `test_set_task_failed.cpp` for the regression test.
 - [ ] Coordinate with #35 (PR #36) — same file (`set_path_from_task.cpp`); land #23 first since #35 is still plan-only.
+
+## Plan Authored
+**Status**: complete
+**When**: 2026-05-27 23:35 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**Plan**: `.agent/work-plans/issue-23/plan.md` at `6b61501`
+**PR**: https://github.com/rolker/unh_marine_navigation/pull/41 (`[PLAN]` prefix)
+**Phases**: single
+
+### Open questions
+- [ ] Zero-stamp ("latest" in TF) vs. `node->now()` — going with the in-repo precedent (zero-stamp at `path_to_pose_vector.cpp:33`) unless review-plan objects; BT nodes don't carry an `rclcpp::Node` handle in this codebase pattern anyway.
+- [ ] 2026-04-27 bag availability on gabby — fall back to sim-based repro if pruned/rotated.
+
+### Plan-derived scope notes (carried from Issue Review actions)
+- Two producers, not one — `set_path_from_task.cpp:71` + `get_sub_path.cpp:49` (verified during planning).
+- Step 1 grep + step 6 bag-replay address the "Watch" findings from Issue Review.
+- Coordination with #35 reaffirmed in plan's Estimated Scope.
