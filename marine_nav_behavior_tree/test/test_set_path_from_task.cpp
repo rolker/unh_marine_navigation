@@ -19,7 +19,7 @@ namespace
 {
 
 geometry_msgs::msg::PoseStamped makePose(
-  double x, int32_t sec, uint32_t nanosec, const std::string& frame = "map")
+  double x, int32_t sec, uint32_t nanosec, const std::string & frame = "map")
 {
   geometry_msgs::msg::PoseStamped p;
   p.header.frame_id = frame;
@@ -55,7 +55,9 @@ TEST(SetPathFromTaskBuildPath, ZeroesOuterStampOnNonEmptyResult)
 TEST(SetPathFromTaskBuildPath, PreservesOuterFrameId)
 {
   auto poses = stalePoses();
-  for(auto& p : poses) p.header.frame_id = "odom";
+  for(auto & p : poses) {
+    p.header.frame_id = "odom";
+  }
   auto path = SetPathFromTask::buildPath(poses, 0, -1);
   EXPECT_EQ(path.header.frame_id, "odom");
 }

@@ -26,8 +26,7 @@ nav_msgs::msg::Path makeStalePath()
   p.header.frame_id = "map";
   p.header.stamp.sec = 999;   // outer (stale, what the bug propagated)
 
-  for(int i = 0; i < 3; ++i)
-  {
+  for(int i = 0; i < 3; ++i) {
     geometry_msgs::msg::PoseStamped pose;
     pose.header.frame_id = "map";
     pose.header.stamp.sec = 1000 + i;
@@ -53,7 +52,9 @@ TEST(GetSubPathBuildSubPath, ZeroesOuterStampOnNonEmptyResult)
 TEST(GetSubPathBuildSubPath, PreservesOuterFrameId)
 {
   auto in = makeStalePath();
-  for(auto& p : in.poses) p.header.frame_id = "odom";
+  for(auto & p : in.poses) {
+    p.header.frame_id = "odom";
+  }
   auto path = GetSubPath::buildSubPath(in, 0, -1);
   EXPECT_EQ(path.header.frame_id, "odom");
 }
