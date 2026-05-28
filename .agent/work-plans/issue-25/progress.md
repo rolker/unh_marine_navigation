@@ -299,7 +299,7 @@ Both cross-confirmed findings resolved in `cba7f49`. Verified: `marine_nav_behav
 **CI**: copilot-pull-request-reviewer success; no build/test CI wired
 
 ### Findings
-- [ ] (must-fix, Copilot R2) `SurveyLineSetTask` SubTree call in the survey-area loop (`run_tasks.xml:262-265`) lacks the explicit `current_task_type="{current_survey_area_task_type}"` remap its sibling case_1 has (`:254`). Verified autoremap chain: `SurveyAreaTask` gated on `current_task_type=='survey_area'` (`:316`) → autoremaps into `RunSurveyAreaSubTasks`; `UpdateCurrentTaskData` writes the sub-task type to `current_survey_area_task_type` (`:228`), NOT `current_task_type`; so `SurveyLineSetTask.current_task_type` autoremaps to the inherited `"survey_area"`, its entry guard `ScriptCondition current_task_type=='survey_line_set'` (`:375`) fails → FAILURE → Fallback → SetTaskFailed. Net: every survey_line_set sub-task within a survey_area is falsely recorded failed + skipped. Re-introduces the unmatched-vs-failed conflation #25 removes, one level down. Fix: add the explicit remap mirroring case_1. — `run_tasks.xml:262-265`
+- [x] (must-fix, Copilot R2) `SurveyLineSetTask` SubTree call in the survey-area loop (`run_tasks.xml:262-265`) lacks the explicit `current_task_type="{current_survey_area_task_type}"` remap its sibling case_1 has (`:254`). Verified autoremap chain: `SurveyAreaTask` gated on `current_task_type=='survey_area'` (`:316`) → autoremaps into `RunSurveyAreaSubTasks`; `UpdateCurrentTaskData` writes the sub-task type to `current_survey_area_task_type` (`:228`), NOT `current_task_type`; so `SurveyLineSetTask.current_task_type` autoremaps to the inherited `"survey_area"`, its entry guard `ScriptCondition current_task_type=='survey_line_set'` (`:375`) fails → FAILURE → Fallback → SetTaskFailed. Net: every survey_line_set sub-task within a survey_area is falsely recorded failed + skipped. Re-introduces the unmatched-vs-failed conflation #25 removes, one level down. Fix: add the explicit remap mirroring case_1. — `run_tasks.xml:262-265`
 
 ### Resolved (R1, stale @ `79b7a24` — prior round)
 - (Copilot R1) Dead `attempts` port (`set_task_failed.h:21`) — removed in `cba7f49`.
@@ -307,3 +307,24 @@ Both cross-confirmed findings resolved in `cba7f49`. Verified: `marine_nav_behav
 
 ### False positives
 - None.
+
+## Local Review (Pre-Push) — round 2
+**Status**: complete
+**When**: 2026-05-27 23:46 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+**Verdict**: approved
+
+**Branch**: feature/issue-25 at `f4b60aa`
+**Mode**: pre-push (base origin/jazzy)
+**Depth**: Standard (small delta on mission-critical BT control-flow)
+**Scope**: round-2 fix delta `f4b60aa` (autoremap fix + 4-case regression fixture)
+**Specialists**: Claude Adversarial (fresh-context) ✓; Copilot Adversarial ✓ (cross-model)
+**Must-fix**: 0 | **Suggestions**: 1 (applied — symmetric case_1 coverage in this commit)
+
+### Findings
+- [x] (suggestion, cross-confirmed Claude+Copilot) Original 2-test fixture only protected case_2 (`SurveyLineSetTask`); case_1 (`SurveyLineTask` at `run_tasks.xml:254`) has the identical autoremap-by-name asymmetry and would not have been regression-protected. Expanded the fixture to 4 cases covering both call sites; parameterized `makeTask(id, type)` and `runNestedAreaSubTask(with_remap, sub_task_type, task)`. — `test_dispatch_routing.cpp`
+
+**Verified (Claude sub-agent):** Enumerated every `<SubTree>` call into a tree that gates internally on `current_task_type` (`GotoTask`, `HoverTask`, `SurveyAreaTask`, `SurveyLineSetTask`, `SurveyLineTask`) and every call site. After this fix, all five callees receive the correct `current_task_type` at every call site; case_2 was the only asymmetry. Empirically the with/without-remap pair confirms BT.CPP v4 autoremap-by-name precedence (explicit per-port remap shadows `_autoremap` for that port).
+
+### Follow-up (out of scope here)
+- Pre-existing typo `current_tassk` at `run_tasks.xml:224,388` (no producer/consumer; harmless). Worth a tiny cleanup PR but unrelated to #25.
