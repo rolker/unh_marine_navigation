@@ -206,6 +206,40 @@ if(BUILD_TESTING)
       tf2_geometry_msgs
     )
   endif()
+
+  ament_add_gtest(test_set_path_from_task
+    test/test_set_path_from_task.cpp
+  )
+  if(TARGET test_set_path_from_task)
+    target_include_directories(test_set_path_from_task PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    )
+    target_link_libraries(test_set_path_from_task
+      ${PROJECT_NAME}_bt_plugins
+    )
+    ament_target_dependencies(test_set_path_from_task
+      behaviortree_cpp
+      geometry_msgs
+      nav_msgs
+    )
+  endif()
+
+  ament_add_gtest(test_get_sub_path
+    test/test_get_sub_path.cpp
+  )
+  if(TARGET test_get_sub_path)
+    target_include_directories(test_get_sub_path PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    )
+    target_link_libraries(test_get_sub_path
+      ${PROJECT_NAME}_bt_plugins
+    )
+    ament_target_dependencies(test_get_sub_path
+      behaviortree_cpp
+      geometry_msgs
+      nav_msgs
+    )
+  endif()
 endif()
 
 ament_package()
