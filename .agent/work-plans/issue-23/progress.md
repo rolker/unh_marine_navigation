@@ -58,3 +58,35 @@ issue: 23
 - [ ] (suggestion) Add coordination note for **#28 (PR #40)** alongside the existing #35 (PR #36) entry — both reference the same field events with different mechanisms (TF extrapolation vs `CancelFollowPath` FCU watchdog). — `plan.md` Estimated Scope
 - [ ] (informational) `set_polygon_from_task.cpp:63` has the same anti-pattern on `PolygonStamped`; out-of-scope sibling, flag in PR body for a future ticket. — out of plan
 - [ ] (suggestion) Add a sentence in plan Context noting `FixPathOrientations` is a pass-through for the outer header — structural evidence the producer-side fix is sufficient. — `plan.md` Context
+
+## Implementation
+**Status**: complete
+**When**: 2026-05-28 00:00 -04:00 (impl) → 2026-05-28 09:00 -04:00 (review-driven hardening)
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**Branch**: `feature/issue-23`
+**Commits**:
+- `40b8f3f` — fix: zero outer `path.header.stamp` in SetPathFromTask + GetSubPath (initial fix + 16 GTest cases + plan amendment)
+- `c8c8e1c` — style: apply uncrustify to new test files (whitespace; new test files only — pre-existing package-wide drift left untouched)
+- `54c8c61` — fix: guard buildPath/buildSubPath against signed/unsigned wrap (round-2 hardening from adversarial review; 4 additional GTest cases)
+
+**Tests**: 31/31 marine_nav_behavior_tree gtests pass (test_set_path_from_task 10/10, test_get_sub_path 10/10, existing 11/11). Pre-existing uncrustify drift on untouched files remains out-of-scope (see PR #37 for the same situation).
+
+**Plan step 6 (bag/sim validation)**: GTest regression covers the failure class as a pure-function unit test (assertion matrix: outer stamp zero on non-empty result, outer frame_id preserved, per-pose stamps untouched, empty/single/inverted/very-negative ranges). The 2026-04-27 gabby bag replay was the additional field-event validation step; deferred — not blocking. The structural fix (zero-stamp = "latest" in tf2 lookups) is the load-bearing change and the unit tests cover its observable contract.
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-05-28 09:00 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+**Verdict**: approved
+
+**Branch**: `feature/issue-23` at `54c8c61`
+**Mode**: pre-push
+**Depth**: Standard (reason: BT plugin + Nav2/tf2 interaction; 9 files, ~500 lines, no security/cross-layer triggers)
+**Must-fix**: 1 | **Suggestions**: 3
+
+### Findings
+- [x] (must-fix) Range math signed/unsigned wrap in `buildPath`/`buildSubPath` — very-negative end_index leaves end_index < 0 after normalization; cast to size_t wraps to a huge value, loop copies whole vector. Cross-model agreement (Claude Adversarial + Copilot Adversarial, independently). Addressed in `54c8c61` with explicit bounds guard + 4 new GTest cases. — `set_path_from_task.cpp:60-68`, `get_sub_path.cpp:42-50`
+- [x] (suggestion) Zero-stamp comment "mirrors path_to_pose_vector.cpp's idiom" was misleading — same idiom but different field (outer Path header here vs per-pose stamps there). Reworded in `54c8c61`. — `set_path_from_task.cpp:78-80`, `get_sub_path.cpp:64-66`
+- [x] (suggestion) `makeStalePath()` comment "outer (stale, what the bug propagated)" misattributed the bug source — the original code copied the first per-pose stamp (1000), not the input outer (999). Reworded in `54c8c61`. — `test_get_sub_path.cpp:27`
+- [ ] (suggestion, declined) `task_bb.value()->message()` doesn't guard against a null shared_ptr in the blackboard (Copilot Adversarial, single-source). Declined: per the workspace's "don't validate for scenarios that can't happen" rule (`CLAUDE.md`), and no current call site puts null in `{current_task}`. The BT runtime would surface a segfault as a node failure rather than silently mask it.
