@@ -1,5 +1,6 @@
 #include "marine_nav_behavior_tree/plugins/action/set_path_from_task.h"
-#include "nav_msgs/msg/path.hpp"
+
+#include "builtin_interfaces/msg/time.hpp"
 #include "marine_nav_tasks/task.h"
 
 
@@ -47,30 +48,35 @@ BT::NodeStatus SetPathFromTask::tick()
     throw BT::RuntimeError(name(), " missing required input [end_index]: ", end_index_bb.error() );
   }
 
-  auto start_index = start_index_bb.value();
-  auto end_index = end_index_bb.value();
+  setOutput("path", buildPath(task->message().poses, start_index_bb.value(), end_index_bb.value()));
 
+  return BT::NodeStatus::SUCCESS;
+}
+
+nav_msgs::msg::Path SetPathFromTask::buildPath(
+  const std::vector<geometry_msgs::msg::PoseStamped>& poses,
+  int start_index,
+  int end_index)
+{
   if(end_index < 0)
   {
-    end_index = task->message().poses.size() + end_index;
+    end_index = static_cast<int>(poses.size()) + end_index;
   }
-
-  const auto& poses = task->message().poses;
 
   nav_msgs::msg::Path path;
 
-  for(std::size_t i = start_index; i <= end_index && i < poses.size(); i++)
+  for(std::size_t i = start_index; i <= static_cast<std::size_t>(end_index) && i < poses.size(); i++)
   {
     path.poses.push_back(poses[i]);
   }
   if(!path.poses.empty())
   {
-    path.header = path.poses.front().header;
+    path.header.frame_id = path.poses.front().header.frame_id;
+    // Zero stamp = "latest" in TF lookups; mirrors path_to_pose_vector.cpp's idiom.
+    // Per-pose stamps stay untouched (load-bearing downstream — see header). For #23.
+    path.header.stamp = builtin_interfaces::msg::Time();
   }
-
-  setOutput("path", path);
-
-  return BT::NodeStatus::SUCCESS;
+  return path;
 }
 
 } // namespace marine_nav_behavior_tree

@@ -23,6 +23,16 @@ public:
   }
 
   BT::NodeStatus tick() override;
+
+  // Extract a sub-range [start_index, end_index] (negative end_index counts
+  // from the end) of input_path.poses into a new Path. The outer header
+  // takes the first selected pose's frame_id but zeros its stamp — "latest"
+  // in TF lookups, the same idiom used in path_to_pose_vector.cpp (see #23).
+  // Per-pose stamps stay untouched.
+  static nav_msgs::msg::Path buildSubPath(
+    const nav_msgs::msg::Path& input_path,
+    int start_index,
+    int end_index);
 };
 
 } // namespace marine_nav_behavior_tree
