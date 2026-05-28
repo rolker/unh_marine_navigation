@@ -18,6 +18,7 @@
 #include "marine_nav_behavior_tree/plugins/action/set_path_from_task.h"
 #include "marine_nav_behavior_tree/plugins/action/set_polygon_from_task.h"
 #include "marine_nav_behavior_tree/plugins/action/set_task_done.h"
+#include "marine_nav_behavior_tree/plugins/action/set_task_failed.h"
 #include "marine_nav_behavior_tree/plugins/action/update_current_task.h"
 
 #include "marine_nav_behavior_tree/plugins/condition/all_tasks_done.h"
@@ -81,6 +82,7 @@ BT_REGISTER_NODES(factory)
   factory.registerNodeType<marine_nav_behavior_tree::SetPathFromTask>("SetPathFromTask");
   factory.registerNodeType<marine_nav_behavior_tree::SetPolygonFromTask>("SetPolygonFromTask");
   factory.registerNodeType<marine_nav_behavior_tree::SetTaskDone>("SetTaskDone");
+  factory.registerNodeType<marine_nav_behavior_tree::SetTaskFailed>("SetTaskFailed");
   factory.registerNodeType<marine_nav_behavior_tree::UpdateCurrentTask>("UpdateCurrentTask");
 
   factory.registerNodeType<marine_nav_behavior_tree::AllTasksDone>("AllTasksDoneCondition");
