@@ -47,6 +47,16 @@ nav_msgs::msg::Path GetSubPath::buildSubPath(
 
   nav_msgs::msg::Path output_path;
 
+  // Out-of-range indices yield an empty path. Without this guard, casting a
+  // still-negative end_index (e.g. end_index = -poses.size()-1) to size_t in
+  // the loop below wraps to a huge value and the loop iterates the whole
+  // vector instead — silently honouring an invalid range. Same shape for a
+  // negative start_index.
+  if(start_index < 0 || end_index < 0 || start_index > end_index)
+  {
+    return output_path;
+  }
+
   for(std::size_t i = start_index; i <= static_cast<std::size_t>(end_index) && i < input_path.poses.size(); i++)
   {
     output_path.poses.push_back(input_path.poses[i]);
@@ -55,8 +65,9 @@ nav_msgs::msg::Path GetSubPath::buildSubPath(
   if(!output_path.poses.empty())
   {
     output_path.header.frame_id = output_path.poses.front().header.frame_id;
-    // Zero stamp = "latest" in TF lookups; mirrors path_to_pose_vector.cpp's idiom.
-    // Per-pose stamps stay untouched (load-bearing downstream — see header). For #23.
+    // Zero-stamp idiom (same as path_to_pose_vector.cpp:33, applied here to
+    // the outer Path header) tells TF lookups to use "latest". Per-pose
+    // stamps stay untouched (load-bearing downstream — see header). For #23.
     output_path.header.stamp = builtin_interfaces::msg::Time();
   }
 

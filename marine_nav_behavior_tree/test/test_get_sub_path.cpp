@@ -24,7 +24,12 @@ nav_msgs::msg::Path makeStalePath()
 {
   nav_msgs::msg::Path p;
   p.header.frame_id = "map";
-  p.header.stamp.sec = 999;   // outer (stale, what the bug propagated)
+  // Distinct outer stamp + per-pose stamps below. The bug propagated the
+  // first per-pose stamp (1000) into the outer header, not this 999 — that
+  // gets dropped because buildSubPath rebuilds the outer header from the
+  // first output pose. Tests assert outer == 0 post-fix, which catches a
+  // regression to either source.
+  p.header.stamp.sec = 999;
 
   for(int i = 0; i < 3; ++i) {
     geometry_msgs::msg::PoseStamped pose;
@@ -110,6 +115,25 @@ TEST(GetSubPathBuildSubPath, InvertedRangeReturnsEmpty)
   EXPECT_TRUE(path.poses.empty());
   EXPECT_EQ(path.header.stamp.sec, 0);
   EXPECT_TRUE(path.header.frame_id.empty());
+}
+
+// Very-negative end_index (more negative than -size) leaves it still negative
+// after the "counts from end" normalization. The bounds guard must catch this
+// and return empty, not silently wrap to size_t and copy the whole vector.
+TEST(GetSubPathBuildSubPath, VeryNegativeEndIndexReturnsEmpty)
+{
+  auto path = GetSubPath::buildSubPath(makeStalePath(), 0, -5);   // size=3, -5 → -2
+  EXPECT_TRUE(path.poses.empty());
+  EXPECT_EQ(path.header.stamp.sec, 0);
+}
+
+// Negative start_index would also wrap to a huge size_t in the loop init.
+// Treat any negative index as out-of-range → empty path.
+TEST(GetSubPathBuildSubPath, NegativeStartIndexReturnsEmpty)
+{
+  auto path = GetSubPath::buildSubPath(makeStalePath(), -1, 2);
+  EXPECT_TRUE(path.poses.empty());
+  EXPECT_EQ(path.header.stamp.sec, 0);
 }
 
 int main(int argc, char ** argv)

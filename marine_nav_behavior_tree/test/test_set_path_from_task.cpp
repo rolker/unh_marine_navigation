@@ -120,6 +120,25 @@ TEST(SetPathFromTaskBuildPath, InvertedRangeReturnsEmpty)
   EXPECT_TRUE(path.header.frame_id.empty());
 }
 
+// Very-negative end_index (more negative than -size) leaves it still negative
+// after the "counts from end" normalization. The bounds guard must catch this
+// and return empty, not silently wrap to size_t and copy the whole vector.
+TEST(SetPathFromTaskBuildPath, VeryNegativeEndIndexReturnsEmpty)
+{
+  auto path = SetPathFromTask::buildPath(stalePoses(), 0, -5);   // size=3, -5 → -2
+  EXPECT_TRUE(path.poses.empty());
+  EXPECT_EQ(path.header.stamp.sec, 0);
+}
+
+// Negative start_index would also wrap to a huge size_t in the loop init.
+// Treat any negative index as out-of-range → empty path.
+TEST(SetPathFromTaskBuildPath, NegativeStartIndexReturnsEmpty)
+{
+  auto path = SetPathFromTask::buildPath(stalePoses(), -1, 2);
+  EXPECT_TRUE(path.poses.empty());
+  EXPECT_EQ(path.header.stamp.sec, 0);
+}
+
 int main(int argc, char ** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
