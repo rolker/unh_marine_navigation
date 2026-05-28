@@ -262,6 +262,7 @@
                   <SubTree ID="SurveyLineSetTask"
                            name="SurveyAreaSurveyLineSetTask"
                            survey_line_set_task="{current_survey_area_task}"
+                           current_task_type="{current_survey_area_task_type}"
                            _autoremap="true"/>
                   <SetTaskDone task="{current_survey_area_task}"/>
                 </Sequence>
