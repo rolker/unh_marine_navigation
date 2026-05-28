@@ -41,7 +41,16 @@ nav2_behaviors::ResultStatus Hover::onRun(const std::shared_ptr<const HoverActio
   node->get_parameter(behavior_name_+".maximum_rotation_speed", maximum_rotation_speed_);
   node->get_parameter(behavior_name_+".generate_visualization", generate_visualization_);
 
-  if(generate_visualization_)
+  // Create the visualization publisher once (lazy first-call), not on every
+  // onRun invocation. Re-creating overwrites the prior LifecyclePublisher's
+  // shared_ptr; the old one is destroyed while the new one is constructed,
+  // and DDS topic-type discovery sees both registrations briefly. `ros2 bag
+  // record` does strict type-uniqueness validation at subscribe time and
+  // rejects the topic with "more than one type associated" — the topic
+  // silently drops from sim/field bags. Guarding on the existing publisher
+  // pointer makes this a one-shot create that survives hover-cancel-hover
+  // cycles cleanly. For #42.
+  if(generate_visualization_ && !visualization_publisher_)
   {
     visualization_publisher_ = node->create_publisher<visualization_msgs::msg::MarkerArray>(behavior_name_+"_visualization", 1);
     visualization_publisher_->on_activate();
