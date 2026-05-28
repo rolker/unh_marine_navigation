@@ -234,9 +234,11 @@
             <!-- Dispatch sub-tasks by type with a Switch (mirrors the top-level fix): an
                  UNMATCHED sub-task type hits the default SetTaskDone (skip, not failed) so
                  the _failureIf routing can't conflate a type-mismatch with an execution
-                 failure (#25 review). A matched sub-task that fails after retries routes to
-                 SetTaskFailed, which records it failed and marks it done so the area
-                 CONTINUES its remaining lines (skip-and-continue) instead of being abandoned. -->
+                 failure (#25 review). A matched sub-task that fails — FollowPath recovery
+                 exhausted, or any other failure in the line subtree (transit, path setup,
+                 TF) — routes to SetTaskFailed, which records it failed and marks it done so
+                 the area CONTINUES its remaining lines (skip-and-continue) instead of being
+                 abandoned. -->
             <Switch2 name="SelectSurveyAreaSubTask"
                      variable="{current_survey_area_task_type}"
                      case_1="survey_line"
@@ -394,9 +396,10 @@
                      _autoremap="true"/>
             <!-- Sub-tasks of a line set are all survey_line, so no type routing is needed
                  here (unlike the survey-area loop). Wrap the line subtree in a Fallback to
-                 SetTaskFailed so a sub-line that fails (after SurveyLine's RecoveryNode
-                 exhausts its retries) is recorded failed and the set CONTINUES its remaining
-                 lines (skip-and-continue) rather than abandoning (#25). -->
+                 SetTaskFailed so a sub-line that fails — FollowPath recovery exhausted, or any
+                 other failure in the line subtree (transit, path setup, TF) — is recorded
+                 failed and the set CONTINUES its remaining lines (skip-and-continue) rather
+                 than abandoning (#25). -->
             <Fallback name="SurveyLineSetSubLineOrFailed">
               <Sequence>
                 <SubTree ID="SurveyLineTask"
