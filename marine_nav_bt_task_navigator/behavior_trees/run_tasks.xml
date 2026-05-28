@@ -348,6 +348,16 @@
                             selected_controller="{selected_controller}"/>
         <SetControllerSpeed speed="{target_speed}"
                             controller_name="{selected_controller}"/>
+        <!-- Refresh {survey_path} every tick so an operator mid-line mission
+             re-send (which updates {current_task} → {survey_line_task} via
+             UpdateCurrentTaskData upstream) propagates to FollowPath. Nav2
+             FollowPathAction::on_wait_for_result re-reads the path port each
+             RUNNING tick, compares against goal_.path, and sets goal_updated_
+             on a change → BtActionNode preempts with the new goal. For #35. -->
+        <SetPathFromTask end_index="-1"
+                         path="{survey_path}"
+                         start_index="0"
+                         task="{survey_line_task}"/>
         <!-- Recover transient FollowPath ABORTs (e.g. a momentary progress-checker trip)
              with a short Wait, then retry — up to 3 times. On persistent failure the
              RecoveryNode FAILs up to the dispatch, which records the line failed
