@@ -78,6 +78,23 @@ if(BUILD_TESTING)
       "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     )
   endif()
+
+  ament_add_gtest(test_hover_visualization
+    test/test_hover_visualization.cpp
+  )
+  if(TARGET test_hover_visualization)
+    target_include_directories(test_hover_visualization PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    )
+    target_link_libraries(test_hover_visualization
+      marine_nav_hover_behavior
+    )
+    ament_target_dependencies(test_hover_visualization
+      rclcpp
+      rclcpp_lifecycle
+      nav2_behaviors
+    )
+  endif()
 endif()
 
 ament_package()
