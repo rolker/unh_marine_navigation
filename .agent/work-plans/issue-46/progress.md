@@ -33,3 +33,26 @@ issue: 46
 - [x] (must-fix) Consequences cited `marine_autonomy_integration_tests`/`done_hover` as local; they live in the separate `unh_marine_autonomy` repo — relabeled as a cross-repo manual check. — `plan.md` Consequences
 - [x] (must-fix) `bt_task_navigator` has no test infra; moved the regression gtest to `marine_nav_behavior_tree` (existing harness), dropped the bootstrap. — `plan.md` Files to Change
 - [ ] (confirmed) Phase 2 reasoning (re-read port insufficient; re-entry-on-id-change is the lever) verified against `hover_action.cpp:35-41` + `bt_action_node.hpp:237-250`.
+
+## Implementation
+**Status**: complete (pending sim test)
+**When**: 2026-05-29 10:40 -04:00
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+
+**Commit**: `51855a8` on `feature/issue-46`
+**Decision**: both phases bundled (operator: same-day sim test + deployment).
+
+- Phase 1: `SequenceWithMemory` → plain `Sequence` in `HoverTask` (`run_tasks.xml`).
+- Phase 2: new `RestartOnTaskChange` decorator (custom C++ node, Option B) keyed on
+  `{current_task_update_time}`; wrapped around the hover `Sequence`; registered +
+  TreeNodesModel entry. Restart key is update_time (not id) so a re-issued same-id
+  `hover_override` is caught; `Task::update` bumps it only on real change → no thrash.
+- `done_hover`: kept drift-to-stop (no explicit pose).
+- Test: `test_hover_reentry.cpp`, 5 cases — **all gtests green** (47 across the package, 0 failures).
+- Build: `marine_nav_behavior_tree` + `marine_nav_bt_task_navigator` build clean.
+
+### Notes
+- [ ] Local `ament_uncrustify` fails package-wide incl. untouched committed files (version
+      skew) — not mass-reformatting per no-circumvent-tests; CI is the canonical gate.
+- [ ] Next: quick sim test (activate, survey offset from launch, confirm end-of-mission hover
+      settles at survey end, not launch; re-command hover and confirm it moves), then deploy.

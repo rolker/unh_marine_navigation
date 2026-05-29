@@ -94,19 +94,34 @@ correct in isolation; the defect is the control-node choice. The XML comment at
 | `HoverTask` control flow | **Cross-repo** (`unh_marine_autonomy`, not this repo): `done_hover` is emitted by `mission_manager.py` and exercised by `marine_autonomy_integration_tests/test/test_mission_navigation_failure.py`. The swap doesn't change task semantics, only when `PredictStoppingPose` re-ticks, so no `unh_marine_autonomy` change is expected — but flag a manual cross-repo integration check before merge. | Manual cross-repo check (not in this PR's CI) |
 | Hover re-entry semantics | Existing `test_predict_stopping_pose.cpp` (unaffected — node unchanged) | Verified no change |
 
-## Open Questions
+## Open Questions (resolved 2026-05-29)
 
-- [ ] **Bundle Phase 2 here or stack as a follow-up?** Recommend **stacking** — Phase 1 fully
-      fixes the reported end-of-task symptom and is small/safe; Phase 2 is a distinct
-      reactive-refresh design (re-entry-on-id-change + reactive action node) with its own test
-      matrix, mirroring how #35 was its own change. (Counter: the "bundle related cleanups"
-      preference — your call.)
-- [ ] **Phase 2 mechanism:** acceptable to add a small reactive id-latch in the BT XML, or do
-      you prefer a dedicated custom condition node (`TaskIdChangedCondition`) for clarity/testing?
-- [ ] Should `done_hover` instead carry the last survey pose explicitly, sidestepping the
-      drift-projection path entirely? (Leaning no — drift-to-stop is the intended #33 behavior.)
+- [x] **Bundle Phase 2 here or stack?** → **Bundle** (operator wants one fix for a same-day
+      sim test + deployment).
+- [x] **Phase 2 mechanism?** → **Custom C++ node** (`RestartOnTaskChange` decorator), not inline
+      XML — for unit-testability and to avoid the XML-scripting footgun of routing a failed
+      condition to `SetTaskFailed`.
+- [x] **`done_hover` explicit pose?** → **No.** Keep drift-to-stop (intended #33 behavior).
+
+## Implementation Notes
+
+- Phase 2 restart key is **`{current_task_update_time}`**, not task id: a re-issued
+  `hover_override` keeps the same id ('hover_override') and only its pose changes, so an
+  id-only check would miss it. `Task::update` bumps `last_update_time_` only when the task
+  message actually changes (`task.cpp:44`), so a benign feedback-loop re-send of an identical
+  task does not trigger a spurious restart (which would thrash hover). The quick sim test is
+  the gate that confirms no thrash in practice.
+- The `RestartOnTaskChange` decorator's `haltChild()` + re-tick cancels and re-sends the hover
+  goal on a re-command, so the separately-considered `HoverAction::on_wait_for_result` reactive
+  change was **not needed** — fewer files touched.
+- Regression test placed in `marine_nav_behavior_tree/test/test_hover_reentry.cpp` (existing
+  gtest harness). 5 cases, all green: plain-Sequence re-ticks after halt; SequenceWithMemory
+  does not (documents the bug); plain-Sequence no-recompute during continuous hold; decorator
+  restarts on timestamp change; decorator stable when timestamp unchanged.
+- **Local lint note:** `colcon test` `ament_uncrustify` fails package-wide, including committed
+  files this PR does not touch — a local uncrustify version skew, not introduced here. Not
+  mass-reformatting per the no-circumvent-tests rule; gtests + build are green.
 
 ## Estimated Scope
 
-Phase 1: single small PR (XML one-line swap + comment + one gtest). Phase 2: a second stacked
-PR if approved. Defaulting to Phase 1 this PR pending the bundle-vs-stack answer.
+Single PR, both phases. Implemented and unit-tested; pending quick sim test before merge/deploy.
