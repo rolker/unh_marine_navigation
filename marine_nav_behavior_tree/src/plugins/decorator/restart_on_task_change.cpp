@@ -31,23 +31,31 @@ void RestartOnTaskChange::halt()
 
 BT::NodeStatus RestartOnTaskChange::tick()
 {
-  rclcpp::Time current;
-  const bool have_input = static_cast<bool>(getInput("task_update_time", current));
+  // task_update_time is a required input: fail fast on a missing/unwired port
+  // rather than silently no-op'ing (which would leave the decorator ineffective
+  // and mask the wiring error). In correct trees UpdateCurrentTask always
+  // populates {current_task_update_time} before HoverTask runs, so this fires
+  // only on a wiring/type regression — deterministically, at bring-up. Matches
+  // the throw-on-missing-required-port convention of the other nodes here.
+  const auto input = getInput<rclcpp::Time>("task_update_time");
+  if (!input) {
+    throw BT::RuntimeError(
+      name(), " missing required input [task_update_time]: ", input.error());
+  }
+  const rclcpp::Time current = input.value();
 
-  if (have_input) {
-    if (!have_baseline_) {
-      // Fresh entry (first tick, or first after a halt / completed child):
-      // adopt the current stamp as the baseline; do not restart.
-      baseline_ = current;
-      have_baseline_ = true;
-    } else if (current != baseline_) {
-      // The task changed under us without a type-driven halt (same-type
-      // re-command). Force a clean re-entry of the child subtree: haltChild()
-      // resets a plain Sequence to its first child and cancels any running
-      // action, so the subsequent tick recomputes the goal and re-sends it.
-      baseline_ = current;
-      haltChild();
-    }
+  if (!have_baseline_) {
+    // Fresh entry (first tick, or first after a halt / completed child):
+    // adopt the current stamp as the baseline; do not restart.
+    baseline_ = current;
+    have_baseline_ = true;
+  } else if (current != baseline_) {
+    // The task changed under us without a type-driven halt (same-type
+    // re-command). Force a clean re-entry of the child subtree: haltChild()
+    // resets a plain Sequence to its first child and cancels any running
+    // action, so the subsequent tick recomputes the goal and re-sends it.
+    baseline_ = current;
+    haltChild();
   }
 
   setStatus(BT::NodeStatus::RUNNING);

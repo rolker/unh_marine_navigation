@@ -78,8 +78,11 @@
              would chase the drifting boat). SequenceWithMemory kept its index
              across halts and — because Hover never returns SUCCESS — never
              re-ticked PredictStoppingPose, freezing {hover_target} at the first
-             value ever computed (#46). Continuous-hold safety relies on this
-             Sequence staying the last child of the outer ReactiveSequence. -->
+             value ever computed (#46). Continuous-hold safety relies on the
+             enclosing RestartOnTaskChange decorator (this Sequence's parent)
+             staying the LAST child of the outer ReactiveSequence: a sibling
+             added after it would make the ReactiveSequence halt this subtree
+             every tick, recomputing the stop point and chasing the boat. -->
         <Sequence>
           <Fallback name="SetHoverGoalFallback">
             <Inverter>
