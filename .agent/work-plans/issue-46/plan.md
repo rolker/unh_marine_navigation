@@ -8,8 +8,12 @@ https://github.com/rolker/unh_marine_navigation/issues/46
 
 `HoverTask` (`run_tasks.xml:64-95`) wraps `[Fallback, PredictStoppingPose, Script, Hover]`
 in `SequenceWithMemory`. In BT.CPP 4.9.0 that node resets its child index only on
-`SUCCESS`, and its `halt()` deliberately does not reset it. `Hover` is a perpetual
-station-keep that never returns `SUCCESS` (`hover.cpp:205`), so the index never resets:
+`SUCCESS`; its `halt()` is understood **not** to reset the index (the documented contract
+that distinguishes it from plain `Sequence`, whose `halt()` resets to 0). Note the
+`halt()` bodies live in the compiled lib — not readable here — so this distinction is
+asserted from BT.CPP's documented behavior and is **pinned by the Phase-1 regression test**
+(step 3), not read from source. `Hover` is a perpetual station-keep that never returns
+`SUCCESS` (`hover.cpp:205`), so the index never resets:
 after the first engagement the node parks at the `Hover` child and every later re-entry
 (via `Switch5` halting/re-selecting on `current_task_type`) resumes straight at `Hover`,
 **skipping `PredictStoppingPose`**. `{hover_target}` is therefore computed once — the
@@ -27,14 +31,24 @@ correct in isolation; the defect is the control-node choice. The XML comment at
    `PredictStoppingPose` (fresh stop point), while a *continuous* hold still resumes at the
    RUNNING `Hover` child (no per-tick recompute — important: recomputing every tick would
    chase the drifting boat, which is why the stop point must be captured once *per entry*).
+   The continuous-hold safety has a load-bearing dependency: it holds because the inner
+   sequence is the **last** child of the outer `ReactiveSequence` (`run_tasks.xml:62`), so
+   ReactiveSequence (which halts only siblings *after* a RUNNING child) never halts it
+   between loops. A future edit that adds a sibling after the sequence would break this —
+   call this out in the comment (step 2).
 2. **Rewrite the `run_tasks.xml:79-84` comment** to state the real contract: stop point is
-   recomputed once per entry because plain `Sequence` resets on halt; do **not** restore
-   `SequenceWithMemory` (links the failure mode to this issue).
-3. **Add a regression gtest** that pins the BT-mechanics contract this fix depends on:
+   recomputed once per entry because plain `Sequence` resets on halt; continuous hold is
+   safe only while the sequence stays the last child of the ReactiveSequence; do **not**
+   restore `SequenceWithMemory` (links the failure mode to this issue).
+3. **Add a regression gtest** that pins **both** halves of the contract this fix depends on:
    minimal tree `Sequence[counting-sync-action, never-succeeding(RUNNING)-leaf]`, then
-   tick → `haltTree` → tick, asserting the counting action ran **twice**. The same test
-   built with `SequenceWithMemory` asserts it runs **once** (documents why the swap is
-   load-bearing). No ROS fixture needed.
+   (a) tick → `haltTree` → tick, asserting the counting action ran **twice** (re-entry
+   recompute — the bug); and (b) tick → tick with **no** halt, asserting it ran **once**
+   (continuous-hold no-recompute — the regression guard). The same (a) built with
+   `SequenceWithMemory` asserts **once** (documents why the swap is load-bearing). No ROS
+   fixture needed — pure BT-mechanics test. Place it in `marine_nav_behavior_tree/test/`
+   (which already has a gtest harness — 6 tests), **not** `bt_task_navigator` (which has no
+   test infrastructure at all), to avoid bootstrapping a new test target.
 
 **Phase 2 — same-type re-command (`hover_override`) — see Open Questions for bundle-vs-stack**
 
@@ -52,8 +66,8 @@ correct in isolation; the defect is the control-node choice. The XML comment at
 | File | Change |
 |------|--------|
 | `marine_nav_bt_task_navigator/behavior_trees/run_tasks.xml` | P1: `SequenceWithMemory`→`Sequence` in `HoverTask`; correct comment. P2: reactive id-latch guard. |
-| `marine_nav_bt_task_navigator/test/test_hover_reentry.cpp` (new) | P1: re-entry re-ticks regression test (Sequence vs SequenceWithMemory). |
-| `marine_nav_bt_task_navigator/CMakeLists.txt` | Register the new gtest. |
+| `marine_nav_behavior_tree/test/test_sequence_reentry.cpp` (new) | P1: re-entry-recompute + continuous-hold-no-recompute regression test (Sequence vs SequenceWithMemory). Lives here because this package already has a gtest harness. |
+| `marine_nav_behavior_tree/CMakeLists.txt` | P1: add the new gtest to the existing test block. |
 | `marine_nav_behavior_tree/src/plugins/action/hover_action.{cpp,h}` | P2 only: override `on_wait_for_result` for reactive target re-send. |
 
 ## Principles Self-Check
@@ -76,8 +90,8 @@ correct in isolation; the defect is the control-node choice. The XML comment at
 
 | If we change... | Also update... | Included in plan? |
 |---|---|---|
-| `run_tasks.xml` (installed via ament `install(DIRECTORY)`) | Rebuild `marine_nav_bt_task_navigator` — symlink-install does **not** pick up XML data-file edits | Yes — note in test/build steps |
-| `HoverTask` control flow | `marine_autonomy_integration_tests` (`test_mission_navigation_failure.py` exercises `done_hover`) — confirm still green | Yes — run before PR |
+| `run_tasks.xml` (installed via ament `install(DIRECTORY)`, `CMakeLists.txt:51`) | Rebuild `marine_nav_bt_task_navigator` — symlink-install does **not** pick up XML data-file edits | Yes — note in test/build steps |
+| `HoverTask` control flow | **Cross-repo** (`unh_marine_autonomy`, not this repo): `done_hover` is emitted by `mission_manager.py` and exercised by `marine_autonomy_integration_tests/test/test_mission_navigation_failure.py`. The swap doesn't change task semantics, only when `PredictStoppingPose` re-ticks, so no `unh_marine_autonomy` change is expected — but flag a manual cross-repo integration check before merge. | Manual cross-repo check (not in this PR's CI) |
 | Hover re-entry semantics | Existing `test_predict_stopping_pose.cpp` (unaffected — node unchanged) | Verified no change |
 
 ## Open Questions
