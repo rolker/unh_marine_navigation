@@ -91,6 +91,7 @@ add_library(${PROJECT_NAME}_bt_plugins SHARED
   src/plugins/condition/all_tasks_done.cpp
   src/plugins/condition/has_sub_tasks.cpp
   src/plugins/condition/path_empty.cpp
+  src/plugins/decorator/restart_on_task_change.cpp
 )
 
 list(APPEND plugin_libs ${PROJECT_NAME}_bt_plugins)
@@ -275,6 +276,22 @@ if(BUILD_TESTING)
       behaviortree_cpp
       geometry_msgs
       nav_msgs
+    )
+  endif()
+
+  ament_add_gtest(test_hover_reentry
+    test/test_hover_reentry.cpp
+  )
+  if(TARGET test_hover_reentry)
+    target_include_directories(test_hover_reentry PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    )
+    target_link_libraries(test_hover_reentry
+      ${PROJECT_NAME}_bt_plugins
+    )
+    ament_target_dependencies(test_hover_reentry
+      behaviortree_cpp
+      rclcpp
     )
   endif()
 endif()
