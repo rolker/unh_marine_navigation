@@ -283,15 +283,18 @@ BT::NodeStatus AdjustPathForObstacles::tick()
   // Lazy-create the costmap subscription on first tick (the topic port and the
   // blackboard node are only reliably readable once the tree is wired). The
   // callback runs on the bt_navigator executor thread, distinct from this tick
-  // thread — hence the mutex + shared_ptr swap.
+  // thread — hence the mutex + shared_ptr swap. The lambda captures the shared
+  // cache (not `this`), so a callback still in flight on the executor thread when
+  // this node is destroyed (tree reload / shutdown) touches live state, not freed.
   if (!costmap_sub_) {
     costmap_topic_ = getInput<std::string>("costmap_topic").value_or(
       "local_costmap/costmap_raw");
+    auto cache = costmap_cache_;
     costmap_sub_ = node->create_subscription<nav2_msgs::msg::Costmap>(
       costmap_topic_, rclcpp::QoS(1),
-      [this](nav2_msgs::msg::Costmap::SharedPtr msg) {
-        std::lock_guard<std::mutex> lock(costmap_mutex_);
-        costmap_ = msg;
+      [cache](nav2_msgs::msg::Costmap::SharedPtr msg) {
+        std::lock_guard<std::mutex> lock(cache->mutex);
+        cache->costmap = msg;
       });
   }
 
@@ -308,8 +311,8 @@ BT::NodeStatus AdjustPathForObstacles::tick()
   // Snapshot the latest costmap (pointer copy under the lock; DP reads it lock-free).
   std::shared_ptr<nav2_msgs::msg::Costmap> costmap;
   {
-    std::lock_guard<std::mutex> lock(costmap_mutex_);
-    costmap = costmap_;
+    std::lock_guard<std::mutex> lock(costmap_cache_->mutex);
+    costmap = costmap_cache_->costmap;
   }
   if (!costmap) {
     return passthrough();  // no costmap yet

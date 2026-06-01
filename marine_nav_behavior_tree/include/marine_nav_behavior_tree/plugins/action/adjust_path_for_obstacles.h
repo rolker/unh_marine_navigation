@@ -69,6 +69,16 @@ struct Station
 std::vector<Station> resampleStations(
   const std::vector<geometry_msgs::msg::PoseStamped> & poses, double step);
 
+// Shared costmap cache. Held by both the node and the subscription callback so
+// that an in-flight callback running on the executor thread keeps the cache
+// alive even if the BT node is destroyed mid-callback (tree reload / shutdown).
+// The callback captures a shared_ptr to this — never the node's `this`.
+struct CostmapCache
+{
+  std::mutex mutex;
+  std::shared_ptr<nav2_msgs::msg::Costmap> costmap;
+};
+
 // Reactive corridor path-adjuster. Sits between SetPathFromTask and FollowPath
 // in the SurveyLine inner ReactiveSequence: reads the nominal trackline, samples
 // the existing local costmap, and reshapes the followed path around obstacles
@@ -88,10 +98,10 @@ public:
 
 private:
   // Latest costmap, swapped in by the subscription callback (executor thread)
-  // and read by tick() (BT thread). Guarded by costmap_mutex_; tick takes a
-  // shared_ptr snapshot under the lock and releases it before the DP runs.
-  std::shared_ptr<nav2_msgs::msg::Costmap> costmap_;
-  std::mutex costmap_mutex_;
+  // and read by tick() (BT thread). Lives in a shared cache the callback owns a
+  // reference to (see CostmapCache) so callback and node lifetimes are decoupled.
+  // tick() takes a shared_ptr snapshot under the lock and releases it before the DP.
+  std::shared_ptr<CostmapCache> costmap_cache_ = std::make_shared<CostmapCache>();
   rclcpp::Subscription<nav2_msgs::msg::Costmap>::SharedPtr costmap_sub_;
   std::string costmap_topic_;
 
