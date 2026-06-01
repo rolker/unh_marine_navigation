@@ -15,7 +15,9 @@ find_package(geometry_msgs REQUIRED)
 find_package(marine_nav_interfaces REQUIRED)
 find_package(marine_nav_tasks REQUIRED)
 find_package(nav2_behavior_tree REQUIRED)
+find_package(nav2_msgs REQUIRED)
 find_package(nav2_util REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(rcl_interfaces REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(tf2 REQUIRED)
@@ -68,6 +70,7 @@ install (
 
 add_library(${PROJECT_NAME}_bt_plugins SHARED
   src/bt_register_nodes.cpp
+  src/plugins/action/adjust_path_for_obstacles.cpp
   src/plugins/action/add_sub_task.cpp
   src/plugins/action/clear_path.cpp
   src/plugins/action/fix_path_orientations.cpp
@@ -111,7 +114,9 @@ ament_target_dependencies(${PROJECT_NAME}_bt_plugins
   geometry_msgs
   marine_nav_interfaces
   nav2_behavior_tree
+  nav2_msgs
   nav2_util
+  nav_msgs
   rcl_interfaces
   rclcpp
   tf2
@@ -292,6 +297,24 @@ if(BUILD_TESTING)
     ament_target_dependencies(test_hover_reentry
       behaviortree_cpp
       rclcpp
+    )
+  endif()
+
+  ament_add_gtest(test_adjust_path_for_obstacles
+    test/test_adjust_path_for_obstacles.cpp
+  )
+  if(TARGET test_adjust_path_for_obstacles)
+    target_include_directories(test_adjust_path_for_obstacles PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    )
+    target_link_libraries(test_adjust_path_for_obstacles
+      ${PROJECT_NAME}_bt_plugins
+    )
+    ament_target_dependencies(test_adjust_path_for_obstacles
+      behaviortree_cpp
+      geometry_msgs
+      nav2_msgs
+      nav_msgs
     )
   endif()
 endif()

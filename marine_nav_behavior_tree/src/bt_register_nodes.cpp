@@ -1,5 +1,6 @@
 #include "behaviortree_cpp/bt_factory.h"
 
+#include "marine_nav_behavior_tree/plugins/action/adjust_path_for_obstacles.h"
 #include "marine_nav_behavior_tree/plugins/action/add_sub_task.h"
 #include "marine_nav_behavior_tree/plugins/action/clear_path.h"
 #include "marine_nav_behavior_tree/plugins/action/fix_path_orientations.h"
@@ -29,6 +30,7 @@
 
 BT_REGISTER_NODES(factory)
 {
+  factory.registerNodeType<marine_nav_behavior_tree::AdjustPathForObstacles>("AdjustPathForObstacles");
   factory.registerNodeType<marine_nav_behavior_tree::AddSubTask>("AddSubTask");
   factory.registerNodeType<marine_nav_behavior_tree::ClearPath>("ClearPath");
   factory.registerNodeType<marine_nav_behavior_tree::FixPathOrientations>("FixPathOrientations");
