@@ -90,9 +90,9 @@ issue: 30
 **Sources**: 3 (Claude adversarial, Copilot adversarial, lead/static)
 
 ### Findings
-- [ ] (must-fix, cross-confirmed Claude+Copilot) Subscription callback captures raw `this`; teardown race / potential UAF on tree-reload/shutdown — capture costmap state in a `shared_ptr<State>` by value — `adjust_path_for_obstacles.cpp:281-286`
-- [ ] (must-fix, Copilot verified) Pinned anchor endpoints skip the lethal-cost check (line 97 unreachable when pinned); lethal cell at `active_begin`/`active_end-1` reported as a clear corridor — return `kInf` when zero-col is lethal — `adjust_path_for_obstacles.cpp:92-99`
-- [ ] (must-fix, static) New `ament_uncrustify` divergence (lambda-body indent) regresses the package's green uncrustify lint test — `ament_uncrustify --reformat` — `adjust_path_for_obstacles.cpp` ~85-104
+- [x] (must-fix, cross-confirmed Claude+Copilot) Subscription callback captures raw `this`; teardown race / potential UAF on tree-reload/shutdown — capture costmap state in a `shared_ptr<State>` by value — `adjust_path_for_obstacles.cpp:281-286` — **FIXED** `c6ba027` (CostmapCache held by shared_ptr, captured by value)
+- [x] (must-fix, Copilot verified) Pinned anchor endpoints skip the lethal-cost check (line 97 unreachable when pinned); lethal cell at `active_begin`/`active_end-1` reported as a clear corridor — return `kInf` when zero-col is lethal — `adjust_path_for_obstacles.cpp:92-99` — **FIXED** `e0ae769` (+ LethalAnchorIsInfeasible test)
+- [~] (must-fix → reclassified FALSE POSITIVE, static) "New `ament_uncrustify` divergence" was a **local-tooling artifact**, not a real CI regression. On re-check, the local `ament_uncrustify` (uncrustify 0.78.1) flags *every committed header* in the package with namespace-indentation + `std::vector < double >` template spacing — neither of which the committed, CI-merged codebase uses. If CI enforced the local tool's output no file would pass. The `.cpp` flag was lambda-body indentation, but this file is the first in the package to use auto-assigned lambdas (no committed precedent), entangled with the same unreliable tool. The file already matches the committed ament style; `--reformat` would mangle it inconsistent with the whole package. Not applied. See review note below.
 - [ ] (suggestion, 3 sources: me+Claude+Copilot) Temporal term keyed by station ordinal while path re-resampled each tick; dormant at `w_temporal=0.0` — reproject by arclength / invalidate on path change before enabling — `adjust_path_for_obstacles.cpp:80,100-104,435`
 - [ ] (suggestion, Copilot) Defensive costmap-metadata validation (`resolution>0`, `data.size()==size_x*size_y`) before sampling — `adjust_path_for_obstacles.cpp:349-361`
 - [ ] (suggestion, Claude) Sampling ignores `origin.orientation`; add identity-orientation guard (nav2 costmap is axis-aligned today) — `adjust_path_for_obstacles.cpp:352-355`
@@ -104,3 +104,14 @@ issue: 30
 
 ### False positives
 - (static) cpplint `legal/copyright` + `build/header_guard` on the new files — sibling `clear_path.h` produces the identical 5 hits; pre-existing package-wide convention, not introduced here. The new file correctly matches existing style.
+- (static) `ament_uncrustify` "divergence" on the new files — local uncrustify 0.78.1 produces non-ament output (indents namespace bodies, spaces templates) and flags all committed package files; it disagrees with the CI-merged ament style. Local-tooling artifact, not a code defect. Open item for the human: confirm the project repo's CI uncrustify is green on jazzy (it must be, since the package is merged) and, if desired, file a separate issue to reconcile local uncrustify version/config with CI.
+
+## Review Fixes Applied
+**Status**: complete
+**When**: 2026-06-01 09:30 -0400
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+
+**Commits**: `e0ae769` (lethal-anchor reject + test), `c6ba027` (callback-lifetime UAF)
+**Build/Test**: marine_nav_behavior_tree builds clean; 9/9 gtest pass (8 prior + new LethalAnchorIsInfeasible).
+**Must-fix #3 (uncrustify)**: not applied — reclassified as a local-tooling false positive (see Local Review False positives). Surface to human before merge if CI uncrustify behaviour is in doubt.
+**Suggestions (8)**: deferred — none are live defects (temporal term dormant at `w_temporal=0.0`; the rest are defensive guards / docs). Candidates for a follow-up hardening pass.
