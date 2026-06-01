@@ -430,7 +430,8 @@
              {survey_path} preempts the running FollowPath via the #35 mechanism
              above. For #30. -->
         <AdjustPathForObstacles nominal_path="{nominal_survey_path}"
-                                path="{survey_path}"/>
+                                path="{survey_path}"
+                                obstacle_avoidance_weight="1.0"/>
         <!-- Recover transient FollowPath ABORTs (e.g. a momentary progress-checker trip)
              with a short Wait, then retry — up to 3 times. On persistent failure the
              RecoveryNode FAILs up to the dispatch, which records the line failed
