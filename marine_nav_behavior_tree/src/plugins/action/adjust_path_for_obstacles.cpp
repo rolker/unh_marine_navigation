@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "builtin_interfaces/msg/time.hpp"
+#include "visualization_msgs/msg/marker_array.hpp"
 
 #include <tf2/LinearMath/Quaternion.h>  // NOLINT(build/include_order)
 #include <tf2/LinearMath/Transform.h>  // NOLINT(build/include_order)
@@ -34,6 +35,11 @@ constexpr uint8_t kNoInformation = 255;
 // so forbid deviating there (impassable), but a centreline miss just bounds the
 // active range.
 constexpr double kOutOfBounds = -1.0;
+// Marker namespace for the operator-feedback MarkerArray (CAMP auto-discovers it).
+constexpr char kVizNamespace[] = "survey_obstacle_avoidance";
+// Empty stand-in for the temporal term's "previous offsets" when there is no
+// matching prior tick — an lvalue, so the DP-input ref binds without a per-tick copy.
+const std::vector<double> kEmptyOffsets;
 }  // namespace
 
 std::vector<double> makeLateralOffsets(double max_xte, double lateral_step)
@@ -237,6 +243,93 @@ std::vector<Station> resampleStations(
   return stations;
 }
 
+namespace
+{
+// Build the operator-feedback overlay for a deviating tick: the nominal survey
+// line (faint), the adjusted path the boat will follow (bright), the deviating
+// stretch highlighted (red), and an "AVOIDING" flag at the peak deviation. All
+// in the path frame; CAMP auto-discovers any visualization_msgs/MarkerArray.
+visualization_msgs::msg::MarkerArray buildAvoidanceMarkers(
+  const rclcpp::Time & stamp, const std::string & frame,
+  const nav_msgs::msg::Path & nominal,
+  const std::vector<Station> & stations,
+  const std::vector<double> & offsets_d)
+{
+  visualization_msgs::msg::MarkerArray arr;
+  const auto lifetime = rclcpp::Duration::from_seconds(2.0);
+
+  auto base = [&](int id, int32_t type, double width,
+      double r, double g, double b, double a) {
+      visualization_msgs::msg::Marker m;
+      m.header.frame_id = frame;
+      m.header.stamp = stamp;
+      m.ns = kVizNamespace;
+      m.id = id;
+      m.type = type;
+      m.action = visualization_msgs::msg::Marker::ADD;
+      m.pose.orientation.w = 1.0;
+      m.scale.x = width;
+      m.color.r = r;
+      m.color.g = g;
+      m.color.b = b;
+      m.color.a = a;
+      m.lifetime = lifetime;
+      return m;
+    };
+
+  auto adjusted_point = [&](std::size_t i) {
+      geometry_msgs::msg::Point pt;
+      pt.x = stations[i].x + offsets_d[i] * stations[i].nx;
+      pt.y = stations[i].y + offsets_d[i] * stations[i].ny;
+      return pt;
+    };
+
+  // 1) Nominal survey line (faint gray) — context for how far we deviated.
+  auto nominal_m = base(0, visualization_msgs::msg::Marker::LINE_STRIP, 0.4,
+      0.6, 0.6, 0.6, 0.4);
+  for (const auto & p : nominal.poses) {
+    nominal_m.points.push_back(p.pose.position);
+  }
+  arr.markers.push_back(nominal_m);
+
+  // 2) Adjusted path the boat follows (bright cyan).
+  auto adjusted_m = base(1, visualization_msgs::msg::Marker::LINE_STRIP, 1.0,
+      0.0, 0.9, 1.0, 0.95);
+  std::size_t peak_i = 0;
+  double peak = 0.0;
+  for (std::size_t i = 0; i < stations.size(); ++i) {
+    adjusted_m.points.push_back(adjusted_point(i));
+    if (std::abs(offsets_d[i]) > peak) {
+      peak = std::abs(offsets_d[i]);
+      peak_i = i;
+    }
+  }
+  arr.markers.push_back(adjusted_m);
+
+  // 3) Avoiding band: the deviating stretch, red and thick, drawn on top.
+  auto band_m = base(2, visualization_msgs::msg::Marker::LINE_STRIP, 1.6,
+      1.0, 0.15, 0.1, 0.9);
+  for (std::size_t i = 0; i < stations.size(); ++i) {
+    if (std::abs(offsets_d[i]) >= kDeviationEpsilon) {
+      band_m.points.push_back(adjusted_point(i));
+    }
+  }
+  if (band_m.points.size() >= 2) {  // a 1-point LINE_STRIP renders nothing
+    arr.markers.push_back(band_m);
+  }
+
+  // 4) "AVOIDING" flag at the peak-deviation point (red, view-facing text).
+  auto text_m = base(3, visualization_msgs::msg::Marker::TEXT_VIEW_FACING, 1.0,
+      1.0, 0.2, 0.15, 1.0);
+  text_m.scale.z = 3.0;  // text height (m)
+  text_m.text = "AVOIDING";
+  text_m.pose.position = adjusted_point(peak_i);
+  arr.markers.push_back(text_m);
+
+  return arr;
+}
+}  // namespace
+
 AdjustPathForObstacles::AdjustPathForObstacles(
   const std::string & name, const BT::NodeConfig & config)
 : BT::SyncActionNode(name, config)
@@ -296,9 +389,26 @@ BT::NodeStatus AdjustPathForObstacles::tick()
         std::lock_guard<std::mutex> lock(cache->mutex);
         cache->costmap = msg;
       });
+    viz_pub_ = node->create_publisher<visualization_msgs::msg::MarkerArray>(
+      "survey_obstacle_avoidance", rclcpp::QoS(1));
   }
 
+  // Wipe the avoidance overlay once on the avoiding->clear transition (idle ticks
+  // then publish nothing, rather than spamming a DELETEALL every loop).
+  auto clear_viz = [&]() {
+    if (was_avoiding_ && viz_pub_) {
+      visualization_msgs::msg::MarkerArray arr;
+      visualization_msgs::msg::Marker del;
+      del.ns = kVizNamespace;
+      del.action = visualization_msgs::msg::Marker::DELETEALL;
+      arr.markers.push_back(del);
+      viz_pub_->publish(arr);
+    }
+    was_avoiding_ = false;
+  };
+
   auto passthrough = [&]() {
+    clear_viz();
     setOutput("path", nominal);
     prev_offsets_.clear();
     return BT::NodeStatus::SUCCESS;
@@ -316,6 +426,31 @@ BT::NodeStatus AdjustPathForObstacles::tick()
   }
   if (!costmap) {
     return passthrough();  // no costmap yet
+  }
+
+  // Guard the axis-aligned indexing assumptions before sampling: positive
+  // resolution, non-empty grid, a data buffer matching size_x*size_y, and an
+  // identity origin orientation. nav2's costmap_2d always emits such a grid, but
+  // a malformed or rotated relayed source would otherwise misregister every
+  // sample. Degrade to passthrough (reflex layer remains the backstop).
+  {
+    const auto & m = costmap->metadata;
+    const auto & q = m.origin.orientation;
+    const bool axis_aligned =
+      std::abs(q.x) < 1e-6 && std::abs(q.y) < 1e-6 && std::abs(q.z) < 1e-6 &&
+      std::abs(std::abs(q.w) - 1.0) < 1e-6;
+    if (m.resolution <= 0.0 || m.size_x == 0 || m.size_y == 0 ||
+      costmap->data.size() != static_cast<std::size_t>(m.size_x) * m.size_y ||
+      !axis_aligned)
+    {
+      RCLCPP_WARN_THROTTLE(
+        node->get_logger(), *node->get_clock(), 2000,
+        "AdjustPathForObstacles: unusable costmap (resolution=%.3f size=%ux%u "
+        "data=%zu axis_aligned=%d); passing nominal path.",
+        m.resolution, m.size_x, m.size_y, costmap->data.size(),
+        static_cast<int>(axis_aligned));
+      return passthrough();
+    }
   }
 
   const double station_step = getInput<double>("station_step").value_or(2.0);
@@ -377,23 +512,29 @@ BT::NodeStatus AdjustPathForObstacles::tick()
     return static_cast<double>(c);
   };
 
-  // Robot's station index (clip the active range to ahead-of-boat). Non-fatal:
-  // if the pose is unavailable, start the active range at the first in-window
-  // station instead.
+  // Robot's station index, used to clip the active range to ahead-of-boat.
+  // Without a pose we can't tell which stations are astern, and reshaping behind
+  // the boat can tug a nearest-segment follower backward — so a pose-lookup
+  // failure passes the nominal path through for this tick rather than guessing.
   std::size_t robot_station = 0;
   {
     auto robot_frame = config().blackboard->get<std::string>("robot_frame");
     geometry_msgs::msg::PoseStamped robot;
-    if (nav2_util::getCurrentPose(robot, *tf_buffer, path_frame, robot_frame, 0.1)) {
-      double best_d = kInf;
-      for (std::size_t i = 0; i < n; ++i) {
-        const double d = std::hypot(
-          stations[i].x - robot.pose.position.x,
-          stations[i].y - robot.pose.position.y);
-        if (d < best_d) {
-          best_d = d;
-          robot_station = i;
-        }
+    if (!nav2_util::getCurrentPose(robot, *tf_buffer, path_frame, robot_frame, 0.1)) {
+      RCLCPP_WARN_THROTTLE(
+        node->get_logger(), *node->get_clock(), 2000,
+        "AdjustPathForObstacles: robot pose (%s->%s) unavailable; passing nominal path.",
+        path_frame.c_str(), robot_frame.c_str());
+      return passthrough();
+    }
+    double best_d = kInf;
+    for (std::size_t i = 0; i < n; ++i) {
+      const double d = std::hypot(
+        stations[i].x - robot.pose.position.x,
+        stations[i].y - robot.pose.position.y);
+      if (d < best_d) {
+        best_d = d;
+        robot_station = i;
       }
     }
   }
@@ -433,7 +574,7 @@ BT::NodeStatus AdjustPathForObstacles::tick()
   }
 
   const std::vector<double> & prev =
-    (prev_offsets_.size() == n) ? prev_offsets_ : std::vector<double>{};
+    (prev_offsets_.size() == n) ? prev_offsets_ : kEmptyOffsets;
   const auto solved = solveCorridorOffsets(
     costs, offsets, params, prev, active_begin, active_end);
   if (!solved) {
@@ -446,6 +587,7 @@ BT::NodeStatus AdjustPathForObstacles::tick()
   }
   prev_offsets_ = *solved;
   if (peak < kDeviationEpsilon) {
+    clear_viz();  // back on the line: wipe any stale avoidance overlay
     setOutput("path", nominal);  // no meaningful deviation: keep nominal exactly
     return BT::NodeStatus::SUCCESS;
   }
@@ -466,6 +608,15 @@ BT::NodeStatus AdjustPathForObstacles::tick()
     out.poses.push_back(p);
   }
   setOutput("path", out);
+
+  // Operator feedback: show the deviation in CAMP (nominal line, adjusted path,
+  // the avoiding band, and an "AVOIDING" flag). Published only here, on a real
+  // deviation.
+  if (viz_pub_) {
+    viz_pub_->publish(
+      buildAvoidanceMarkers(node->now(), path_frame, nominal, stations, *solved));
+    was_avoiding_ = true;
+  }
   return BT::NodeStatus::SUCCESS;
 }
 

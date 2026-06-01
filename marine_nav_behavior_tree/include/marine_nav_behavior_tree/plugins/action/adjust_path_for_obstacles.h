@@ -13,6 +13,7 @@
 #include "nav_msgs/msg/path.hpp"
 #include "nav2_msgs/msg/costmap.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "visualization_msgs/msg/marker_array.hpp"
 
 namespace marine_nav_behavior_tree
 {
@@ -104,6 +105,13 @@ private:
   std::shared_ptr<CostmapCache> costmap_cache_ = std::make_shared<CostmapCache>();
   rclcpp::Subscription<nav2_msgs::msg::Costmap>::SharedPtr costmap_sub_;
   std::string costmap_topic_;
+
+  // Operator-feedback markers (auto-discovered by CAMP): nominal line, adjusted
+  // path, the deviating "avoiding" band, and a text flag. Published only while
+  // deviating; cleared with a DELETEALL on the avoiding->clear transition, which
+  // was_avoiding_ tracks so an idle tree doesn't republish every tick.
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr viz_pub_;
+  bool was_avoiding_ = false;
 
   // Previous tick's per-station offsets, for the temporal (chatter) term.
   std::vector<double> prev_offsets_;
