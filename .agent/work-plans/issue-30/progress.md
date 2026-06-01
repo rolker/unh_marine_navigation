@@ -51,3 +51,28 @@ issue: 30
 ### Notes
 - [ ] Build gotcha: new BT node in a worktree trips the POST_BUILD nodes-xml generator (overridden-package SONAME shadow). Workaround: prepend the package build dir to LD_LIBRARY_PATH. See plan.md Implementation Notes.
 - [ ] Not yet field/sim-tuned: w_xte:w_obs, max_xte, max_lateral_rate are defaults pending sim.
+
+## Integrated Review
+**Status**: complete
+**When**: 2026-06-01 08:41 -0400
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+
+**PR**: #51 at `0659e74`
+**Sources**: 2 (Copilot R1 @ `0659e74`, local `## Plan Review` @ `420ada8`)
+**Cross-source confirmations**: 0
+**CI**: all-pass (copilot-pull-request-reviewer success)
+
+### Findings
+- None actionable. Copilot reviewed 10/10 changed files and generated **0 comments** (overview-only review body). The prior `## Plan Review` changes-requested findings are all verified-resolved in the committed implementation:
+  - (must-fix, Plan Review) Insert into executed `SurveyLine` tree + rename output — resolved: `run_tasks.xml:410` `{nominal_survey_path}`, node `:420`
+  - (must-fix, Plan Review) Hand-edit Groot palette + inline `<TreeNodesModel>` — resolved: `nav2.btproj:12`, `run_tasks.xml:755`
+  - (must-fix, Plan Review) Always TF into costmap frame, short-circuit on frame match — resolved: `adjust_path_for_obstacles.cpp:336` (identity when equal), passthrough on TF failure
+  - (suggestion, Plan Review) pointer-swap snapshot / no per-pose stamp dependency / tight snapshot pattern — all followed
+
+### Not review findings (outstanding from plan Open Questions — for the human)
+- Reconcile the #30 issue body (still describes old segment-decomposition design) — needs human re-title.
+- Sim-tune `w_xte:w_obs`, `max_xte`, `max_lateral_rate` (defaults pending).
+- Confirm deployed survey-line pose frame vs costmap `map_tide`.
+
+### False positives
+- None.
