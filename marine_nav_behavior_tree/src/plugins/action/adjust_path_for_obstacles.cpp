@@ -38,10 +38,29 @@ constexpr uint8_t kNoInformation = 255;
 constexpr double kOutOfBounds = -1.0;
 // Marker namespace for the operator-feedback MarkerArray (CAMP auto-discovers it).
 constexpr char kVizNamespace[] = "survey_obstacle_avoidance";
-// Dynamic ROS parameter (declared on the bt_navigator node) for the avoidance
-// speed, so it is tunable live with `ros2 param set` / rqt_reconfigure. The
-// avoid_speed BT port seeds its initial value on first tick.
-constexpr char kAvoidSpeedParam[] = "survey_avoidance_speed";
+
+// Live tunables are declared as ROS params `survey_avoidance.<port>` on the
+// bt_navigator node (grouped so rqt_reconfigure clusters them), seeded from the
+// matching BT port on first tick and authoritative thereafter. The suffix here
+// MUST match the BT port name (the seed is read via getInput(suffix)).
+constexpr char kParamNs[] = "survey_avoidance.";
+struct ParamSeed
+{
+  const char * name;     // BT port name == param suffix
+  double fallback;       // used if the port itself is unset
+  const char * description;
+};
+constexpr ParamSeed kParamSeeds[] = {
+  {"max_deviation", 6.0, "Max metres the line may bend off-course; also the give-up bound."},
+  {"along_track_spacing", 2.0, "Waypoint spacing along the line (m)."},
+  {"lateral_resolution", 0.5, "Cross-track search resolution (m)."},
+  {"line_following_weight", 1.0, "Higher = hug the survey line more strongly."},
+  {"obstacle_avoidance_weight", 0.02, "Higher = deviate more strongly around obstacles."},
+  {"smoothness_weight", 2.0, "Higher = smoother detours (penalise sharp lateral changes)."},
+  {"chatter_damping_weight", 0.0, "Higher = steadier path tick-to-tick (anti-chatter)."},
+  {"max_lateral_change", 1.0, "Max cross-track change between adjacent waypoints (m)."},
+  {"avoid_speed", 0.0, "Speed (m/s) through the manoeuvre via per-pose stamps; 0 = controller default."},
+};
 // Empty stand-in for the temporal term's "previous offsets" when there is no
 // matching prior tick — an lvalue, so the DP-input ref binds without a per-tick copy.
 const std::vector<double> kEmptyOffsets;
@@ -398,22 +417,28 @@ BT::PortsList AdjustPathForObstacles::providedPorts()
     BT::InputPort<std::string>(
       "costmap_topic", "local_costmap/costmap_raw",
       "nav2_msgs/Costmap topic supplying the obstacle field."),
+    // Tunables. Each port seeds the live ROS param `survey_avoidance.<name>` on
+    // first tick; the param is authoritative thereafter (rqt_reconfigure /
+    // `ros2 param set`). See kParamSeeds.
     BT::InputPort<double>(
-      "max_xte", 6.0,
-      "Corridor half-width (m): max deviation, and the give-up bound. Baseline "
-      "param; wire to a task-derived value for a per-line override."),
-    BT::InputPort<double>("station_step", 2.0, "Along-track resample spacing (m)."),
-    BT::InputPort<double>("lateral_step", 0.5, "Cross-track offset resolution (m)."),
-    BT::InputPort<double>("w_xte", 1.0, "Restoring-spring weight on d^2."),
-    BT::InputPort<double>("w_obs", 0.02, "Weight on graded obstacle cost."),
-    BT::InputPort<double>("w_smooth", 2.0, "Smoothness weight on (d_i - d_{i-1})^2."),
-    BT::InputPort<double>("w_temporal", 0.0, "Chatter-damping weight vs last tick."),
-    BT::InputPort<double>("max_lateral_rate", 1.0, "Max |d| change between stations (m)."),
+      "max_deviation", 6.0,
+      "Max metres the line may bend off-course; also the give-up bound."),
+    BT::InputPort<double>("along_track_spacing", 2.0, "Waypoint spacing along the line (m)."),
+    BT::InputPort<double>("lateral_resolution", 0.5, "Cross-track search resolution (m)."),
+    BT::InputPort<double>(
+      "line_following_weight", 1.0, "Higher = hug the survey line more strongly."),
+    BT::InputPort<double>(
+      "obstacle_avoidance_weight", 0.02, "Higher = deviate more strongly around obstacles."),
+    BT::InputPort<double>(
+      "smoothness_weight", 2.0, "Higher = smoother detours (penalise sharp lateral changes)."),
+    BT::InputPort<double>(
+      "chatter_damping_weight", 0.0, "Higher = steadier path tick-to-tick (anti-chatter)."),
+    BT::InputPort<double>(
+      "max_lateral_change", 1.0, "Max cross-track change between adjacent waypoints (m)."),
     BT::InputPort<double>(
       "avoid_speed", 0.0,
-      "Initial speed (m/s) through the avoidance manoeuvre (via per-pose "
-      "timestamps); 0 disables. Seeds the live ROS param 'survey_avoidance_speed' "
-      "on the bt_navigator node, which is authoritative thereafter."),
+      "Speed (m/s) through the avoidance manoeuvre (via per-pose timestamps); "
+      "0 disables (controller default speed)."),
   };
 }
 
@@ -446,18 +471,20 @@ BT::NodeStatus AdjustPathForObstacles::tick()
       });
     viz_pub_ = node->create_publisher<visualization_msgs::msg::MarkerArray>(
       "survey_obstacle_avoidance", rclcpp::QoS(1));
-    // Expose avoid_speed as a live-tunable ROS parameter on the bt_navigator
-    // node, seeded from the BT port. Thereafter the parameter is authoritative
-    // (`ros2 param set <bt_navigator> survey_avoidance_speed <m/s>`), so the
-    // manoeuvre speed can be tuned without redeploying the BT. has_parameter
-    // guards re-declaration across tree reloads / a yaml override.
-    if (!node->has_parameter(kAvoidSpeedParam)) {
-      rcl_interfaces::msg::ParameterDescriptor desc;
-      desc.description =
-        "Speed (m/s) through the survey-line obstacle-avoidance manoeuvre; "
-        "0 disables (controller keeps its default speed).";
-      node->declare_parameter(
-        kAvoidSpeedParam, getInput<double>("avoid_speed").value_or(0.0), desc);
+    // Expose every tunable as a live `survey_avoidance.<name>` ROS parameter on
+    // the bt_navigator node, seeded from the matching BT port. The params are
+    // authoritative thereafter, so the whole avoider tunes without redeploying
+    // the BT (`ros2 param set <bt_navigator> survey_avoidance.<name> <value>` /
+    // rqt_reconfigure). has_parameter guards re-declaration across tree reloads
+    // and honours a params-yaml override.
+    for (const auto & ps : kParamSeeds) {
+      const std::string full = std::string(kParamNs) + ps.name;
+      if (!node->has_parameter(full)) {
+        rcl_interfaces::msg::ParameterDescriptor desc;
+        desc.description = ps.description;
+        node->declare_parameter(
+          full, getInput<double>(ps.name).value_or(ps.fallback), desc);
+      }
     }
   }
 
@@ -521,15 +548,21 @@ BT::NodeStatus AdjustPathForObstacles::tick()
     }
   }
 
-  const double station_step = getInput<double>("station_step").value_or(2.0);
+  // Read the live tunables from the survey_avoidance.* ROS params (declared +
+  // seeded on first tick); the internal CorridorParams keep their terse math
+  // names. get_p resolves `survey_avoidance.<suffix>`.
+  auto get_p = [&](const char * suffix) {
+      return node->get_parameter(std::string(kParamNs) + suffix).as_double();
+    };
+  const double station_step = get_p("along_track_spacing");
   CorridorParams params;
-  params.max_xte = getInput<double>("max_xte").value_or(6.0);
-  params.lateral_step = getInput<double>("lateral_step").value_or(0.5);
-  params.w_xte = getInput<double>("w_xte").value_or(1.0);
-  params.w_obs = getInput<double>("w_obs").value_or(0.02);
-  params.w_smooth = getInput<double>("w_smooth").value_or(2.0);
-  params.w_temporal = getInput<double>("w_temporal").value_or(0.0);
-  params.max_lateral_rate = getInput<double>("max_lateral_rate").value_or(1.0);
+  params.max_xte = get_p("max_deviation");
+  params.lateral_step = get_p("lateral_resolution");
+  params.w_xte = get_p("line_following_weight");
+  params.w_obs = get_p("obstacle_avoidance_weight");
+  params.w_smooth = get_p("smoothness_weight");
+  params.w_temporal = get_p("chatter_damping_weight");
+  params.max_lateral_rate = get_p("max_lateral_change");
 
   const auto stations = resampleStations(nominal.poses, station_step);
   if (stations.size() < 3) {
@@ -678,10 +711,8 @@ BT::NodeStatus AdjustPathForObstacles::tick()
 
   // Optional slow-down through the manoeuvre (off by default): stamp the
   // deviating run so the controller commands the avoidance speed there. Read
-  // from the live ROS parameter (seeded from the avoid_speed port on first tick).
-  double avoid_speed = 0.0;
-  node->get_parameter(kAvoidSpeedParam, avoid_speed);
-  applyAvoidanceSlowdown(out, *solved, avoid_speed, kDeviationEpsilon);
+  // from the live `survey_avoidance.avoid_speed` param (seeded from the port).
+  applyAvoidanceSlowdown(out, *solved, get_p("avoid_speed"), kDeviationEpsilon);
   setOutput("path", out);
 
   // Operator feedback: show the deviation in CAMP (nominal line, adjusted path,

@@ -762,33 +762,33 @@
       <input_port name="costmap_topic"
                   default="local_costmap/costmap_raw"
                   type="std::string">nav2_msgs/Costmap topic supplying the obstacle field</input_port>
-      <input_port name="max_xte"
+      <input_port name="max_deviation"
                   default="6.0"
-                  type="double">Corridor half-width (m): max deviation and give-up bound</input_port>
-      <input_port name="station_step"
+                  type="double">Max metres the line may bend off-course; also the give-up bound</input_port>
+      <input_port name="along_track_spacing"
                   default="2.0"
-                  type="double">Along-track resample spacing (m)</input_port>
-      <input_port name="lateral_step"
+                  type="double">Waypoint spacing along the line (m)</input_port>
+      <input_port name="lateral_resolution"
                   default="0.5"
-                  type="double">Cross-track offset resolution (m)</input_port>
-      <input_port name="w_xte"
+                  type="double">Cross-track search resolution (m)</input_port>
+      <input_port name="line_following_weight"
                   default="1.0"
-                  type="double">Restoring-spring weight on d^2</input_port>
-      <input_port name="w_obs"
+                  type="double">Higher = hug the survey line more strongly</input_port>
+      <input_port name="obstacle_avoidance_weight"
                   default="0.02"
-                  type="double">Weight on graded obstacle cost</input_port>
-      <input_port name="w_smooth"
+                  type="double">Higher = deviate more strongly around obstacles</input_port>
+      <input_port name="smoothness_weight"
                   default="2.0"
-                  type="double">Smoothness weight on (d_i - d_{i-1})^2</input_port>
-      <input_port name="w_temporal"
+                  type="double">Higher = smoother detours (penalise sharp lateral changes)</input_port>
+      <input_port name="chatter_damping_weight"
                   default="0.0"
-                  type="double">Chatter-damping weight vs last tick</input_port>
-      <input_port name="max_lateral_rate"
+                  type="double">Higher = steadier path tick-to-tick (anti-chatter)</input_port>
+      <input_port name="max_lateral_change"
                   default="1.0"
-                  type="double">Max |d| change between stations (m)</input_port>
+                  type="double">Max cross-track change between adjacent waypoints (m)</input_port>
       <input_port name="avoid_speed"
                   default="0.0"
-                  type="double">Initial speed (m/s) through the avoidance manoeuvre; 0 disables. Seeds live ROS param 'survey_avoidance_speed' (authoritative thereafter)</input_port>
+                  type="double">Speed (m/s) through the manoeuvre via per-pose timestamps; 0 disables</input_port>
     </Action>
     <Action ID="SetPathFromTask">
       <input_port name="end_index"
