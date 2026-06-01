@@ -47,12 +47,23 @@ cost is *sampled* from the existing costmap; no new grid is created anywhere.
    `station_step`(~2 m), `w_xte`, `w_obs`, `w_smooth`, `w_temporal`,
    `max_lateral_rate`. Constructor grabs `node` from the blackboard, opens a
    costmap subscription (latest cached under a mutex) + a TF buffer.
+   **`max_xte` (resolved):** node param is the baseline; an optional per-line
+   override is read from the task when present. Wire only the node side now
+   (param + read-override-if-present) — no task-message / CAMP plumbing in this PR.
 2. **tick()** — pass-through fast path when `nominal_path` is empty or no costmap
    yet. Otherwise: resample nominal into stations that are **ahead of the boat and
    inside the costmap window**; clamp first & last active station to `d=0` (anchor
    ends → a true detour that returns to the line). For each station, offsets
    `d ∈ [−max_xte, +max_xte]` at `lateral_step`; world point `on_line(s) + d·left_normal(s)`
-   (in `map_tide`); `node_cost = INF` if lethal else `w_xte·d² + w_obs·g(cost)`.
+   (in `map_tide`); `node_cost = INF` if at/above inscribed/lethal else
+   `w_xte·d² + w_obs·g(cost)`, with `g(cost)` the **raw graded cost — no baseline
+   subtraction, no threshold** (resolved). The `w_xte·d²` term is a restoring
+   spring on the line, and a per-station *uniform* obstacle-cost offset does not
+   move the DP's argmin — only the obstacle-cost **gradient** across the corridor
+   does. So the 150 m inflation tails can't bow the line; it deviates only where
+   cost steepens near a real hazard enough to overcome the spring. Tune the single
+   `w_xte : w_obs` ratio (against the inflation `cost_scaling_factor`); the `INF`
+   floor guarantees it never plans into the obstacle body regardless of the spring.
 3. **DP over stations** (this is the whole "planner"): transition cost
    `w_smooth·(dᵢ−dₖ)² + w_temporal·(dᵢ−d_prev_tick(sᵢ))²`, pruning transitions
    that exceed `max_lateral_rate`. O(stations·offsets²), microseconds. Backtrack
@@ -121,22 +132,26 @@ overlay/annunciator), not here; this plan only ensures both paths are observable
 | `run_tasks.xml` `SurveyLine` ports | the installed copy under `core_ws/install` is build-generated — rebuild, don't hand-edit | Yes |
 | Add a BT node | `bt_register_nodes.cpp` + manifest + `.btproj` palette | Yes |
 | Reshape the followed path | operator must see nominal vs deviated → `unh_echoboats_project11#183` | Tracked there (not this PR) |
-| New costmap subscription in a BT node | confirm the blackboard `node` is spun (Open Q3) | Yes — open question |
+| New costmap subscription in a BT node | confirm the blackboard `node` is spun (Open Questions) | Yes — open question |
 
-## Open Questions
+## Resolved Decisions
 
-- **max_xte source** — per-line task field set from survey spec, a node param, or
-  reuse of the crab follower's existing XTE config? It is the one
-  survey-meaningful number; do not guess.
-- **Survey-line pose frame** — confirm it is `map_tide` (no TF) vs needs a
-  transform into the costmap frame.
+- **max_xte** — node param baseline + optional per-line task-field override; only
+  the node side is wired in this PR (no task-message/CAMP plumbing).
+- **Obstacle cost `g(cost)`** — raw graded cost, no baseline subtraction, no
+  threshold; `INF` floor at inscribed/lethal. The `w_xte·d²` spring means only the
+  obstacle-cost *gradient* (not a uniform offset) moves the path, so distant
+  inflation can't bow the line. Tune the `w_xte : w_obs` ratio.
+
+## Open Questions (verify in code during implementation)
+
+- **Survey-line pose frame** — confirm it is `map_tide` (sample directly) vs needs
+  a TF transform into the costmap frame. Trace where survey-line task poses are
+  populated and what `frame_id` they carry.
 - **Spin of the blackboard node** — other BT nodes only *call services* in tick;
-  confirm a cached costmap *subscription* is serviced by the navigator's executor,
-  else spin a dedicated callback group or poll a costmap service.
-- **Inflation-tail handling** — with `inflation_radius: 150 m`, obstacle cost is
-  nonzero almost everywhere near a hazard. `g(cost)` must key off the
-  inscribed/obstacle + sea_surface bands (or subtract a baseline) so the line does
-  not bow away from distant inflation. (Design constraint, resolve during impl.)
+  confirm the navigator's executor services a cached costmap *subscription* on the
+  blackboard `node`. If yes → cached subscription; if no → dedicated callback group
+  or poll a costmap service. Verify before committing to the subscription design.
 
 ## Estimated Scope
 
