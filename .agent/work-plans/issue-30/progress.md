@@ -232,3 +232,20 @@ no CAMP-side change is needed. Design chosen by Roland (path + avoiding highligh
   survey_avoidance.avoid_speed. Ports + Groot palette updated to match.
 - This directly enables the pending sim-tune (open question): the w_xte:w_obs ratio is now
   line_following_weight:obstacle_avoidance_weight, both live.
+
+## jazzy merge + Copilot R-final fixes
+**Status**: complete
+**When**: 2026-06-01 13:15 -0400
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+
+**Commits**: `18ad20e` (merge origin/jazzy — PR #53 RobotOnPath/goto; CMakeLists test-block conflict resolved keeping all 3), `09c0771` (Copilot review fixes)
+**Build/Test**: marine_nav_behavior_tree clean; 12/12 adjust_path gtest pass; 23 package tests / 0 failures post-merge.
+
+### Copilot review (post slowdown/param commits)
+- 6 earlier findings re-surfaced against head — all verified still FIXED (lethal-anchor, UAF, ternary, test-includes ×2, resample-perf).
+- [x] (valid) makeLateralOffsets could exceed max_deviation when not a multiple of lateral_resolution (round→overshoot) — now floor; sub-step corridor → {0.0}. + NeverExceedsMaxXteForNonMultiple test. Newly relevant now that tunables are live params.
+- [x] (nit) Avoiding-band LINE_STRIP joined separate deviating runs — now LINE_LIST of consecutive pairs.
+- [x] (nit) DELETEALL marker empty header — set frame_id (robot_frame) + stamp.
+
+### Merge-readiness
+- PR #51 mergeable/clean after jazzy merge. Remaining caveat: runtime/integration parts (live params, stamp-slowdown, marker publishing) are unit-tested but not sim/field-exercised — sim shakeout recommended before field reliance.
