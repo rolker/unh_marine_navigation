@@ -70,6 +70,20 @@ struct Station
 std::vector<Station> resampleStations(
   const std::vector<geometry_msgs::msg::PoseStamped> & poses, double step);
 
+// Optionally slow the boat through the avoidance manoeuvre by writing per-pose
+// timestamps on the contiguous deviating run of `path`. CrabbingPathFollower
+// derives per-segment speed from segment_distance / Δstamp when both endpoint
+// stamps are non-zero and increasing, so stamps spaced by distance/`avoid_speed`
+// command `avoid_speed` (m/s) there. `offsets_d[i]` is the cross-track offset of
+// `path.poses[i]`; |offset| >= `deviation_epsilon` marks a deviating pose. No-op
+// when `avoid_speed` <= 0, sizes mismatch, or the deviating run is < 2 poses;
+// poses outside the run keep their (zero) stamps so the controller uses its
+// default speed. Timestamps are geometry-derived (fixed base, no wall clock) so a
+// held detour does not re-trigger FollowPath preemption.
+void applyAvoidanceSlowdown(
+  nav_msgs::msg::Path & path, const std::vector<double> & offsets_d,
+  double avoid_speed, double deviation_epsilon);
+
 // Shared costmap cache. Held by both the node and the subscription callback so
 // that an in-flight callback running on the executor thread keeps the cache
 // alive even if the BT node is destroyed mid-callback (tree reload / shutdown).

@@ -245,6 +245,49 @@ std::vector<Station> resampleStations(
   return stations;
 }
 
+void applyAvoidanceSlowdown(
+  nav_msgs::msg::Path & path, const std::vector<double> & offsets_d,
+  double avoid_speed, double deviation_epsilon)
+{
+  const std::size_t n = path.poses.size();
+  if (avoid_speed <= 0.0 || n != offsets_d.size() || n < 2) {
+    return;
+  }
+
+  // Contiguous deviating run [first, last].
+  std::size_t first = n;
+  std::size_t last = 0;
+  for (std::size_t i = 0; i < n; ++i) {
+    if (std::abs(offsets_d[i]) >= deviation_epsilon) {
+      if (first == n) {
+        first = i;
+      }
+      last = i;
+    }
+  }
+  if (first >= last) {
+    return;  // need >= 2 poses to form a stamped segment
+  }
+
+  // Non-zero base (1 s) so the controller treats the stamps as valid; only the
+  // deltas carry meaning, and they are derived from geometry + speed (no wall
+  // clock), so a held detour yields identical stamps tick-to-tick.
+  constexpr int64_t kBaseNs = 1000000000LL;
+  constexpr int64_t kNsPerS = 1000000000LL;
+  double cum_s = 0.0;
+  for (std::size_t i = first; i <= last; ++i) {
+    if (i > first) {
+      const double d = std::hypot(
+        path.poses[i].pose.position.x - path.poses[i - 1].pose.position.x,
+        path.poses[i].pose.position.y - path.poses[i - 1].pose.position.y);
+      cum_s += d / avoid_speed;
+    }
+    const int64_t ns = kBaseNs + static_cast<int64_t>(cum_s * 1e9);
+    path.poses[i].header.stamp.sec = static_cast<int32_t>(ns / kNsPerS);
+    path.poses[i].header.stamp.nanosec = static_cast<uint32_t>(ns % kNsPerS);
+  }
+}
+
 namespace
 {
 // Build the operator-feedback overlay for a deviating tick: the nominal survey
@@ -361,6 +404,10 @@ BT::PortsList AdjustPathForObstacles::providedPorts()
     BT::InputPort<double>("w_smooth", 2.0, "Smoothness weight on (d_i - d_{i-1})^2."),
     BT::InputPort<double>("w_temporal", 0.0, "Chatter-damping weight vs last tick."),
     BT::InputPort<double>("max_lateral_rate", 1.0, "Max |d| change between stations (m)."),
+    BT::InputPort<double>(
+      "avoid_speed", 0.0,
+      "Optional speed (m/s) through the avoidance manoeuvre, applied via per-pose "
+      "timestamps; 0 disables (controller keeps its default speed)."),
   };
 }
 
@@ -609,6 +656,11 @@ BT::NodeStatus AdjustPathForObstacles::tick()
     p.pose.orientation = tf2::toMsg(q);
     out.poses.push_back(p);
   }
+
+  // Optional slow-down through the manoeuvre (off by default): stamp the
+  // deviating run so the controller commands `avoid_speed` there.
+  const double avoid_speed = getInput<double>("avoid_speed").value_or(0.0);
+  applyAvoidanceSlowdown(out, *solved, avoid_speed, kDeviationEpsilon);
   setOutput("path", out);
 
   // Operator feedback: show the deviation in CAMP (nominal line, adjusted path,

@@ -21,6 +21,7 @@
             <input_port name="w_smooth" default="2.0" type="double">Smoothness weight on (d_i - d_{i-1})^2</input_port>
             <input_port name="w_temporal" default="0.0" type="double">Chatter-damping weight vs last tick</input_port>
             <input_port name="max_lateral_rate" default="1.0" type="double">Max |d| change between stations (m)</input_port>
+            <input_port name="avoid_speed" default="0.0" type="double">Optional speed (m/s) through the avoidance manoeuvre via per-pose timestamps; 0 disables</input_port>
         </Action>
         <Condition ID="AllTasksDoneCondition">
             <input_port name="task_list" default="{task_list}" type="std::shared_ptr&lt;marine_nav_tasks::TaskList&gt;">List of tasks to check</input_port>

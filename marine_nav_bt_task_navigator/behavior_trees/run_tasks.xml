@@ -786,6 +786,9 @@
       <input_port name="max_lateral_rate"
                   default="1.0"
                   type="double">Max |d| change between stations (m)</input_port>
+      <input_port name="avoid_speed"
+                  default="0.0"
+                  type="double">Optional speed (m/s) through the avoidance manoeuvre via per-pose timestamps; 0 disables</input_port>
     </Action>
     <Action ID="SetPathFromTask">
       <input_port name="end_index"
