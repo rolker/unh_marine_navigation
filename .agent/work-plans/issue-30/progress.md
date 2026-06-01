@@ -76,3 +76,31 @@ issue: 30
 
 ### False positives
 - None.
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-06-01 09:04 -0400
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+**Verdict**: changes-requested
+
+**Branch**: feature/issue-30 at `f5a3c99`
+**Mode**: pre-push
+**Depth**: Deep (reason: new subscription-bearing BT node, cross-thread concurrency, cross-layer BT wiring)
+**Must-fix**: 3 | **Suggestions**: 8
+**Sources**: 3 (Claude adversarial, Copilot adversarial, lead/static)
+
+### Findings
+- [ ] (must-fix, cross-confirmed Claude+Copilot) Subscription callback captures raw `this`; teardown race / potential UAF on tree-reload/shutdown — capture costmap state in a `shared_ptr<State>` by value — `adjust_path_for_obstacles.cpp:281-286`
+- [ ] (must-fix, Copilot verified) Pinned anchor endpoints skip the lethal-cost check (line 97 unreachable when pinned); lethal cell at `active_begin`/`active_end-1` reported as a clear corridor — return `kInf` when zero-col is lethal — `adjust_path_for_obstacles.cpp:92-99`
+- [ ] (must-fix, static) New `ament_uncrustify` divergence (lambda-body indent) regresses the package's green uncrustify lint test — `ament_uncrustify --reformat` — `adjust_path_for_obstacles.cpp` ~85-104
+- [ ] (suggestion, 3 sources: me+Claude+Copilot) Temporal term keyed by station ordinal while path re-resampled each tick; dormant at `w_temporal=0.0` — reproject by arclength / invalidate on path change before enabling — `adjust_path_for_obstacles.cpp:80,100-104,435`
+- [ ] (suggestion, Copilot) Defensive costmap-metadata validation (`resolution>0`, `data.size()==size_x*size_y`) before sampling — `adjust_path_for_obstacles.cpp:349-361`
+- [ ] (suggestion, Claude) Sampling ignores `origin.orientation`; add identity-orientation guard (nav2 costmap is axis-aligned today) — `adjust_path_for_obstacles.cpp:352-355`
+- [ ] (suggestion, Claude) `getCurrentPose` failure starts active range at index 0 (possibly behind boat); prefer passthrough/clamp + throttled log — `adjust_path_for_obstacles.cpp:371-387`
+- [ ] (suggestion, Claude) Only first contiguous in-window run optimised; document the limitation — `adjust_path_for_obstacles.cpp:400-406`
+- [ ] (suggestion, Claude) `prev` ternary copies the full vector every tick when temporal on; use if/pointer — `adjust_path_for_obstacles.cpp:423-424`
+- [ ] (suggestion, Claude+me) OOB sentinel uses exact double-equality on `-1.0`; latent trap if `sample()` ever does arithmetic — consider `std::optional<double>` — `adjust_path_for_obstacles.cpp:36,392,402,419`
+- [ ] (suggestion, Copilot) `std::isfinite` validation on numeric BT ports — low priority (static XML literals under our control) — `adjust_path_for_obstacles.cpp:309-317`
+
+### False positives
+- (static) cpplint `legal/copyright` + `build/header_guard` on the new files — sibling `clear_path.h` produces the identical 5 hits; pre-existing package-wide convention, not introduced here. The new file correctly matches existing style.
