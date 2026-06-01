@@ -115,3 +115,42 @@ issue: 30
 **Build/Test**: marine_nav_behavior_tree builds clean; 9/9 gtest pass (8 prior + new LethalAnchorIsInfeasible).
 **Must-fix #3 (uncrustify)**: not applied — reclassified as a local-tooling false positive (see Local Review False positives). Surface to human before merge if CI uncrustify behaviour is in doubt.
 **Suggestions (8)**: deferred — none are live defects (temporal term dormant at `w_temporal=0.0`; the rest are defensive guards / docs). Candidates for a follow-up hardening pass.
+
+## CAMP Visualization + Hardening
+**Status**: complete
+**When**: 2026-06-01 10:05 -0400
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+
+**Commit**: `fcd02af` (CAMP obstacle-avoidance MarkerArray + 3 robustness guards)
+**Build/Test**: marine_nav_behavior_tree clean; 9/9 gtest pass; no warnings from the file.
+
+### Operator feedback (the headline)
+Investigated what CAMP shows about obstacle reaction (see below), then added a
+`visualization_msgs/MarkerArray` publisher on `survey_obstacle_avoidance`,
+published only while deviating: faint nominal line + bright adjusted path + red
+avoiding band + "AVOIDING" text flag; DELETEALL clears it on avoiding→clear.
+CAMP's `MarkersManager` auto-discovers any MarkerArray (markers_manager.cpp), so
+no CAMP-side change is needed. Design chosen by Roland (path + avoiding highlight).
+
+**Pre-existing visualization findings (for the human):**
+- CrabbingPathFollower already publishes `received_global_plan` (Path) +
+  `path_follower_visualization` (MarkerArray, auto-shown in CAMP) — `crabbing_path_follower.cpp:170,176`.
+- **Topic-name bug**: CAMP subscribes to `received_global_**path**` (`platform.cpp:103`)
+  but the follower publishes `received_global_**plan**` — nothing publishes
+  `received_global_path` (no remap found). CAMP's dedicated path renderer is dead;
+  the marker layer compensates. Worth a separate fix (CAMP or a remap).
+- The local costmap IS visible in CAMP: nav2 publishes `local_costmap/costmap`
+  (OccupancyGrid) and CAMP's GridManager auto-discovers any OccupancyGrid by type
+  with no namespace filter (`grid_manager.cpp:30`). Operator toggles the grid layer.
+
+### Hardening (review suggestions #5/#6/#7/#9 — the "cheap" set Roland approved)
+- [x] (#5) Costmap-metadata validation before sampling (resolution>0, non-empty, data==size_x*size_y) — passthrough on malformed.
+- [x] (#6) Identity origin-orientation guard (axis-aligned assumption) — passthrough on rotated/relayed grid.
+- [x] (#7) Pose-lookup failure → passthrough (don't reshape from index 0 / astern) + throttled warn.
+- [x] (#9) Temporal-term `prev` ref bound to a shared empty lvalue — drops a per-tick vector copy.
+
+### Still deferred (not done)
+- (#4) Temporal-term arclength reprojection — dormant at `w_temporal=0.0`; do before enabling.
+- (#8) Document the single-contiguous-in-window-run limitation.
+- (#10) OOB sentinel → `std::optional<double>` refactor.
+- (#11) `std::isfinite` validation on numeric BT ports — low (static XML literals).
