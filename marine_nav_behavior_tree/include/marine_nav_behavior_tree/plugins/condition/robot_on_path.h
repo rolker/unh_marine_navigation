@@ -1,5 +1,8 @@
-#ifndef MARINE_NAV_BEHAVIOR_TREE_CONDITIONS_ROBOT_ON_PATH_H
-#define MARINE_NAV_BEHAVIOR_TREE_CONDITIONS_ROBOT_ON_PATH_H
+#ifndef MARINE_NAV_BEHAVIOR_TREE__PLUGINS__CONDITION__ROBOT_ON_PATH_H_
+#define MARINE_NAV_BEHAVIOR_TREE__PLUGINS__CONDITION__ROBOT_ON_PATH_H_
+
+#include <memory>
+#include <string>
 
 #include <behaviortree_cpp/bt_factory.h>
 #include "geometry_msgs/msg/point.hpp"
@@ -51,4 +54,4 @@ public:
 
 }  // namespace marine_nav_behavior_tree
 
-#endif
+#endif  // MARINE_NAV_BEHAVIOR_TREE__PLUGINS__CONDITION__ROBOT_ON_PATH_H_

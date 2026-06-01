@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <memory>
 
 #include "nav2_util/robot_utils.hpp"
 
