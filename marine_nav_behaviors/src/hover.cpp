@@ -29,6 +29,37 @@ void Hover::onConfigure()
     node, behavior_name_+".point_at_target", rclcpp::ParameterValue(point_at_target_));
   nav2_util::declare_parameter_if_not_declared(
     node, behavior_name_+".generate_visualization", rclcpp::ParameterValue(generate_visualization_));
+
+  // Create the visualization publisher eagerly here, at lifecycle configure —
+  // NOT lazily on the first hover. The behavior_server is configured early in
+  // bringup, so the publisher endpoint exists before operator clients (CAMP,
+  // rviz) subscribe to <ns>/hover_visualization. Creating it lazily at the
+  // first hover meant the writer appeared long after those subscribers had
+  // already attached to a publisher-less topic; on FastDDS that late, mid-run
+  // create+activate loses the discovery match for the already-attached reader,
+  // so markers never render until the client re-subscribes (CAMP restart). #42
+  // stopped the publisher being re-created every hover (churn -> transient
+  // "more than one type associated"); this moves the single create to configure
+  // so there is no late-join race at all. For #48.
+  node->get_parameter(behavior_name_+".generate_visualization", generate_visualization_);
+  if(generate_visualization_ && !visualization_publisher_)
+  {
+    visualization_publisher_ = node->create_publisher<visualization_msgs::msg::MarkerArray>(
+      behavior_name_+"_visualization", 1);
+    visualization_publisher_->on_activate();
+  }
+}
+
+void Hover::onCleanup()
+{
+  // Tear down the visualization publisher on the matching lifecycle transition
+  // so a configure->cleanup->configure cycle re-creates it cleanly (mirrors the
+  // create in onConfigure).
+  if(visualization_publisher_)
+  {
+    visualization_publisher_->on_deactivate();
+    visualization_publisher_.reset();
+  }
 }
 
 nav2_behaviors::ResultStatus Hover::onRun(const std::shared_ptr<const HoverAction::Goal> goal)
@@ -39,13 +70,10 @@ nav2_behaviors::ResultStatus Hover::onRun(const std::shared_ptr<const HoverActio
   node->get_parameter(behavior_name_+".minimum_speed", minimum_speed_);
   node->get_parameter(behavior_name_+".maximum_speed", maximum_speed_);
   node->get_parameter(behavior_name_+".maximum_rotation_speed", maximum_rotation_speed_);
-  node->get_parameter(behavior_name_+".generate_visualization", generate_visualization_);
-
-  if(generate_visualization_)
-  {
-    visualization_publisher_ = node->create_publisher<visualization_msgs::msg::MarkerArray>(behavior_name_+"_visualization", 1);
-    visualization_publisher_->on_activate();
-  }
+  // generate_visualization is intentionally NOT re-read here: the publisher is
+  // created once at onConfigure (see #48), so this is a configure-time setting.
+  // Re-reading it could flip generate_visualization_ true at runtime with no
+  // publisher behind it; publish_visualization guards on the publisher anyway.
 
   if(goal->maximum_radius > 0.0)
   {
@@ -188,7 +216,9 @@ nav2_behaviors::ResultStatus Hover::onCycleUpdate()
   // todo - collision avoidance
   vel_pub_->publish(std::move(cmd_vel));
 
-  if(generate_visualization_)
+  // Publisher is created at onConfigure when generate_visualization is set; the
+  // null-check is defensive in case the param was disabled at configure time.
+  if(generate_visualization_ && visualization_publisher_)
   {
     publish_visualization(current_pose.header.stamp);
   }

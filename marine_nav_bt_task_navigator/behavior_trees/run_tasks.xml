@@ -15,6 +15,20 @@
     </Sequence>
   </BehaviorTree>
 
+  <!-- ExitHoverForNav: leave any active hover before nav, but DO NOT cancel
+       the live FollowPath. Used on entry to NavigateThroughWaypoints and
+       SurveyLine so the next FollowPath goal preempts the active one at the
+       follow_path server (no uncommanded zero-cmd window). CancelAllNavigation
+       is still used for GotoPose, which is an operator hard-stop and *should*
+       drop FollowPath. For #28. -->
+  <BehaviorTree ID="ExitHoverForNav">
+    <ForceSuccess>
+      <CancelHover name="CancelHoverBeforeNav"
+                   server_timeout="1000"
+                   server_name="hover"/>
+    </ForceSuccess>
+  </BehaviorTree>
+
   <BehaviorTree ID="GotoPose">
     <Sequence name="GotoPoseSequence">
       <SubTree ID="NavigateThroughWaypoints"
@@ -47,44 +61,73 @@
   <BehaviorTree ID="HoverTask">
     <ReactiveSequence>
       <ScriptCondition code="current_task_type == &apos;hover&apos;"/>
-      <SequenceWithMemory>
-        <Fallback name="SetHoverGoalFallback">
-          <Inverter>
-            <SetPathFromTask end_index="-1"
-                             path="{goal_poses}"
-                             start_index="0"
-                             task="{current_task}"/>
-          </Inverter>
-          <IfThenElse>
-            <PathEmptyCondition path="{goal_poses}"/>
-            <AlwaysSuccess/>
-            <SubTree ID="GotoPose"
-                     _autoremap="true"/>
-          </IfThenElse>
-        </Fallback>
-        <!-- Hold the momentum-coasting stop point instead of the live pose, so
-             a boat arriving at survey speed decelerates into the point rather
-             than overshooting and driving back (#33). Run on both paths: after
-             a transit (location given) the boat is ~stopped so this ≈ the
-             current pose; computing it on every entry also keeps {hover_target}
-             fresh, avoiding a stale target leaking from a previous hover. -->
-        <PredictStoppingPose deceleration="{default_deceleration}"
-                             pose="{hover_target}"/>
-        <Script code="navigation_state := &apos;hover&apos;"/>
-        <Hover target="{hover_target}"
-               maximum_radius="0.000000"
-               maximum_speed="0.000000"
-               error_code_id="{hover_error_code}"
-               server_timeout="1000"
-               minimum_radius="0.000000"
-               server_name="hover"/>
-      </SequenceWithMemory>
+      <!-- RestartOnTaskChange forces a clean re-entry of the hover Sequence
+           whenever {current_task_update_time} changes (a new or updated hover
+           task). The Switch that dispatches HoverTask keys on task *type*, so a
+           same-type re-command (a new hover_override, or a different hover id)
+           does NOT halt this branch on its own; without this decorator the
+           Sequence would stay parked at the RUNNING Hover child and never
+           recompute the target. Task::update bumps current_task_update_time only
+           on a real message change, so benign feedback re-sends don't restart.
+           For #46. -->
+      <RestartOnTaskChange task_update_time="{current_task_update_time}">
+        <!-- Plain Sequence (NOT SequenceWithMemory): Sequence::halt() resets the
+             child index to 0, so every entry re-runs the goal-set Fallback and
+             PredictStoppingPose for a fresh stop point, while a continuous hold
+             still resumes at the RUNNING Hover child (no per-tick recompute that
+             would chase the drifting boat). SequenceWithMemory kept its index
+             across halts and — because Hover never returns SUCCESS — never
+             re-ticked PredictStoppingPose, freezing {hover_target} at the first
+             value ever computed (#46). Continuous-hold safety relies on the
+             enclosing RestartOnTaskChange decorator (this Sequence's parent)
+             staying the LAST child of the outer ReactiveSequence: a sibling
+             added after it would make the ReactiveSequence halt this subtree
+             every tick, recomputing the stop point and chasing the boat. -->
+        <Sequence>
+          <Fallback name="SetHoverGoalFallback">
+            <Inverter>
+              <SetPathFromTask end_index="-1"
+                               path="{goal_poses}"
+                               start_index="0"
+                               task="{current_task}"/>
+            </Inverter>
+            <IfThenElse>
+              <PathEmptyCondition path="{goal_poses}"/>
+              <AlwaysSuccess/>
+              <SubTree ID="GotoPose"
+                       _autoremap="true"/>
+            </IfThenElse>
+          </Fallback>
+          <!-- Hold the momentum-coasting stop point instead of the live pose, so
+               a boat arriving at survey speed decelerates into the point rather
+               than overshooting and driving back (#33). After a transit (location
+               given) the boat is ~stopped so this ≈ the current pose. Recomputed
+               once per entry (see Sequence note above) to avoid a stale target
+               leaking from a previous hover. -->
+          <PredictStoppingPose deceleration="{default_deceleration}"
+                               pose="{hover_target}"/>
+          <Script code="navigation_state := &apos;hover&apos;"/>
+          <Hover target="{hover_target}"
+                 maximum_radius="0.000000"
+                 maximum_speed="0.000000"
+                 error_code_id="{hover_error_code}"
+                 server_timeout="1000"
+                 minimum_radius="0.000000"
+                 server_name="hover"/>
+        </Sequence>
+      </RestartOnTaskChange>
     </ReactiveSequence>
   </BehaviorTree>
 
   <BehaviorTree ID="NavigateThroughWaypoints">
     <Sequence>
-      <SubTree ID="CancelAllNavigation"
+      <!-- ExitHoverForNav (CancelHover only) instead of CancelAllNavigation,
+           so the live FollowPath is not pre-emptively canceled here. The next
+           FollowPath goal will preempt the active one at the follow_path
+           server, eliminating the uncommanded zero-cmd window during line
+           transitions that previously tripped the FCU's 3 s GUIDED watchdog
+           (#28; field trip 2026-05-22). -->
+      <SubTree ID="ExitHoverForNav"
                _autoremap="true"/>
       <ClearPath navigation_path="{path}"/>
       <FixPathOrientations output_path="{goals}"
@@ -100,7 +143,12 @@
         <PlannerSelector topic_name="planner_selector"
                          default_planner="GridBased"
                          selected_planner="{selected_planner}"/>
-        <RateController hz=".5">
+        <!-- hz raised from 0.5 → 2.0 so re-plan/refresh cadence is well under
+             the FCU's 3 s GUIDED watchdog margin (#28). num_attempts on
+             ComputePathThroughPoses capped 20 → 4 so a stuck planner can't
+             stack retries past the watchdog — fail loudly to SetTaskFailed
+             rather than stall silently. -->
+        <RateController hz="2.0">
           <Fallback name="ComputePathThroughPoses">
             <ReactiveSequence>
               <RemovePassedGoals input_goals="{goals_vector}"
@@ -111,7 +159,7 @@
               <IsPathValid path="{path}"
                            server_timeout="{server_timeout}"/>
             </ReactiveSequence>
-            <RetryUntilSuccessful num_attempts="20">
+            <RetryUntilSuccessful num_attempts="4">
               <ComputePathThroughPoses goals="{goals_vector}"
                                        server_name="compute_path_through_poses"
                                        server_timeout="{server_timeout}"
@@ -162,6 +210,7 @@
                    current_task_type="{current_task_type}"
                    navigation_state="{navigation_state}"
                    current_task="{current_task}"
+                   current_task_update_time="{current_task_update_time}"
                    _autoremap="true"/>
           <SetTaskFailed name="HoverFailed" task="{current_task}" reason="hover_failed"/>
         </Fallback>
@@ -339,7 +388,11 @@
 
   <BehaviorTree ID="SurveyLine">
     <Sequence>
-      <SubTree ID="CancelAllNavigation"
+      <!-- ExitHoverForNav (CancelHover only) instead of CancelAllNavigation:
+           SurveyLine entry must not pre-emptively cancel the transit FollowPath
+           that just started — the next FollowPath goal (survey_path) preempts
+           it cleanly at the follow_path server. See #28. -->
+      <SubTree ID="ExitHoverForNav"
                _autoremap="true"/>
       <ReactiveSequence>
         <Script code="navigation_state := &apos;survey_line&apos;"/>
@@ -348,6 +401,16 @@
                             selected_controller="{selected_controller}"/>
         <SetControllerSpeed speed="{target_speed}"
                             controller_name="{selected_controller}"/>
+        <!-- Refresh {survey_path} every tick so an operator mid-line mission
+             re-send (which updates {current_task} → {survey_line_task} via
+             UpdateCurrentTaskData upstream) propagates to FollowPath. Nav2
+             FollowPathAction::on_wait_for_result re-reads the path port each
+             RUNNING tick, compares against goal_.path, and sets goal_updated_
+             on a change → BtActionNode preempts with the new goal. For #35. -->
+        <SetPathFromTask end_index="-1"
+                         path="{survey_path}"
+                         start_index="0"
+                         task="{survey_line_task}"/>
         <!-- Recover transient FollowPath ABORTs (e.g. a momentary progress-checker trip)
              with a short Wait, then retry — up to 3 times. On persistent failure the
              RecoveryNode FAILs up to the dispatch, which records the line failed
@@ -656,6 +719,10 @@
     </Action>
     <Decorator ID="RateController">
       <input_port name="hz">Rate</input_port>
+    </Decorator>
+    <Decorator ID="RestartOnTaskChange">
+      <input_port name="task_update_time"
+                  type="rclcpp::Time">Timestamp of the current task's last update (wire to {current_task_update_time}); when it changes while the child is RUNNING, the child is halted and re-ticked from the top</input_port>
     </Decorator>
     <Action ID="RemovePassedGoals">
       <input_port name="input_goals">Input goals to remove if passed</input_port>

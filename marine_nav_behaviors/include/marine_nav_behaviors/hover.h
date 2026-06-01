@@ -21,6 +21,8 @@ public:
 
   void onConfigure() override;
 
+  void onCleanup() override;
+
   nav2_core::CostmapInfoType getResourceInfo() override {return nav2_core::CostmapInfoType::LOCAL;}
 
 protected:
