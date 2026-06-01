@@ -45,16 +45,27 @@
   <BehaviorTree ID="GotoTask">
     <ReactiveSequence name="GotoTaskReactiveSequence">
       <ScriptCondition code="current_task_type == &apos;goto&apos;"/>
-      <Sequence name="GotoPoseAndSetDoneSequence">
-        <SetPathFromTask end_index="-1"
-                         path="{goal_poses}"
-                         start_index="0"
-                         task="{current_task}"/>
-        <SubTree ID="GotoPose"
-                 _autoremap="true"/>
-        <SetTaskDone name="SetGotoTaskDone"
-                     task="{current_task}"/>
-      </Sequence>
+      <!-- RestartOnTaskChange forces a clean re-entry whenever
+           {current_task_update_time} changes — i.e. the operator re-issues a goto
+           override. The dispatch Switch keys on task *type*, so a same-type
+           re-command does NOT halt this branch on its own; without this decorator
+           the Sequence stays parked at the RUNNING GotoPose child, SetPathFromTask
+           is never re-ticked, and the boat keeps driving to the ORIGINAL target.
+           Mirrors the hover fix (#46); for #52. Must stay the LAST child of the
+           outer ReactiveSequence (a sibling after it would halt this subtree every
+           tick). -->
+      <RestartOnTaskChange task_update_time="{current_task_update_time}">
+        <Sequence name="GotoPoseAndSetDoneSequence">
+          <SetPathFromTask end_index="-1"
+                           path="{goal_poses}"
+                           start_index="0"
+                           task="{current_task}"/>
+          <SubTree ID="GotoPose"
+                   _autoremap="true"/>
+          <SetTaskDone name="SetGotoTaskDone"
+                       task="{current_task}"/>
+        </Sequence>
+      </RestartOnTaskChange>
     </ReactiveSequence>
   </BehaviorTree>
 
@@ -217,6 +228,7 @@
         <Fallback name="GotoOrFailed">
           <SubTree ID="GotoTask"
                    current_task="{current_task}"
+                   current_task_update_time="{current_task_update_time}"
                    lead_in_distance="0.0"
                    server_timeout="{server_timeout}"
                    bt_loop_duration="{bt_loop_duration}"
@@ -509,14 +521,34 @@
 
   <BehaviorTree ID="TransitAndSurveyLine">
     <Sequence>
-      <GetSubPath output_path="{transit_path}"
-                  end_index="0"
-                  start_index="0"
-                  input_path="{survey_path}"/>
-      <Script code="navigation_state := &apos;transit&apos;"/>
-      <SubTree ID="NavigateThroughWaypoints"
-               goals="{transit_path}"
-               _autoremap="true"/>
+      <!-- Lead in to the line's first waypoint UNLESS the boat is already on the
+           line. After an override (hover park / goto nudge) halts and the
+           survey-line case re-enters, the boat is still on the line; skipping the
+           transit lets the path-following controller resume from the boat's
+           current position instead of driving back to the line start and re-running
+           the whole line (inefficient on long lines — e.g. a goto nudge to recover
+           a sonar hiccup). On a genuine fresh entry the boat is not yet on the line,
+           so RobotOnPath fails and the lead-in runs exactly as before. RobotOnPath
+           also degrades to the lead-in on missing TF or an empty path. For #52.
+           threshold is metres of cross-track tolerance — comfortably above survey
+           cross-track error / goto-park positioning error and below the line
+           spacing; tune here if a survey runs lines closer than this. -->
+      <Fallback name="LeadInUnlessOnLine">
+        <RobotOnPath path="{survey_path}"
+                     threshold="5.0"
+                     tf_buffer="{tf_buffer}"
+                     robot_frame="{robot_frame}"/>
+        <Sequence name="LeadInToLineStart">
+          <GetSubPath output_path="{transit_path}"
+                      end_index="0"
+                      start_index="0"
+                      input_path="{survey_path}"/>
+          <Script code="navigation_state := &apos;transit&apos;"/>
+          <SubTree ID="NavigateThroughWaypoints"
+                   goals="{transit_path}"
+                   _autoremap="true"/>
+        </Sequence>
+      </Fallback>
       <SubTree ID="SurveyLine"
                server_timeout="{server_timeout}"
                bt_loop_duration="{bt_loop_duration}"
@@ -704,6 +736,19 @@
       <input_port name="path"
                   default="{path}"
                   type="nav_msgs::msg::Path_&lt;std::allocator&lt;void&gt; &gt;">Path to check</input_port>
+    </Condition>
+    <Condition ID="RobotOnPath">
+      <input_port name="path"
+                  default="{survey_path}"
+                  type="nav_msgs::msg::Path_&lt;std::allocator&lt;void&gt; &gt;">Path to test proximity to</input_port>
+      <input_port name="threshold"
+                  type="double">Maximum distance (m) from the path to count as 'on' it</input_port>
+      <input_port name="tf_buffer"
+                  default="{tf_buffer}"
+                  type="std::shared_ptr&lt;tf2_ros::Buffer&gt;">TF2 buffer</input_port>
+      <input_port name="robot_frame"
+                  default="{robot_frame}"
+                  type="std::string">Robot base frame</input_port>
     </Condition>
     <Action ID="PredictStoppingPose">
       <input_port name="deceleration"
