@@ -6,7 +6,9 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
+#include <string>
 #include <vector>
 
 #include "geometry_msgs/msg/pose_stamped.hpp"

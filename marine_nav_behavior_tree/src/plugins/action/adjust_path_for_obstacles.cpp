@@ -201,39 +201,41 @@ std::vector<Station> resampleStations(
     return stations;
   }
 
-  // Per-segment direction + cumulative length.
+  // Per-segment length + total.
+  std::vector<double> seg_len(pts.size(), 0.0);  // seg_len[i] = |pts[i-1]→pts[i]|
   double total = 0.0;
   for (std::size_t i = 1; i < pts.size(); ++i) {
-    total += std::hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    seg_len[i] = std::hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    total += seg_len[i];
   }
   if (total <= 0.0) {
     return stations;
   }
 
+  // Single forward walk: the sample arclength s is monotonically increasing, so
+  // the active segment index only advances — O(segments + stations) overall
+  // (vs a per-station rescan from the start). `seg_start` is the arclength at
+  // pts[seg-1]; we stay on the last segment for s at/after `total`.
+  std::size_t seg = 1;
+  double seg_start = 0.0;
   auto station_at = [&](double s) -> Station {
-    double acc = 0.0;
-    for (std::size_t i = 1; i < pts.size(); ++i) {
-      const double dx = pts[i][0] - pts[i - 1][0];
-      const double dy = pts[i][1] - pts[i - 1][1];
-      const double len = std::hypot(dx, dy);
-      if (len <= 0.0) {
-        continue;
-      }
-      if (s <= acc + len || i + 1 == pts.size()) {
-        const double t = std::clamp((s - acc) / len, 0.0, 1.0);
-        const double tx = dx / len;
-        const double ty = dy / len;
-        Station st;
-        st.x = pts[i - 1][0] + t * dx;
-        st.y = pts[i - 1][1] + t * dy;
-        st.nx = -ty;  // left normal (90deg CCW from tangent)
-        st.ny = tx;
-        st.yaw = std::atan2(ty, tx);
-        return st;
-      }
-      acc += len;
+    while (seg + 1 < pts.size() && s > seg_start + seg_len[seg]) {
+      seg_start += seg_len[seg];
+      ++seg;
     }
-    return Station{};  // unreachable
+    const double dx = pts[seg][0] - pts[seg - 1][0];
+    const double dy = pts[seg][1] - pts[seg - 1][1];
+    const double len = seg_len[seg];
+    const double t = std::clamp((s - seg_start) / len, 0.0, 1.0);
+    const double tx = dx / len;
+    const double ty = dy / len;
+    Station st;
+    st.x = pts[seg - 1][0] + t * dx;
+    st.y = pts[seg - 1][1] + t * dy;
+    st.nx = -ty;  // left normal (90deg CCW from tangent)
+    st.ny = tx;
+    st.yaw = std::atan2(ty, tx);
+    return st;
   };
 
   for (double s = 0.0; s < total; s += step) {
