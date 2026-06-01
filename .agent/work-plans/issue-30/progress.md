@@ -38,3 +38,16 @@ issue: 30
 - [ ] (suggestion) Commit to the cached-subscription design (node IS spun — `set_controller_speed.cpp` proves it); note the callback runs on the bt_navigator executor thread (distinct from the tick thread) so the mutex is load-bearing — use a pointer-swap snapshot, don't hold the lock across the DP.
 - [ ] (suggestion) #23 per-pose stamps are NOT load-bearing for CrabbingPathFollower (it times off the robot pose stamp, selects segments geometrically); don't block path synthesis on preserving per-pose stamps for resampled stations.
 - [ ] (suggestion) First subscription-bearing BT node in the repo — sound but unprecedented; keep the snapshot pattern tight.
+
+## Implementation
+**Status**: complete
+**When**: 2026-06-01 00:15 -0400
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+
+**Commits**: `6a6d7b2` (node + 8 unit tests + CMake/package.xml/register), `a794fcb` (SurveyLine BT wiring + Groot palette)
+**Build**: marine_nav_behavior_tree + marine_nav_bt_task_navigator build clean; node in generated manifest; run_tasks.xml + nav2.btproj well-formed.
+**Tests**: 8/8 gtest pass (clear→on-line, blob→bounded re-anchored detour, wall→infeasible, lateral-rate limit, offsets/resample helpers).
+
+### Notes
+- [ ] Build gotcha: new BT node in a worktree trips the POST_BUILD nodes-xml generator (overridden-package SONAME shadow). Workaround: prepend the package build dir to LD_LIBRARY_PATH. See plan.md Implementation Notes.
+- [ ] Not yet field/sim-tuned: w_xte:w_obs, max_xte, max_lateral_rate are defaults pending sim.

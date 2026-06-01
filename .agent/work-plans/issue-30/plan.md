@@ -187,3 +187,25 @@ overlay/annunciator), not here; this plan only ensures both paths are observable
 
 Single PR: one new BT node + its unit test, registration/manifest, and a one-line
 `SurveyLine` wiring edit. Operator-visibility display is out of scope (#183).
+
+## Implementation Notes
+
+- **Pure core is `Station`/`makeLateralOffsets`/`resampleStations`/`solveCorridorOffsets`**
+  (free functions in the header) so the DP is unit-tested with a hand-built cost
+  matrix, no ROS. `tick()` only does costmap sampling, TF, robot-pose clipping,
+  and reconstruction. 8 gtests pass (clear→on-line, blob→bounded re-anchored
+  detour, wall→infeasible, lateral-rate limit, offset/resample helpers).
+- **Costmap source**: subscribes to `nav2_msgs/Costmap` (`costmap_raw`, 0–254) so
+  the inscribed/lethal `INF` floor and `NO_INFORMATION`→free mapping are exact;
+  no `nav2_costmap_2d` dependency (raw index math). Added `nav2_msgs` + `nav_msgs`
+  to CMake/package.xml.
+- **Build gotcha (worktree + new BT node)**: `marine_nav_behavior_tree` runs a
+  POST_BUILD `generate_..._nodes_xml` step that loads the freshly-built plugin
+  `.so`. In a worktree the package is *overridden* (it also lives in the sourced
+  main merged install), and the loader picks the stale main `.so` by SONAME —
+  which lacks the new node's symbols → `undefined symbol: …AdjustPathForObstacles…`.
+  Existing-package builds never hit this (the stale `.so` has all symbols); only a
+  *new* node exposes it. Workaround used: prepend the package's own build dir to
+  `LD_LIBRARY_PATH` before building so the generate step loads the fresh `.so`:
+  `export LD_LIBRARY_PATH="$PWD/build/marine_nav_behavior_tree:$LD_LIBRARY_PATH"`.
+  The same prepend is needed to run the unit test binary in a worktree.
