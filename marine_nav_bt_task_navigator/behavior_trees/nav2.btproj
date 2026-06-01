@@ -9,6 +9,20 @@
             <input_port name="sub_task_id" default="{sub_task_id}" type="std::string">ID of new sub-task to add to parent task</input_port>
             <input_port name="parent_task" default="{parent_task}" type="std::shared_ptr&lt;marine_nav_tasks::Task&gt;">Parent task to add sub-task to</input_port>
         </Action>
+        <Action ID="AdjustPathForObstacles">
+            <input_port name="nominal_path" default="{nominal_survey_path}" type="nav_msgs::msg::Path_&lt;std::allocator&lt;void&gt; &gt;">Nominal trackline to reshape around obstacles</input_port>
+            <output_port name="path" default="{survey_path}" type="nav_msgs::msg::Path_&lt;std::allocator&lt;void&gt; &gt;">Reshaped path for FollowPath (nominal pass-through when clear/blocked)</output_port>
+            <input_port name="costmap_topic" default="local_costmap/costmap_raw" type="std::string">nav2_msgs/Costmap topic supplying the obstacle field</input_port>
+            <input_port name="max_deviation" default="6.0" type="double">Max metres the line may bend off-course; also the give-up bound</input_port>
+            <input_port name="along_track_spacing" default="2.0" type="double">Waypoint spacing along the line (m)</input_port>
+            <input_port name="lateral_resolution" default="0.5" type="double">Cross-track search resolution (m)</input_port>
+            <input_port name="line_following_weight" default="1.0" type="double">Higher = hug the survey line more strongly</input_port>
+            <input_port name="obstacle_avoidance_weight" default="0.02" type="double">Higher = deviate more strongly around obstacles</input_port>
+            <input_port name="smoothness_weight" default="2.0" type="double">Higher = smoother detours (penalise sharp lateral changes)</input_port>
+            <input_port name="chatter_damping_weight" default="0.0" type="double">Higher = steadier path tick-to-tick (anti-chatter)</input_port>
+            <input_port name="max_lateral_change" default="1.0" type="double">Max cross-track change between adjacent waypoints (m)</input_port>
+            <input_port name="avoid_speed" default="0.0" type="double">Speed (m/s) through the manoeuvre via per-pose timestamps; 0 disables</input_port>
+        </Action>
         <Condition ID="AllTasksDoneCondition">
             <input_port name="task_list" default="{task_list}" type="std::shared_ptr&lt;marine_nav_tasks::TaskList&gt;">List of tasks to check</input_port>
         </Condition>

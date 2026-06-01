@@ -14,13 +14,16 @@
   <depend>marine_nav_interfaces</depend>
   <depend>marine_nav_tasks</depend>
   <depend>nav2_behavior_tree</depend>
+  <depend>nav2_msgs</depend>
   <depend>nav2_util</depend>
+  <depend>nav_msgs</depend>
   <depend>rcl_interfaces</depend>
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
   <depend>tf2</depend>
   <depend>tf2_geometry_msgs</depend>
   <depend>tf2_ros</depend>
+  <depend>visualization_msgs</depend>
 
   <test_depend>ament_cmake_gtest</test_depend>
   <test_depend>ament_lint_auto</test_depend>
