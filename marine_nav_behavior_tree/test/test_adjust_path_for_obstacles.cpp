@@ -62,6 +62,23 @@ TEST(MakeLateralOffsets, DegenerateStepYieldsSingleZero)
   EXPECT_DOUBLE_EQ(o[0], 0.0);
 }
 
+TEST(MakeLateralOffsets, NeverExceedsMaxXteForNonMultiple)
+{
+  // max_xte not an exact multiple of the step: floor, so no offset overshoots
+  // the corridor half-width (1.0 / 0.6 -> {-0.6, 0, 0.6}, NOT ±1.2).
+  const auto o = makeLateralOffsets(1.0, 0.6);
+  ASSERT_EQ(o.size(), 3u);
+  for (double d : o) {
+    EXPECT_LE(std::abs(d), 1.0 + 1e-9);
+  }
+  EXPECT_DOUBLE_EQ(o[1], 0.0);
+
+  // Corridor narrower than one step -> only the centre (no deviation possible).
+  const auto narrow = makeLateralOffsets(0.3, 0.5);
+  ASSERT_EQ(narrow.size(), 1u);
+  EXPECT_DOUBLE_EQ(narrow[0], 0.0);
+}
+
 // --- resampleStations ------------------------------------------------------
 
 TEST(ResampleStations, StraightLineSpacingNormalAndYaw)

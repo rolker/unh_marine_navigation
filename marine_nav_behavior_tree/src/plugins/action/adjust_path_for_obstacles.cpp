@@ -73,11 +73,17 @@ std::vector<double> makeLateralOffsets(double max_xte, double lateral_step)
     offsets.push_back(0.0);
     return offsets;
   }
-  const int n_each = static_cast<int>(std::round(max_xte / lateral_step));
+  // Floor (not round) so the extreme offset n_each*lateral_step never exceeds
+  // max_xte — max_xte is a hard corridor half-width, and with live params it can
+  // be set to any value, not just a multiple of lateral_step. The +1e-9 guards an
+  // exact multiple from under-flooring on fp error. A corridor narrower than one
+  // lateral_step yields only {0.0} (no deviation) — by design: lower
+  // lateral_resolution to use a sub-step corridor.
+  const int n_each = static_cast<int>(std::floor(max_xte / lateral_step + 1e-9));
   for (int k = -n_each; k <= n_each; ++k) {
     offsets.push_back(k * lateral_step);
   }
-  // Guarantee an exact 0.0 centre even if rounding nudged it.
+  // Guarantee an exact 0.0 centre even if fp nudged it.
   if (n_each >= 0) {
     offsets[n_each] = 0.0;
   }
@@ -375,15 +381,21 @@ visualization_msgs::msg::MarkerArray buildAvoidanceMarkers(
   }
   arr.markers.push_back(adjusted_m);
 
-  // 3) Avoiding band: the deviating stretch, red and thick, drawn on top.
-  auto band_m = base(2, visualization_msgs::msg::Marker::LINE_STRIP, 1.6,
+  // 3) Avoiding band: the deviating stretch(es), red and thick, drawn on top.
+  // LINE_LIST (not LINE_STRIP) of consecutive deviating pairs, so two separate
+  // deviating runs (e.g. two obstacles) aren't joined by a straight line across
+  // the on-line gap between them.
+  auto band_m = base(2, visualization_msgs::msg::Marker::LINE_LIST, 1.6,
       1.0, 0.15, 0.1, 0.9);
-  for (std::size_t i = 0; i < stations.size(); ++i) {
-    if (std::abs(offsets_d[i]) >= kDeviationEpsilon) {
+  for (std::size_t i = 0; i + 1 < stations.size(); ++i) {
+    if (std::abs(offsets_d[i]) >= kDeviationEpsilon &&
+      std::abs(offsets_d[i + 1]) >= kDeviationEpsilon)
+    {
       band_m.points.push_back(adjusted_point(i));
+      band_m.points.push_back(adjusted_point(i + 1));
     }
   }
-  if (band_m.points.size() >= 2) {  // a 1-point LINE_STRIP renders nothing
+  if (!band_m.points.empty()) {
     arr.markers.push_back(band_m);
   }
 
@@ -494,6 +506,10 @@ BT::NodeStatus AdjustPathForObstacles::tick()
     if (was_avoiding_ && viz_pub_) {
       visualization_msgs::msg::MarkerArray arr;
       visualization_msgs::msg::Marker del;
+      // Give the DELETEALL a valid header — some marker consumers (RViz/CAMP)
+      // warn on or drop markers with an empty frame_id even for a delete.
+      del.header.frame_id = config().blackboard->get<std::string>("robot_frame");
+      del.header.stamp = node->now();
       del.ns = kVizNamespace;
       del.action = visualization_msgs::msg::Marker::DELETEALL;
       arr.markers.push_back(del);
