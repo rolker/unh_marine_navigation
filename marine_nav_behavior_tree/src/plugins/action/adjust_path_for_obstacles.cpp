@@ -91,7 +91,16 @@ std::optional<std::vector<double>> solveCorridorOffsets(
   // node_cost(i, j): finite only for admissible (station, offset) pairs.
   auto node_cost = [&](std::size_t i, std::size_t j) -> double {
     if (pinned_to_zero(i)) {
-      return j == zero_col ? 0.0 : kInf;
+      if (j != zero_col) {
+        return kInf;
+      }
+      // A pinned station is forced to d=0, but it must still respect a lethal
+      // cell there — otherwise an anchor re-joining the line on top of an
+      // obstacle would be reported as a clear corridor. (Out-of-active-range
+      // rows hold 0.0 and are unaffected; the active endpoints carry real
+      // sampled cost.) Lethal anchor => no finite path => caller passes nominal
+      // through and the reflex layer is the backstop.
+      return obstacle_costs[i][zero_col] >= params.lethal_cost ? kInf : 0.0;
     }
     const double cost = obstacle_costs[i][j];
     if (cost >= params.lethal_cost) {

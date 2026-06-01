@@ -138,6 +138,24 @@ TEST(SolveCorridorOffsets, FullWallIsInfeasible)
   EXPECT_FALSE(r.has_value());
 }
 
+TEST(SolveCorridorOffsets, LethalAnchorIsInfeasible)
+{
+  // A lethal cell on the centreline at an anchor endpoint (here the start
+  // anchor, station 0, centre column 4) must make the corridor infeasible —
+  // a pinned station is forced to d=0, so it cannot route around the obstacle,
+  // and the solver must not report a clear path through it.
+  std::vector<std::vector<double>> costs(kN, std::vector<double>(kOffsets.size(), 0.0));
+  costs[0][4] = 254.0;  // lethal at the start-anchor's d=0 cell
+  const auto r = solveCorridorOffsets(costs, kOffsets, defaultParams(), {}, 0, kN);
+  EXPECT_FALSE(r.has_value());
+
+  // Same at the end anchor (station kN-1).
+  std::vector<std::vector<double>> costs_end(kN, std::vector<double>(kOffsets.size(), 0.0));
+  costs_end[kN - 1][4] = 254.0;
+  const auto r_end = solveCorridorOffsets(costs_end, kOffsets, defaultParams(), {}, 0, kN);
+  EXPECT_FALSE(r_end.has_value());
+}
+
 TEST(SolveCorridorOffsets, RespectsLateralRateLimit)
 {
   std::vector<std::vector<double>> costs(kN, std::vector<double>(kOffsets.size(), 0.0));
