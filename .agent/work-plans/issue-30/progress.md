@@ -169,8 +169,30 @@ no CAMP-side change is needed. Design chosen by Roland (path + avoiding highligh
 - [x] (cross-confirmed Copilot R2 + Local Review) Pinned anchors skip lethal check — `adjust_path_for_obstacles.cpp:109` — already FIXED `e0ae769`
 - [x] (cross-confirmed Copilot R2 + Local Review) Callback captures raw `this` → teardown UAF — `adjust_path_for_obstacles.cpp:385` — already FIXED `c6ba027`
 - [x] (cross-confirmed Copilot R2 + Local Review) Ternary prvalue copies prev_offsets_ per tick — `adjust_path_for_obstacles.cpp:577` — already FIXED `fcd02af`
-- [ ] (valid, Copilot R2+R3) Test missing `<algorithm>`/`<string>` (uses std::max + std::string via transitive includes) — `test_adjust_path_for_obstacles.cpp:9-10` — trivial, do it
-- [ ] (suggestion, Copilot R3) resampleStations re-scans all segments per station → O(stations×segments); low impact (survey lines are typically straight, 2 poses → 1 segment) — `adjust_path_for_obstacles.cpp:213`
+- [x] (valid, Copilot R2+R3) Test missing `<algorithm>`/`<string>` — FIXED `996ecd8`
+- [x] (suggestion, Copilot R3) resampleStations O(stations×segments) → single-pass O(segments+stations) — FIXED `996ecd8`
 
 ### False positives
 - None — all Copilot findings legitimate (3 already fixed, 2 open).
+
+## Review Follow-ups + Optional Slowdown
+**Status**: complete
+**When**: 2026-06-01 11:40 -0400
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+
+**Commits**: `996ecd8` (Copilot review: resample single-pass + test includes), `90380bd` (optional avoidance slowdown)
+**Build/Test**: marine_nav_behavior_tree clean; 11/11 gtest pass (9 prior + 2 ApplyAvoidanceSlowdown); XML well-formed.
+
+### Copilot review (#4, #6) — done
+- #4 test `<algorithm>`/`<string>` includes; #6 resampleStations single-pass walk.
+
+### Optional slow-down through avoidance (#3 — Roland-requested, beyond original scope)
+- New `avoid_speed` port (default 0.0 = off). `applyAvoidanceSlowdown()` stamps the
+  deviating run so CrabbingPathFollower commands `avoid_speed` there (it derives
+  per-segment speed from distance/Δstamp — `crabbing_path_follower.cpp:347-353`).
+  **Corrects** the earlier "per-pose stamps not load-bearing" read — the follower
+  DOES use them for speed (geometric segment *selection* was the only part that
+  was stamp-independent). Port wired into TreeNodesModel + nav2.btproj; default-off
+  so deployments opt in.
+
+### Still deferred (unchanged): suggestions #4(temporal)/#8/#10/#11 from Local Review (Pre-Push).
