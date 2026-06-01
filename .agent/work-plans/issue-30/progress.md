@@ -212,3 +212,23 @@ no CAMP-side change is needed. Design chosen by Roland (path + avoiding highligh
   seed; param authoritative thereafter (yaml override honoured). Aids sim/field tuning.
 - Same pattern could expose the corridor weights (w_xte/w_obs/max_xte/…) as live
   params for the pending sim-tune — offered to Roland, not yet done.
+
+## All tunables live + clearer names
+**Status**: complete
+**When**: 2026-06-01 12:35 -0400
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+
+**Commit**: `380f87a`
+**Build/Test**: marine_nav_behavior_tree clean; 11/11 gtest pass; XML well-formed.
+
+- Every tunable is now a live ROS param under `survey_avoidance.*` (kParamSeeds
+  table; seeded from the BT port on first tick, authoritative thereafter). Tune the
+  whole avoider in sim/field without redeploying:
+  `ros2 param set <bt_navigator> survey_avoidance.<name> <value>` / rqt_reconfigure.
+- Renamed for clarity (Roland-approved; internal CorridorParams math fields kept terse):
+  w_obs→obstacle_avoidance_weight, w_xte→line_following_weight, w_smooth→smoothness_weight,
+  w_temporal→chatter_damping_weight, max_xte→max_deviation, max_lateral_rate→max_lateral_change,
+  station_step→along_track_spacing, lateral_step→lateral_resolution; avoid_speed param now
+  survey_avoidance.avoid_speed. Ports + Groot palette updated to match.
+- This directly enables the pending sim-tune (open question): the w_xte:w_obs ratio is now
+  line_following_weight:obstacle_avoidance_weight, both live.
