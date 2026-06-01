@@ -788,7 +788,7 @@
                   type="double">Max |d| change between stations (m)</input_port>
       <input_port name="avoid_speed"
                   default="0.0"
-                  type="double">Optional speed (m/s) through the avoidance manoeuvre via per-pose timestamps; 0 disables</input_port>
+                  type="double">Initial speed (m/s) through the avoidance manoeuvre; 0 disables. Seeds live ROS param 'survey_avoidance_speed' (authoritative thereafter)</input_port>
     </Action>
     <Action ID="SetPathFromTask">
       <input_port name="end_index"

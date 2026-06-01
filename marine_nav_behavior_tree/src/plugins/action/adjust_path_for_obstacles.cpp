@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "builtin_interfaces/msg/time.hpp"
+#include "rcl_interfaces/msg/parameter_descriptor.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
 
 #include <tf2/LinearMath/Quaternion.h>  // NOLINT(build/include_order)
@@ -37,6 +38,10 @@ constexpr uint8_t kNoInformation = 255;
 constexpr double kOutOfBounds = -1.0;
 // Marker namespace for the operator-feedback MarkerArray (CAMP auto-discovers it).
 constexpr char kVizNamespace[] = "survey_obstacle_avoidance";
+// Dynamic ROS parameter (declared on the bt_navigator node) for the avoidance
+// speed, so it is tunable live with `ros2 param set` / rqt_reconfigure. The
+// avoid_speed BT port seeds its initial value on first tick.
+constexpr char kAvoidSpeedParam[] = "survey_avoidance_speed";
 // Empty stand-in for the temporal term's "previous offsets" when there is no
 // matching prior tick — an lvalue, so the DP-input ref binds without a per-tick copy.
 const std::vector<double> kEmptyOffsets;
@@ -406,8 +411,9 @@ BT::PortsList AdjustPathForObstacles::providedPorts()
     BT::InputPort<double>("max_lateral_rate", 1.0, "Max |d| change between stations (m)."),
     BT::InputPort<double>(
       "avoid_speed", 0.0,
-      "Optional speed (m/s) through the avoidance manoeuvre, applied via per-pose "
-      "timestamps; 0 disables (controller keeps its default speed)."),
+      "Initial speed (m/s) through the avoidance manoeuvre (via per-pose "
+      "timestamps); 0 disables. Seeds the live ROS param 'survey_avoidance_speed' "
+      "on the bt_navigator node, which is authoritative thereafter."),
   };
 }
 
@@ -440,6 +446,19 @@ BT::NodeStatus AdjustPathForObstacles::tick()
       });
     viz_pub_ = node->create_publisher<visualization_msgs::msg::MarkerArray>(
       "survey_obstacle_avoidance", rclcpp::QoS(1));
+    // Expose avoid_speed as a live-tunable ROS parameter on the bt_navigator
+    // node, seeded from the BT port. Thereafter the parameter is authoritative
+    // (`ros2 param set <bt_navigator> survey_avoidance_speed <m/s>`), so the
+    // manoeuvre speed can be tuned without redeploying the BT. has_parameter
+    // guards re-declaration across tree reloads / a yaml override.
+    if (!node->has_parameter(kAvoidSpeedParam)) {
+      rcl_interfaces::msg::ParameterDescriptor desc;
+      desc.description =
+        "Speed (m/s) through the survey-line obstacle-avoidance manoeuvre; "
+        "0 disables (controller keeps its default speed).";
+      node->declare_parameter(
+        kAvoidSpeedParam, getInput<double>("avoid_speed").value_or(0.0), desc);
+    }
   }
 
   // Wipe the avoidance overlay once on the avoiding->clear transition (idle ticks
@@ -658,8 +677,10 @@ BT::NodeStatus AdjustPathForObstacles::tick()
   }
 
   // Optional slow-down through the manoeuvre (off by default): stamp the
-  // deviating run so the controller commands `avoid_speed` there.
-  const double avoid_speed = getInput<double>("avoid_speed").value_or(0.0);
+  // deviating run so the controller commands the avoidance speed there. Read
+  // from the live ROS parameter (seeded from the avoid_speed port on first tick).
+  double avoid_speed = 0.0;
+  node->get_parameter(kAvoidSpeedParam, avoid_speed);
   applyAvoidanceSlowdown(out, *solved, avoid_speed, kDeviationEpsilon);
   setOutput("path", out);
 
