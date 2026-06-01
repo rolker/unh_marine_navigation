@@ -196,3 +196,19 @@ no CAMP-side change is needed. Design chosen by Roland (path + avoiding highligh
   so deployments opt in.
 
 ### Still deferred (unchanged): suggestions #4(temporal)/#8/#10/#11 from Local Review (Pre-Push).
+
+## avoid_speed as a live ROS parameter
+**Status**: complete
+**When**: 2026-06-01 12:10 -0400
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+
+**Commit**: `190e414`
+**Build/Test**: marine_nav_behavior_tree clean; 11/11 gtest pass; XML well-formed.
+
+- `avoid_speed` BT port now seeds a dynamic ROS param `survey_avoidance_speed` on
+  the bt_navigator node (declared once, has_parameter-guarded; descriptor for
+  rqt_reconfigure). Read each tick → tunable live:
+  `ros2 param set <bt_navigator> survey_avoidance_speed <m/s>`. Port = startup
+  seed; param authoritative thereafter (yaml override honoured). Aids sim/field tuning.
+- Same pattern could expose the corridor weights (w_xte/w_obs/max_xte/…) as live
+  params for the pending sim-tune — offered to Roland, not yet done.
