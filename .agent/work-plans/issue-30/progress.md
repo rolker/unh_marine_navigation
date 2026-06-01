@@ -154,3 +154,23 @@ no CAMP-side change is needed. Design chosen by Roland (path + avoiding highligh
 - (#8) Document the single-contiguous-in-window-run limitation.
 - (#10) OOB sentinel → `std::optional<double>` refactor.
 - (#11) `std::isfinite` validation on numeric BT ports — low (static XML literals).
+
+## Integrated Review
+**Status**: complete
+**When**: 2026-06-01 11:12 -0400
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+
+**PR**: #51 at `14ea99c`
+**Sources**: 4 (Copilot R1 @ `0659e74`, R2 @ `402edff`, R3 @ `14ea99c`, local Local Review (Pre-Push) @ `f5a3c99`)
+**Cross-source confirmations**: 3
+**CI**: all-pass (copilot-pull-request-reviewer success)
+
+### Findings
+- [x] (cross-confirmed Copilot R2 + Local Review) Pinned anchors skip lethal check — `adjust_path_for_obstacles.cpp:109` — already FIXED `e0ae769`
+- [x] (cross-confirmed Copilot R2 + Local Review) Callback captures raw `this` → teardown UAF — `adjust_path_for_obstacles.cpp:385` — already FIXED `c6ba027`
+- [x] (cross-confirmed Copilot R2 + Local Review) Ternary prvalue copies prev_offsets_ per tick — `adjust_path_for_obstacles.cpp:577` — already FIXED `fcd02af`
+- [ ] (valid, Copilot R2+R3) Test missing `<algorithm>`/`<string>` (uses std::max + std::string via transitive includes) — `test_adjust_path_for_obstacles.cpp:9-10` — trivial, do it
+- [ ] (suggestion, Copilot R3) resampleStations re-scans all segments per station → O(stations×segments); low impact (survey lines are typically straight, 2 poses → 1 segment) — `adjust_path_for_obstacles.cpp:213`
+
+### False positives
+- None — all Copilot findings legitimate (3 already fixed, 2 open).
