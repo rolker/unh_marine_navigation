@@ -91,6 +91,7 @@ add_library(${PROJECT_NAME}_bt_plugins SHARED
   src/plugins/condition/all_tasks_done.cpp
   src/plugins/condition/has_sub_tasks.cpp
   src/plugins/condition/path_empty.cpp
+  src/plugins/condition/robot_on_path.cpp
   src/plugins/decorator/restart_on_task_change.cpp
 )
 
@@ -292,6 +293,39 @@ if(BUILD_TESTING)
     ament_target_dependencies(test_hover_reentry
       behaviortree_cpp
       rclcpp
+    )
+  endif()
+
+  ament_add_gtest(test_goto_reentry
+    test/test_goto_reentry.cpp
+  )
+  if(TARGET test_goto_reentry)
+    target_include_directories(test_goto_reentry PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    )
+    target_link_libraries(test_goto_reentry
+      ${PROJECT_NAME}_bt_plugins
+    )
+    ament_target_dependencies(test_goto_reentry
+      behaviortree_cpp
+      rclcpp
+    )
+  endif()
+
+  ament_add_gtest(test_robot_on_path
+    test/test_robot_on_path.cpp
+  )
+  if(TARGET test_robot_on_path)
+    target_include_directories(test_robot_on_path PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    )
+    target_link_libraries(test_robot_on_path
+      ${PROJECT_NAME}_bt_plugins
+    )
+    ament_target_dependencies(test_robot_on_path
+      behaviortree_cpp
+      geometry_msgs
+      nav_msgs
     )
   endif()
 endif()

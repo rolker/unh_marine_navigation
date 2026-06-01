@@ -24,6 +24,7 @@
 #include "marine_nav_behavior_tree/plugins/condition/all_tasks_done.h"
 #include "marine_nav_behavior_tree/plugins/condition/has_sub_tasks.h"
 #include "marine_nav_behavior_tree/plugins/condition/path_empty.h"
+#include "marine_nav_behavior_tree/plugins/condition/robot_on_path.h"
 
 #include "marine_nav_behavior_tree/plugins/decorator/restart_on_task_change.h"
 
@@ -90,6 +91,7 @@ BT_REGISTER_NODES(factory)
   factory.registerNodeType<marine_nav_behavior_tree::AllTasksDone>("AllTasksDoneCondition");
   factory.registerNodeType<marine_nav_behavior_tree::HasSubTasks>("HasSubTasksCondition");
   factory.registerNodeType<marine_nav_behavior_tree::PathEmpty>("PathEmptyCondition");
+  factory.registerNodeType<marine_nav_behavior_tree::RobotOnPath>("RobotOnPath");
 
   factory.registerNodeType<marine_nav_behavior_tree::RestartOnTaskChange>("RestartOnTaskChange");
 
