@@ -401,16 +401,24 @@
                             selected_controller="{selected_controller}"/>
         <SetControllerSpeed speed="{target_speed}"
                             controller_name="{selected_controller}"/>
-        <!-- Refresh {survey_path} every tick so an operator mid-line mission
+        <!-- Refresh {nominal_survey_path} every tick so an operator mid-line mission
              re-send (which updates {current_task} → {survey_line_task} via
              UpdateCurrentTaskData upstream) propagates to FollowPath. Nav2
              FollowPathAction::on_wait_for_result re-reads the path port each
              RUNNING tick, compares against goal_.path, and sets goal_updated_
              on a change → BtActionNode preempts with the new goal. For #35. -->
         <SetPathFromTask end_index="-1"
-                         path="{survey_path}"
+                         path="{nominal_survey_path}"
                          start_index="0"
                          task="{survey_line_task}"/>
+        <!-- Reshape the trackline around obstacles before it reaches FollowPath:
+             corridor solver over the local costmap, anchored to the nominal line.
+             Passes nominal through unchanged when clear or fully blocked. Re-ticked
+             here every loop (the ReactiveSequence IS the monitor); a changed
+             {survey_path} preempts the running FollowPath via the #35 mechanism
+             above. For #30. -->
+        <AdjustPathForObstacles nominal_path="{nominal_survey_path}"
+                                path="{survey_path}"/>
         <!-- Recover transient FollowPath ABORTs (e.g. a momentary progress-checker trip)
              with a short Wait, then retry — up to 3 times. On persistent failure the
              RecoveryNode FAILs up to the dispatch, which records the line failed
@@ -743,6 +751,41 @@
       <input_port name="parameter_suffix"
                   default="default_speed"
                   type="std::string">Parameter suffix appended to controller_name to form the full parameter path (controller_name + "." + parameter_suffix).</input_port>
+    </Action>
+    <Action ID="AdjustPathForObstacles">
+      <input_port name="nominal_path"
+                  default="{nominal_survey_path}"
+                  type="nav_msgs::msg::Path_&lt;std::allocator&lt;void&gt; &gt;">Nominal trackline to reshape around obstacles</input_port>
+      <output_port name="path"
+                   default="{survey_path}"
+                   type="nav_msgs::msg::Path_&lt;std::allocator&lt;void&gt; &gt;">Reshaped path for FollowPath (nominal pass-through when clear/blocked)</output_port>
+      <input_port name="costmap_topic"
+                  default="local_costmap/costmap_raw"
+                  type="std::string">nav2_msgs/Costmap topic supplying the obstacle field</input_port>
+      <input_port name="max_xte"
+                  default="6.0"
+                  type="double">Corridor half-width (m): max deviation and give-up bound</input_port>
+      <input_port name="station_step"
+                  default="2.0"
+                  type="double">Along-track resample spacing (m)</input_port>
+      <input_port name="lateral_step"
+                  default="0.5"
+                  type="double">Cross-track offset resolution (m)</input_port>
+      <input_port name="w_xte"
+                  default="1.0"
+                  type="double">Restoring-spring weight on d^2</input_port>
+      <input_port name="w_obs"
+                  default="0.02"
+                  type="double">Weight on graded obstacle cost</input_port>
+      <input_port name="w_smooth"
+                  default="2.0"
+                  type="double">Smoothness weight on (d_i - d_{i-1})^2</input_port>
+      <input_port name="w_temporal"
+                  default="0.0"
+                  type="double">Chatter-damping weight vs last tick</input_port>
+      <input_port name="max_lateral_rate"
+                  default="1.0"
+                  type="double">Max |d| change between stations (m)</input_port>
     </Action>
     <Action ID="SetPathFromTask">
       <input_port name="end_index"
