@@ -107,6 +107,12 @@ class AdjustPathForObstacles : public BT::SyncActionNode
 public:
   AdjustPathForObstacles(const std::string & name, const BT::NodeConfig & config);
 
+  // Clears the avoidance overlay on teardown (tree reload / new goal / shutdown)
+  // so a deviation in progress when the node is destroyed doesn't leave a stale
+  // overlay in consumers that don't honour marker lifetime (e.g. CAMP).
+  // SyncActionNode::halt() is final, so the destructor is the available hook.
+  ~AdjustPathForObstacles() override;
+
   static BT::PortsList providedPorts();
 
   BT::NodeStatus tick() override;
@@ -126,6 +132,15 @@ private:
   // was_avoiding_ tracks so an idle tree doesn't republish every tick.
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr viz_pub_;
   bool was_avoiding_ = false;
+
+  // Node + robot frame cached on first tick so clearOverlay() can publish the
+  // DELETEALL from the destructor, where the blackboard may already be gone.
+  rclcpp::Node::SharedPtr node_;
+  std::string robot_frame_;
+
+  // Publish a DELETEALL for the overlay; no-op unless we were avoiding. Shared by
+  // the in-tick avoiding->clear transition and the destructor.
+  void clearOverlay();
 
   // Previous tick's per-station offsets, for the temporal (chatter) term.
   std::vector<double> prev_offsets_;

@@ -417,6 +417,35 @@ AdjustPathForObstacles::AdjustPathForObstacles(
 {
 }
 
+AdjustPathForObstacles::~AdjustPathForObstacles()
+{
+  // Tree reload / new goal / shutdown while a deviation was being drawn would
+  // otherwise leave the AVOIDING overlay latched in CAMP (which doesn't honour
+  // the 2 s marker lifetime). clearOverlay() is a no-op unless was_avoiding_.
+  clearOverlay();
+}
+
+void AdjustPathForObstacles::clearOverlay()
+{
+  if (!viz_pub_ || !was_avoiding_) {
+    return;
+  }
+  visualization_msgs::msg::MarkerArray arr;
+  visualization_msgs::msg::Marker del;
+  // A valid header even for a DELETEALL: some consumers (RViz/CAMP) warn on or
+  // drop markers with an empty frame_id. Cached on first tick so this is safe
+  // from the destructor.
+  del.header.frame_id = robot_frame_;
+  if (node_) {
+    del.header.stamp = node_->now();
+  }
+  del.ns = kVizNamespace;
+  del.action = visualization_msgs::msg::Marker::DELETEALL;
+  arr.markers.push_back(del);
+  viz_pub_->publish(arr);
+  was_avoiding_ = false;
+}
+
 BT::PortsList AdjustPathForObstacles::providedPorts()
 {
   return {
@@ -472,6 +501,10 @@ BT::NodeStatus AdjustPathForObstacles::tick()
   // cache (not `this`), so a callback still in flight on the executor thread when
   // this node is destroyed (tree reload / shutdown) touches live state, not freed.
   if (!costmap_sub_) {
+    // Cache for clearOverlay() (used from the destructor, where the blackboard
+    // may already be torn down).
+    node_ = node;
+    robot_frame_ = config().blackboard->get<std::string>("robot_frame");
     costmap_topic_ = getInput<std::string>("costmap_topic").value_or(
       "local_costmap/costmap_raw");
     auto cache = costmap_cache_;
@@ -501,22 +534,10 @@ BT::NodeStatus AdjustPathForObstacles::tick()
   }
 
   // Wipe the avoidance overlay once on the avoiding->clear transition (idle ticks
-  // then publish nothing, rather than spamming a DELETEALL every loop).
-  auto clear_viz = [&]() {
-    if (was_avoiding_ && viz_pub_) {
-      visualization_msgs::msg::MarkerArray arr;
-      visualization_msgs::msg::Marker del;
-      // Give the DELETEALL a valid header — some marker consumers (RViz/CAMP)
-      // warn on or drop markers with an empty frame_id even for a delete.
-      del.header.frame_id = config().blackboard->get<std::string>("robot_frame");
-      del.header.stamp = node->now();
-      del.ns = kVizNamespace;
-      del.action = visualization_msgs::msg::Marker::DELETEALL;
-      arr.markers.push_back(del);
-      viz_pub_->publish(arr);
-    }
-    was_avoiding_ = false;
-  };
+  // then publish nothing, rather than spamming a DELETEALL every loop). The
+  // destructor shares clearOverlay() for the teardown case (tree reload / new
+  // goal) that no tick reaches.
+  auto clear_viz = [this]() {clearOverlay();};
 
   auto passthrough = [&]() {
     clear_viz();
