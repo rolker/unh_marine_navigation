@@ -48,12 +48,27 @@ public:
     post_param_callback_handle_ = add_post_set_parameters_callback(
       std::bind(&CostmapWindowNode::onPostSetParameters, this, std::placeholders::_1));
 
-    // Nav2 publishes the costmap reliable + transient-local (latched). Use
-    // best-available for both policies so we attach and receive the streamed
-    // updates regardless of how the source is configured.
+    // Match Nav2's costmap publisher QoS EXPLICITLY: reliable + transient-local,
+    // depth 1 (nav2_costmap_2d Costmap2DPublisher uses
+    // `KeepLast(1).transient_local().reliable()`). This matters because that
+    // publisher is *subscription-count-gated* — `publishCostmap()` only emits the
+    // OccupancyGrid when `costmap_pub_->get_subscription_count() > 0`. With the
+    // earlier `best_available` policies our subscription's match against the lazy,
+    // transient-local publisher was nondeterministic at startup, so the publisher
+    // often saw 0 subscribers and stayed silent until a *second* subscriber
+    // (e.g. rqt_udp_bridge) was attached by hand — the long-standing costmap hack
+    // (#56). An explicit transient-local subscriber deterministically counts
+    // toward the gate AND re-requests the latched grid on every (re)match, so the
+    // window is delivered without the manual second subscriber.
+    //
+    // Trade-off: an explicit transient-local subscription only matches a
+    // transient-local publisher. Nav2's costmap is always transient-local (above),
+    // so this is correct for the intended source; a hypothetical volatile costmap
+    // source would no longer match (the old best_available did). That's an
+    // acceptable narrowing — this node exists to window the Nav2 local costmap.
     rclcpp::QoS sub_qos(1);
-    sub_qos.reliability_best_available();
-    sub_qos.durability_best_available();
+    sub_qos.reliable();
+    sub_qos.transient_local();
     subscription_ = create_subscription<nav_msgs::msg::OccupancyGrid>(
       "costmap", sub_qos,
       std::bind(&CostmapWindowNode::costmapCallback, this, std::placeholders::_1));
