@@ -26,15 +26,18 @@ near-anchor fix are **net-new controller code**: the BT node sampled a
 via `getCost()/worldToMap()`. So this is "move the math, re-implement the
 plumbing," not a straight re-host.
 
-**Stacked into two PRs** (smaller reviews, June 4):
+**Single combined PR #60** (Roland's call — fewer PR mechanics against the June 4
+clock). Built in two logical phases / atomic commits below; both land on
+`feature/issue-59`, and the PR `Closes #59`. The echoboats config flip is the one
+separate PR (different repo).
 
-### PR1 — extract the solver (lands green on its own)
+### Phase 1 — extract the solver (atomic commit, green on its own)
 1. Move the pure solver + its unit tests from `marine_nav_behavior_tree` into
    `marine_nav_utilities` as `corridor_solver.{h,cpp}` (sibling to
    `costmap_window.cpp`). Point the existing BT node at the new header — no
    behavior change. Update both packages' `CMakeLists.txt` + `package.xml`.
 
-### PR2 — decorator controller + delete the BT node
+### Phase 2 — decorator controller + delete the BT node
 2. **New package `marine_nav_avoidance_controller`** — a decorator
    `nav2_core::Controller`:
    - `configure()`: nested `pluginlib` load of an **inner** controller (param:
@@ -77,15 +80,15 @@ plumbing," not a straight re-host.
 
 ## Files to Change
 
-| File | PR | Change |
-|------|----|--------|
-| `marine_nav_utilities/{include,src}/…/corridor_solver.{h,cpp}` | 1 | New: pure solver moved here |
-| `marine_nav_utilities/test/test_corridor_solver.cpp` + `CMakeLists.txt`/`package.xml` | 1 | Moved solver unit tests + build wiring |
-| `marine_nav_behavior_tree/.../adjust_path_for_obstacles.{h,cpp}` | 1→2 | PR1: include solver from utilities (no behavior change). PR2: delete |
-| `marine_nav_behavior_tree/CMakeLists.txt` (:74 src, :306-316 test) + `bt_register_nodes.cpp` + `test/test_adjust_path_for_obstacles.cpp` | 2 | Remove node source, test target, registration |
+| File | Phase | Change |
+|------|-------|--------|
+| `marine_nav_utilities/{include,src}/…/corridor_solver.{h,cpp}` | 1 ✅ | New: pure solver moved here |
+| `marine_nav_utilities/test/test_corridor_solver.cpp` + `CMakeLists.txt`/`package.xml` | 1 ✅ | Moved solver unit tests + build wiring |
+| `marine_nav_behavior_tree/.../adjust_path_for_obstacles.{h,cpp}` | 1→2 | Ph1 ✅: include solver from utilities (no behavior change). Ph2: delete |
+| `marine_nav_behavior_tree/CMakeLists.txt` (:74 src, test block) + `bt_register_nodes.cpp` + `test/test_adjust_path_for_obstacles.cpp` | 2 | Remove node source, test target, registration |
 | `marine_nav_avoidance_controller/**` (`CMakeLists.txt`, `package.xml`, `plugin.xml`, src, tests) | 2 | New decorator-controller package |
 | `marine_nav_bt_task_navigator/behavior_trees/run_tasks.xml` | 2 | Drop `AdjustPathForObstacles` from `SurveyLine` |
-| `bizzyboat_project11/config/nav2_overlay.yaml` *(echoboats — separate PR)* | 2-cfg | Override `FollowPath` plugin → wrapper(inner=crabbing), BizzyBoat-only |
+| `bizzyboat_project11/config/nav2_overlay.yaml` *(echoboats — separate PR)* | cfg | Override `FollowPath` plugin → wrapper(inner=crabbing), BizzyBoat-only |
 
 ## Principles Self-Check
 
@@ -138,9 +141,8 @@ plumbing," not a straight re-host.
 
 ## Estimated Scope
 
-**PR1** (`unh_marine_navigation`): solver extraction to `marine_nav_utilities` +
-moved tests + build wiring — green on its own, no behavior change.
-**PR2** (`unh_marine_navigation`): new `marine_nav_avoidance_controller` package
-+ tests + BT-node deletion + `run_tasks.xml`.
-**PR2-cfg** (`unh_echoboats_project11`): `nav2_overlay.yaml` controller-plugin
+**One PR** (#60, `unh_marine_navigation`, `Closes #59`): solver extraction +
+new `marine_nav_avoidance_controller` package + tests + BT-node deletion +
+`run_tasks.xml`, built in two atomic-commit phases.
+**Config PR** (`unh_echoboats_project11`): `nav2_overlay.yaml` controller-plugin
 override (BizzyBoat-only). All before June 4; seafloor/ben need no change.
