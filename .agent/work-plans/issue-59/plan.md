@@ -86,8 +86,10 @@ separate PR (different repo).
 | `marine_nav_utilities/test/test_corridor_solver.cpp` + `CMakeLists.txt`/`package.xml` | 1 ✅ | Moved solver unit tests + build wiring |
 | `marine_nav_behavior_tree/.../adjust_path_for_obstacles.{h,cpp}` | 1→2 | Ph1 ✅: include solver from utilities (no behavior change). Ph2: delete |
 | `marine_nav_behavior_tree/CMakeLists.txt` (:74 src, test block) + `bt_register_nodes.cpp` + `test/test_adjust_path_for_obstacles.cpp` | 2 | Remove node source, test target, registration |
-| `marine_nav_avoidance_controller/**` (`CMakeLists.txt`, `package.xml`, `plugin.xml`, src, tests) | 2 | New decorator-controller package |
-| `marine_nav_bt_task_navigator/behavior_trees/run_tasks.xml` | 2 | Drop `AdjustPathForObstacles` from `SurveyLine` |
+| `marine_nav_avoidance_controller/**` (`CMakeLists.txt`, `package.xml`, `plugin.xml`, src) | 2 ✅ | New decorator-controller package |
+| `marine_nav_utilities/.../corridor_solver` (`planCorridorOffsets` + tests) | 2 ✅ | Node-free planning core, anchor-behind regression test |
+| `marine_nav_crabbing_path_follower/.../crabbing_path_follower.cpp` | 2 ✅ | `setPlan` no longer resets PID unconditionally (staleness guard only) |
+| `marine_nav_bt_task_navigator/behavior_trees/{run_tasks.xml,nav2.btproj}` | 2 ✅ | Drop `AdjustPathForObstacles`; `SetPathFromTask`→`{survey_path}` |
 | `bizzyboat_project11/config/nav2_overlay.yaml` *(echoboats — separate PR)* | cfg | Override `FollowPath` plugin → wrapper(inner=crabbing), BizzyBoat-only |
 
 ## Principles Self-Check
@@ -138,6 +140,30 @@ separate PR (different repo).
 
 - Mid-line re-send (#35): confirm a new goal's `setPlan()` propagates through the wrapper to the inner — verify in code/test, don't assume.
 - `avoid_speed`: whole-controller slowdown (v1 default) vs. per-segment — confirm with Roland at PR2 impl.
+
+## Implementation Notes
+
+- **Per-tick re-plan vs. the inner PID (the #35 open question, resolved).** The
+  wrapper re-issues `setPlan(reshaped)` every control cycle. `CrabbingPathFollower`
+  self-heals its segment index (forward scan) but `setPlan` also reset the PID —
+  which would wipe the cross-track integrator every tick. Fix: removed the
+  unconditional `pid_->reset(true)` from `setPlan`; the *existing* staleness guard
+  in `computeVelocityCommands` (`pid_reset_threshold_`, ~1 s) is now the sole
+  reset, so the PID only resets on a genuine new goal after a pause. Chose this
+  over a `clock_->now()` check in `setPlan` because `setPlan` has no timestamp and
+  mixing system/ROS clocks throws when not in sim.
+- **`avoid_speed` (v1)** is realized by capping the inner controller's
+  `setSpeedLimit` while deviating and restoring the server limit on the
+  deviating→clear transition — whole-controller slowdown, not per-segment. The
+  old per-pose-stamp hack is gone.
+- **Testability.** The net-new planning logic (nearest-station + anchor-behind +
+  cost sampling + solve) is extracted as the node-free `planCorridorOffsets` and
+  unit-tested in `marine_nav_utilities` (incl. the anchor-behind regression).
+  The controller's remaining code is ROS plumbing, validated in sim + on-water.
+- **Pre-existing lint debt.** New files match the repo's existing convention
+  (single-underscore header guards, no copyright banner); `ament_cpplint` flags
+  these repo-wide already (crabbing, behavior_tree, utilities) — a separate
+  cleanup, not introduced here.
 
 ## Estimated Scope
 
