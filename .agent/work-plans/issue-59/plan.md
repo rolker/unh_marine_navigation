@@ -42,11 +42,14 @@ correct host: the framework delivers a fresh, in-process costmap there.
    hand-built costmap; regression that the detour anchors at a non-zero actual
    offset (the bug #57 names); solver tests stay in utilities.
 4. **BT wiring** — remove `AdjustPathForObstacles` from `SurveyLine` in
-   `run_tasks.xml` (BT now passes the nominal line straight to FollowPath).
-   Deprecate or delete the BT node + its registration (open question).
-5. **Config rollout (follow-up, cross-repo)** — point the `FollowPath`
+   `run_tasks.xml` (BT now passes the nominal line straight to FollowPath), and
+   **delete** the BT node, its `bt_register_nodes` entry, `plugin_lib_names`
+   entry, and its tests in this PR. Verify the new goal's `setPlan()` propagates
+   through the wrapper to the inner follower (#35 mid-line re-send) — test it.
+5. **Config rollout (cross-repo, before June 4)** — point the `FollowPath`
    controller plugin at the wrapper with crabbing as the inner, in
-   `bizzyboat.yaml` (echoboats) and `nav2_params.base.yaml` (seafloor).
+   `bizzyboat.yaml` (echoboats) and `nav2_params.base.yaml` (seafloor), with
+   on-water validation before the survey.
 
 ## Files to Change
 
@@ -54,7 +57,7 @@ correct host: the framework delivers a fresh, in-process costmap there.
 |------|--------|
 | `marine_nav_utilities/{include,src}/…/corridor_solver.{h,cpp}` | New: pure solver moved here |
 | `marine_nav_utilities/test/test_corridor_solver.cpp` | Moved solver unit tests |
-| `marine_nav_behavior_tree/.../adjust_path_for_obstacles.{h,cpp}` | Include solver from utilities; deprecate/remove (Q) |
+| `marine_nav_behavior_tree/.../adjust_path_for_obstacles.{h,cpp}` | Delete (node + registration + plugin_lib_names + tests) |
 | `marine_nav_avoidance_controller/**` | New package: decorator controller + plugin.xml + tests |
 | `marine_nav_bt_task_navigator/behavior_trees/run_tasks.xml` | Drop `AdjustPathForObstacles` from `SurveyLine` |
 | `bizzyboat.yaml` / `nav2_params.base.yaml` *(echoboats / seafloor — separate PRs)* | FollowPath → wrapper(inner=crabbing) |
@@ -81,19 +84,23 @@ correct host: the framework delivers a fresh, in-process costmap there.
 |---|---|---|
 | Move solver to utilities | `marine_nav_behavior_tree` deps + includes; `package.xml` of both | Yes |
 | Remove BT node from tree | `run_tasks.xml`, `bt_register_nodes`, `plugin_lib_names`, BT tests | Yes |
-| New controller plugin | controller_server config in **echoboats + seafloor** repos | Follow-up PRs (cross-repo) |
+| New controller plugin | controller_server config in **echoboats + seafloor** repos | Yes — separate PRs, before June 4 |
 | `avoid_speed` mechanism change | crabbing `setSpeedLimit` semantics | Yes (verify) |
+
+## Decisions (resolved 2026-06-02)
+
+- **Host shape**: decorator wrapper owning an inner `CrabbingPathFollower` (tracker stays pure).
+- **Old BT node**: delete it in this PR (registration + `plugin_lib_names` + tests).
+- **Package name**: `marine_nav_avoidance_controller`.
+- **Timing**: land plugin **and** flip controller config before the **June 4 dev freeze**, with on-water validation before the June 15 survey. (Roland's call; accepted risk of a live control-path change close to class — mitigate with on-water validation, not just CI.)
 
 ## Open Questions
 
-- Decorator wrapper vs. folding avoidance into `CrabbingPathFollower` — lean **decorator** (keeps the tracker pure, more general).
-- Delete the `AdjustPathForObstacles` BT node now, or keep it deprecated for one cycle?
-- New package name: `marine_nav_avoidance_controller`?
-- Mid-line re-send (#35): confirm a new goal's `setPlan()` propagates through the wrapper to the inner — verify, don't assume.
-- Cross-repo config rollout cadence vs. the **June 4 dev freeze** — land the core plugin now, config-flip after freeze?
+- Mid-line re-send (#35): confirm a new goal's `setPlan()` propagates through the wrapper to the inner — verify in code/test, don't assume.
 
 ## Estimated Scope
 
 Core change is one PR in `unh_marine_navigation` (solver extraction + new plugin
-package + tests + BT wiring); two dependent config PRs in echoboats and seafloor.
-Solver extraction could be split as a first stacked PR if review prefers.
+package + tests + BT-node deletion); two dependent config PRs in echoboats and
+seafloor, all before June 4. Solver extraction could be split as a first stacked
+PR if review prefers.

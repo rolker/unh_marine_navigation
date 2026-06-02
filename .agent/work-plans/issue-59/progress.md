@@ -14,8 +14,8 @@ issue: 59
 **Phases**: single core PR + two follow-up cross-repo config PRs (echoboats, seafloor)
 
 ### Open questions
-- [ ] Decorator wrapper vs. folding avoidance into CrabbingPathFollower (lean: decorator)
-- [ ] Delete the AdjustPathForObstacles BT node now, or keep deprecated one cycle?
-- [ ] New package name: marine_nav_avoidance_controller?
-- [ ] Mid-line re-send (#35): verify new-goal setPlan() propagates through the wrapper
-- [ ] Cross-repo config rollout cadence vs. June 4 dev freeze
+- [x] Host shape → **decorator wrapper** (inner CrabbingPathFollower)
+- [x] Old BT node → **delete now** (registration + plugin_lib_names + tests)
+- [x] Package name → **marine_nav_avoidance_controller**
+- [x] Timing → **all before June 4** (plugin + config-flip), on-water validation before June 15
+- [ ] Mid-line re-send (#35): verify new-goal setPlan() propagates through the wrapper (in-code)
