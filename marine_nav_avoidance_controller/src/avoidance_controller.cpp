@@ -126,18 +126,20 @@ void AvoidanceController::configure(
   logger_ = node->get_logger();
   clock_ = node->get_clock();
 
-  using nav2_util::declare_parameter_if_not_declared;
-  declare_parameter_if_not_declared(node, name_ + ".primary_controller", rclcpp::ParameterValue(std::string("")));
-  declare_parameter_if_not_declared(node, name_ + ".max_deviation", rclcpp::ParameterValue(6.0));
-  declare_parameter_if_not_declared(node, name_ + ".along_track_spacing", rclcpp::ParameterValue(2.0));
-  declare_parameter_if_not_declared(node, name_ + ".lateral_resolution", rclcpp::ParameterValue(0.5));
-  declare_parameter_if_not_declared(node, name_ + ".line_following_weight", rclcpp::ParameterValue(1.0));
-  declare_parameter_if_not_declared(node, name_ + ".obstacle_avoidance_weight", rclcpp::ParameterValue(1.0));
-  declare_parameter_if_not_declared(node, name_ + ".smoothness_weight", rclcpp::ParameterValue(2.0));
-  declare_parameter_if_not_declared(node, name_ + ".chatter_damping_weight", rclcpp::ParameterValue(0.0));
-  declare_parameter_if_not_declared(node, name_ + ".max_lateral_change", rclcpp::ParameterValue(1.0));
-  declare_parameter_if_not_declared(node, name_ + ".anchor_behind_distance", rclcpp::ParameterValue(4.0));
-  declare_parameter_if_not_declared(node, name_ + ".avoid_speed", rclcpp::ParameterValue(0.0));
+  auto declare = [&](const char * suffix, const rclcpp::ParameterValue & value) {
+      nav2_util::declare_parameter_if_not_declared(node, name_ + "." + suffix, value);
+    };
+  declare("primary_controller", rclcpp::ParameterValue(std::string("")));
+  declare("max_deviation", rclcpp::ParameterValue(6.0));
+  declare("along_track_spacing", rclcpp::ParameterValue(2.0));
+  declare("lateral_resolution", rclcpp::ParameterValue(0.5));
+  declare("line_following_weight", rclcpp::ParameterValue(1.0));
+  declare("obstacle_avoidance_weight", rclcpp::ParameterValue(1.0));
+  declare("smoothness_weight", rclcpp::ParameterValue(2.0));
+  declare("chatter_damping_weight", rclcpp::ParameterValue(0.0));
+  declare("max_lateral_change", rclcpp::ParameterValue(1.0));
+  declare("anchor_behind_distance", rclcpp::ParameterValue(4.0));
+  declare("avoid_speed", rclcpp::ParameterValue(0.0));
 
   const std::string primary_type =
     node->get_parameter(name_ + ".primary_controller").as_string();
@@ -190,6 +192,12 @@ void AvoidanceController::activate()
 void AvoidanceController::deactivate()
 {
   if (primary_) {
+    // Drop any active avoid_speed override before deactivating so a later
+    // re-activate doesn't inherit a stale clamp.
+    if (avoid_speed_active_) {
+      primary_->setSpeedLimit(server_speed_limit_, server_speed_is_percentage_);
+      avoid_speed_active_ = false;
+    }
     primary_->deactivate();
   }
   if (viz_pub_) {
@@ -201,6 +209,12 @@ void AvoidanceController::setPlan(const nav_msgs::msg::Path & path)
 {
   nominal_plan_ = path;
   prev_offsets_.clear();
+  // A genuinely new goal starts clean: drop any active avoid_speed override so
+  // the inner tracker isn't left clamped from a prior line's deviation.
+  if (primary_ && avoid_speed_active_) {
+    primary_->setSpeedLimit(server_speed_limit_, server_speed_is_percentage_);
+    avoid_speed_active_ = false;
+  }
   // The inner controller is (re-)given a plan every control cycle from
   // computeVelocityCommands once reshaping runs; seed it here too so a goal
   // with no obstacle still tracks immediately.
@@ -211,12 +225,13 @@ void AvoidanceController::setPlan(const nav_msgs::msg::Path & path)
 
 void AvoidanceController::setSpeedLimit(const double & speed_limit, const bool & percentage)
 {
-  // Remember the server-commanded limit so we can restore it after an
-  // avoid_speed override, and forward it to the inner tracker.
+  // Remember the server-commanded limit so the avoid_speed override can restore
+  // it. Only forward to the inner tracker when we are NOT currently overriding —
+  // forwarding mid-override would clobber the avoid_speed cap; the new limit is
+  // applied on the next restore (deviation clear / new goal / avoid_speed off).
   server_speed_limit_ = speed_limit;
   server_speed_is_percentage_ = percentage;
-  avoid_speed_active_ = false;
-  if (primary_) {
+  if (primary_ && !avoid_speed_active_) {
     primary_->setSpeedLimit(speed_limit, percentage);
   }
 }
@@ -250,13 +265,16 @@ geometry_msgs::msg::TwistStamped AvoidanceController::computeVelocityCommands(
   const nav_msgs::msg::Path reshaped = reshapeAroundObstacles(pose);
 
   // avoid_speed: while deviating, cap the inner controller's speed; restore the
-  // server-commanded limit on the deviating->clear transition. was_avoiding_ is
-  // set by reshapeAroundObstacles for this tick.
-  if (primary_ && avoid_speed_ > 0.0) {
-    if (was_avoiding_ && !avoid_speed_active_) {
+  // server limit when the deviation clears OR avoid_speed is disabled. The
+  // restore is intentionally NOT gated on avoid_speed_ > 0, so setting
+  // avoid_speed to 0 mid-deviation un-clamps the inner rather than leaving it
+  // stuck. was_avoiding_ is set by reshapeAroundObstacles for this tick.
+  if (primary_) {
+    const bool want_override = was_avoiding_ && avoid_speed_ > 0.0;
+    if (want_override && !avoid_speed_active_) {
       primary_->setSpeedLimit(avoid_speed_, false);
       avoid_speed_active_ = true;
-    } else if (!was_avoiding_ && avoid_speed_active_) {
+    } else if (!want_override && avoid_speed_active_) {
       primary_->setSpeedLimit(server_speed_limit_, server_speed_is_percentage_);
       avoid_speed_active_ = false;
     }
