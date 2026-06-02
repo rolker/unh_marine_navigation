@@ -1,26 +1,28 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>marine_nav_behavior_tree</name>
+  <name>marine_nav_avoidance_controller</name>
   <version>0.0.0</version>
-  <description>Nav2 behavior tree nodes useful for marine navigation</description>
+  <description>
+    Nav2 decorator controller that reshapes the followed path around obstacles
+    (corridor solve over the local costmap) and delegates tracking to an inner
+    controller. Survey-line obstacle avoidance, hosted at the control layer.
+  </description>
 
   <maintainer email="roland@ccom.unh.edu">Roland Arsenault</maintainer>
 
   <license>BSD</license>
 
   <buildtool_depend>ament_cmake_ros</buildtool_depend>
-  <depend>behaviortree_cpp</depend>
+
   <depend>geometry_msgs</depend>
-  <depend>marine_nav_interfaces</depend>
-  <depend>marine_nav_tasks</depend>
   <depend>marine_nav_utilities</depend>
-  <depend>nav2_behavior_tree</depend>
-  <depend>nav2_msgs</depend>
+  <depend>nav2_core</depend>
+  <depend>nav2_costmap_2d</depend>
   <depend>nav2_util</depend>
   <depend>nav_msgs</depend>
-  <depend>rcl_interfaces</depend>
+  <depend>pluginlib</depend>
   <depend>rclcpp</depend>
-  <depend>std_msgs</depend>
+  <depend>rclcpp_lifecycle</depend>
   <depend>tf2</depend>
   <depend>tf2_geometry_msgs</depend>
   <depend>tf2_ros</depend>
@@ -32,6 +34,6 @@
 
   <export>
     <build_type>ament_cmake</build_type>
-    <behaviortree_cpp bt_lib_plugin="libmarine_nav_behavior_tree_plugins"/>
+    <nav2_core plugin="${prefix}/plugin.xml" />
   </export>
 </package>

@@ -1,8 +1,7 @@
-// Unit tests for the pure corridor-solver core of AdjustPathForObstacles:
-// makeLateralOffsets, resampleStations, and solveCorridorOffsets. No ROS — the
-// DP is a free function over a hand-built cost matrix, exercising the three
-// canonical cases the plan calls out: clear -> nominal, blob -> bounded detour
-// that re-anchors, wall -> infeasible (caller passes nominal through).
+// Unit tests for the pure corridor solver: makeLateralOffsets, resampleStations,
+// and solveCorridorOffsets. No ROS — the DP is a free function over a hand-built
+// cost matrix, exercising the canonical cases: clear -> nominal, blob -> bounded
+// detour that re-anchors, wall -> infeasible (caller passes nominal through).
 
 #include <gtest/gtest.h>
 
@@ -12,14 +11,14 @@
 #include <vector>
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
-#include "nav_msgs/msg/path.hpp"
-#include "marine_nav_behavior_tree/plugins/action/adjust_path_for_obstacles.h"
+#include "marine_nav_utilities/corridor_solver.h"
 
-using marine_nav_behavior_tree::applyAvoidanceSlowdown;
-using marine_nav_behavior_tree::CorridorParams;
-using marine_nav_behavior_tree::makeLateralOffsets;
-using marine_nav_behavior_tree::resampleStations;
-using marine_nav_behavior_tree::solveCorridorOffsets;
+using marine_nav_utilities::CorridorParams;
+using marine_nav_utilities::makeLateralOffsets;
+using marine_nav_utilities::planCorridorOffsets;
+using marine_nav_utilities::resampleStations;
+using marine_nav_utilities::solveCorridorOffsets;
+using marine_nav_utilities::Station;
 
 namespace
 {
@@ -192,71 +191,114 @@ TEST(SolveCorridorOffsets, RespectsLateralRateLimit)
   }
 }
 
-// --- applyAvoidanceSlowdown ------------------------------------------------
+// --- planCorridorOffsets (node-free core of the controller avoider) --------
 
 namespace
 {
-nav_msgs::msg::Path straightPath(int n)
+// A straight survey line along +x at 1 m spacing, left-normal (0, 1).
+std::vector<Station> straightStations(std::size_t n)
 {
-  // n poses 1 m apart along +x; stamps left zero.
-  nav_msgs::msg::Path path;
-  for (int i = 0; i < n; ++i) {
-    geometry_msgs::msg::PoseStamped p;
-    p.pose.position.x = i * 1.0;
-    path.poses.push_back(p);
+  std::vector<Station> st;
+  for (std::size_t i = 0; i < n; ++i) {
+    Station s;
+    s.x = static_cast<double>(i);
+    s.y = 0.0;
+    s.nx = 0.0;
+    s.ny = 1.0;
+    s.yaw = 0.0;
+    st.push_back(s);
   }
-  return path;
+  return st;
 }
 
-double stampSeconds(const geometry_msgs::msg::PoseStamped & p)
+CorridorParams planParams()
 {
-  return p.header.stamp.sec + p.header.stamp.nanosec * 1e-9;
+  CorridorParams p = defaultParams();
+  p.max_xte = 3.0;        // wider corridor so the detour fits
+  p.w_smooth = 0.1;
+  return p;
 }
 }  // namespace
 
-TEST(ApplyAvoidanceSlowdown, StampsDeviatingRunAtTargetSpeed)
+TEST(PlanCorridorOffsets, ClearWaterReturnsNoDeviation)
 {
-  auto path = straightPath(7);
-  std::vector<double> d(7, 0.0);
-  d[2] = 1.0;
-  d[3] = 1.5;
-  d[4] = 1.0;  // deviating run [2,4]
-
-  applyAvoidanceSlowdown(path, d, 0.5, 0.05);  // 0.5 m/s through the run
-
-  // Outside the run: untouched (zero) stamps.
-  for (int i : {0, 1, 5, 6}) {
-    EXPECT_EQ(path.poses[i].header.stamp.sec, 0);
-    EXPECT_EQ(path.poses[i].header.stamp.nanosec, 0u);
-  }
-  // In the run: non-zero, strictly increasing, implied speed == 0.5 m/s.
-  EXPECT_GT(stampSeconds(path.poses[2]), 0.0);
-  for (int i = 3; i <= 4; ++i) {
-    const double dt = stampSeconds(path.poses[i]) - stampSeconds(path.poses[i - 1]);
-    const double dist = path.poses[i].pose.position.x - path.poses[i - 1].pose.position.x;
-    EXPECT_GT(dt, 0.0);
-    EXPECT_NEAR(dist / dt, 0.5, 1e-6);
+  const auto stations = straightStations(20);
+  auto sample = [](double, double) { return 0.0; };  // all free
+  const auto r = planCorridorOffsets(
+    stations, sample, planParams(), 1.0, 4.0, /*robot*/ 2.0, 0.0, {});
+  ASSERT_TRUE(r.has_value());
+  for (double d : *r) {
+    EXPECT_NEAR(d, 0.0, 1e-9);
   }
 }
 
-TEST(ApplyAvoidanceSlowdown, DisabledOrNoRunLeavesStampsZero)
+TEST(PlanCorridorOffsets, BendsAroundAnObstacleAheadAndReanchors)
 {
-  auto path = straightPath(5);
-  std::vector<double> d(5, 0.0);
-  d[2] = 1.0;  // a deviating pose, but...
-  applyAvoidanceSlowdown(path, d, 0.0, 0.05);  // ...avoid_speed = 0 disables
-  for (const auto & p : path.poses) {
-    EXPECT_EQ(p.header.stamp.sec, 0);
-    EXPECT_EQ(p.header.stamp.nanosec, 0u);
+  const auto stations = straightStations(20);
+  // Lethal blob straddling the line near x in [9,11], |y| < 0.75.
+  auto sample = [](double x, double y) -> double {
+    if (x >= 9.0 && x <= 11.0 && std::abs(y) < 0.75) {
+      return 254.0;
+    }
+    return 0.0;
+  };
+  const auto r = planCorridorOffsets(
+    stations, sample, planParams(), 1.0, 4.0, /*robot*/ 2.0, 0.0, {});
+  ASSERT_TRUE(r.has_value());
+  double peak = 0.0;
+  for (double d : *r) {
+    peak = std::max(peak, std::abs(d));
   }
+  EXPECT_GE(peak, 0.75);                  // deviated clear of the blob
+  EXPECT_LE(peak, 3.0 + 1e-9);            // within the corridor
+  EXPECT_NEAR(r->back(), 0.0, 1e-9);      // re-anchors to the line at the end
+}
 
-  // Single deviating pose => no 2-pose segment => no-op even when enabled.
-  auto path2 = straightPath(5);
-  std::vector<double> single(5, 0.0);
-  single[2] = 1.0;
-  applyAvoidanceSlowdown(path2, single, 0.5, 0.05);
-  for (const auto & p : path2.poses) {
-    EXPECT_EQ(p.header.stamp.sec, 0);
-    EXPECT_EQ(p.header.stamp.nanosec, 0u);
-  }
+TEST(PlanCorridorOffsets, AnchorBehindLetsTheBoatDeviateWherePinAtBoatCannot)
+{
+  // The #59 fix, demonstrated by contrast. An obstacle straddles the boat's own
+  // position (x in [8,10], boat at x=9). With anchor_behind=0 the detour's near
+  // anchor is pinned to d=0 *at the boat* (the old BT-node behaviour) — which
+  // lands the anchor on a lethal cell, so no corridor exists (nullopt). With
+  // anchor_behind>0 the anchor sits behind the boat, leaving the boat free to
+  // carry a non-zero offset and clear the obstacle.
+  const auto stations = straightStations(24);
+  auto sample = [](double x, double y) -> double {
+    if (x >= 8.0 && x <= 10.0 && std::abs(y) < 0.75) {
+      return 254.0;
+    }
+    return 0.0;
+  };
+  const double robot_x = 9.0;
+
+  const auto pinned_at_boat = planCorridorOffsets(
+    stations, sample, planParams(), 1.0, /*anchor_behind*/ 0.0, robot_x, 0.0, {});
+  EXPECT_FALSE(pinned_at_boat.has_value());  // boat pinned onto the obstacle
+
+  const auto anchored_behind = planCorridorOffsets(
+    stations, sample, planParams(), 1.0, /*anchor_behind*/ 4.0, robot_x, 0.0, {});
+  ASSERT_TRUE(anchored_behind.has_value());
+  EXPECT_GT(std::abs((*anchored_behind)[9]), 1e-6);  // boat free to deviate
+  EXPECT_NEAR(anchored_behind->front(), 0.0, 1e-9);  // still re-anchors behind
+}
+
+TEST(PlanCorridorOffsets, OutOfWindowReturnsNullopt)
+{
+  const auto stations = straightStations(20);
+  auto sample = [](double, double) { return -1.0; };  // entire line out of window
+  const auto r = planCorridorOffsets(
+    stations, sample, planParams(), 1.0, 4.0, 2.0, 0.0, {});
+  EXPECT_FALSE(r.has_value());
+}
+
+TEST(PlanCorridorOffsets, FullWallAheadIsInfeasible)
+{
+  const auto stations = straightStations(20);
+  // A wall across the whole corridor at x in [9,10] (all |y| lethal).
+  auto sample = [](double x, double) -> double {
+    return (x >= 9.0 && x <= 10.0) ? 254.0 : 0.0;
+  };
+  const auto r = planCorridorOffsets(
+    stations, sample, planParams(), 1.0, 4.0, 2.0, 0.0, {});
+  EXPECT_FALSE(r.has_value());
 }
