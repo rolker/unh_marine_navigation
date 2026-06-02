@@ -72,7 +72,6 @@ install (
 
 add_library(${PROJECT_NAME}_bt_plugins SHARED
   src/bt_register_nodes.cpp
-  src/plugins/action/adjust_path_for_obstacles.cpp
   src/plugins/action/add_sub_task.cpp
   src/plugins/action/clear_path.cpp
   src/plugins/action/fix_path_orientations.cpp
@@ -302,24 +301,6 @@ if(BUILD_TESTING)
     ament_target_dependencies(test_hover_reentry
       behaviortree_cpp
       rclcpp
-    )
-  endif()
-
-  ament_add_gtest(test_adjust_path_for_obstacles
-    test/test_adjust_path_for_obstacles.cpp
-  )
-  if(TARGET test_adjust_path_for_obstacles)
-    target_include_directories(test_adjust_path_for_obstacles PRIVATE
-      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-    )
-    target_link_libraries(test_adjust_path_for_obstacles
-      ${PROJECT_NAME}_bt_plugins
-    )
-    ament_target_dependencies(test_adjust_path_for_obstacles
-      behaviortree_cpp
-      geometry_msgs
-      nav2_msgs
-      nav_msgs
     )
   endif()
 

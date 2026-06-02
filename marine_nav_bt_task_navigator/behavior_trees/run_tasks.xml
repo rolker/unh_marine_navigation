@@ -413,24 +413,21 @@
                             selected_controller="{selected_controller}"/>
         <SetControllerSpeed speed="{target_speed}"
                             controller_name="{selected_controller}"/>
-        <!-- Refresh {nominal_survey_path} every tick so an operator mid-line mission
+        <!-- Refresh {survey_path} every tick so an operator mid-line mission
              re-send (which updates {current_task} → {survey_line_task} via
              UpdateCurrentTaskData upstream) propagates to FollowPath. Nav2
              FollowPathAction::on_wait_for_result re-reads the path port each
              RUNNING tick, compares against goal_.path, and sets goal_updated_
-             on a change → BtActionNode preempts with the new goal. For #35. -->
+             on a change → BtActionNode preempts with the new goal. For #35.
+             Survey-line obstacle avoidance is no longer reshaped here: it moved
+             to the controller layer (marine_nav_avoidance_controller, #59),
+             which reshapes the followed path against the controller_server's own
+             in-process costmap. The BT now feeds FollowPath the nominal survey
+             line directly. -->
         <SetPathFromTask end_index="-1"
-                         path="{nominal_survey_path}"
+                         path="{survey_path}"
                          start_index="0"
                          task="{survey_line_task}"/>
-        <!-- Reshape the trackline around obstacles before it reaches FollowPath:
-             corridor solver over the local costmap, anchored to the nominal line.
-             Passes nominal through unchanged when clear or fully blocked. Re-ticked
-             here every loop (the ReactiveSequence IS the monitor); a changed
-             {survey_path} preempts the running FollowPath via the #35 mechanism
-             above. For #30. -->
-        <AdjustPathForObstacles nominal_path="{nominal_survey_path}"
-                                path="{survey_path}"/>
         <!-- Recover transient FollowPath ABORTs (e.g. a momentary progress-checker trip)
              with a short Wait, then retry — up to 3 times. On persistent failure the
              RecoveryNode FAILs up to the dispatch, which records the line failed
@@ -796,44 +793,6 @@
       <input_port name="parameter_suffix"
                   default="default_speed"
                   type="std::string">Parameter suffix appended to controller_name to form the full parameter path (controller_name + "." + parameter_suffix).</input_port>
-    </Action>
-    <Action ID="AdjustPathForObstacles">
-      <input_port name="nominal_path"
-                  default="{nominal_survey_path}"
-                  type="nav_msgs::msg::Path_&lt;std::allocator&lt;void&gt; &gt;">Nominal trackline to reshape around obstacles</input_port>
-      <output_port name="path"
-                   default="{survey_path}"
-                   type="nav_msgs::msg::Path_&lt;std::allocator&lt;void&gt; &gt;">Reshaped path for FollowPath (nominal pass-through when clear/blocked)</output_port>
-      <input_port name="costmap_topic"
-                  default="local_costmap/costmap_raw"
-                  type="std::string">nav2_msgs/Costmap topic supplying the obstacle field</input_port>
-      <input_port name="max_deviation"
-                  default="6.0"
-                  type="double">Max metres the line may bend off-course; also the give-up bound</input_port>
-      <input_port name="along_track_spacing"
-                  default="2.0"
-                  type="double">Waypoint spacing along the line (m)</input_port>
-      <input_port name="lateral_resolution"
-                  default="0.5"
-                  type="double">Cross-track search resolution (m)</input_port>
-      <input_port name="line_following_weight"
-                  default="1.0"
-                  type="double">Higher = hug the survey line more strongly</input_port>
-      <input_port name="obstacle_avoidance_weight"
-                  default="0.02"
-                  type="double">Higher = deviate more strongly around obstacles</input_port>
-      <input_port name="smoothness_weight"
-                  default="2.0"
-                  type="double">Higher = smoother detours (penalise sharp lateral changes)</input_port>
-      <input_port name="chatter_damping_weight"
-                  default="0.0"
-                  type="double">Higher = steadier path tick-to-tick (anti-chatter)</input_port>
-      <input_port name="max_lateral_change"
-                  default="1.0"
-                  type="double">Max cross-track change between adjacent waypoints (m)</input_port>
-      <input_port name="avoid_speed"
-                  default="0.0"
-                  type="double">Speed (m/s) through the manoeuvre via per-pose timestamps; 0 disables</input_port>
     </Action>
     <Action ID="SetPathFromTask">
       <input_port name="end_index"
