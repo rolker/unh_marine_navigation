@@ -17,50 +17,75 @@ sound. `CrabbingPathFollower` is already a `nav2_core::Controller` handed a live
 `Costmap2DROS` (`crabbing_path_follower.h:28,49`), so the controller layer is the
 correct host: the framework delivers a fresh, in-process costmap there.
 
-## Approach
+**Scope note (what moves vs. what is new):** only the *pure* solver
+(`solveCorridorOffsets`, `makeLateralOffsets`, `resampleStations`, `Station`,
+`CorridorParams`) is a move — it's already ROS-free and unit-tested. The
+costmap **sampling**, TF resolution, active-range computation, and the
+near-anchor fix are **net-new controller code**: the BT node sampled a
+`nav2_msgs/Costmap` *message*; the controller samples `costmap_2d::Costmap2D`
+via `getCost()/worldToMap()`. So this is "move the math, re-implement the
+plumbing," not a straight re-host.
 
-1. **Extract the corridor solver into `marine_nav_utilities`** — move
-   `solveCorridorOffsets`, `makeLateralOffsets`, `resampleStations`, `Station`,
-   `CorridorParams` out of `marine_nav_behavior_tree` into a pure
-   `corridor_solver.{h,cpp}` (sibling to `costmap_window.cpp`). Move their unit
-   tests. Point the existing BT node at the new header (no behavior change) so
-   the extraction lands green on its own.
+**Stacked into two PRs** (smaller reviews, June 4):
+
+### PR1 — extract the solver (lands green on its own)
+1. Move the pure solver + its unit tests from `marine_nav_behavior_tree` into
+   `marine_nav_utilities` as `corridor_solver.{h,cpp}` (sibling to
+   `costmap_window.cpp`). Point the existing BT node at the new header — no
+   behavior change. Update both packages' `CMakeLists.txt` + `package.xml`.
+
+### PR2 — decorator controller + delete the BT node
 2. **New package `marine_nav_avoidance_controller`** — a decorator
    `nav2_core::Controller`:
    - `configure()`: nested `pluginlib` load of an **inner** controller (param:
      inner plugin id + its param namespace); cache `tf`, `costmap_ros`, node.
-     Declare `survey_avoidance.*` tunables on the **controller_server lifecycle
-     node** (externally param-serviceable — fixes the #57/15:03 wrong-node gap).
+     **The `pluginlib::ClassLoader` for the inner controller must be a member
+     that outlives the loaded instance** — a scope-local loader unloads the
+     symbol and crashes on use. Declare `survey_avoidance.*` tunables on the
+     **controller_server lifecycle node** (externally param-serviceable — fixes
+     the #57/15:03 wrong-node gap). Drive the inner controller's full lifecycle
+     (configure/activate/deactivate/cleanup) from the wrapper's.
    - `setPlan(nominal)`: store the nominal line; forward to the inner controller.
    - `computeVelocityCommands(pose,…)`: read `costmap_ros_->getCostmap()`, run
      the solver **anchored at the boat's actual cross-track offset** (from
      `pose`), `setPlan(reshaped)` on the inner controller, delegate. Publish the
      operator overlay from this node.
-   - `setSpeedLimit()` passthrough; realize `avoid_speed` by limiting the inner
-     controller's speed during a deviation (drop the per-pose-stamp hack).
+   - `setSpeedLimit()` passthrough. **`avoid_speed` decision (resolve at impl):**
+     the BT design slowed *only the deviating segment* (per-pose stamps);
+     routing it through the inner `setSpeedLimit` slows the *whole controller*
+     while any deviation is active. Default to whole-controller toggle for v1
+     (simpler, restore on clear) unless per-segment proves necessary — flag to
+     Roland when reached.
 3. **Tests** — wrapper reshape-and-delegate against a fake inner controller +
-   hand-built costmap; regression that the detour anchors at a non-zero actual
-   offset (the bug #57 names); solver tests stay in utilities.
-4. **BT wiring** — remove `AdjustPathForObstacles` from `SurveyLine` in
-   `run_tasks.xml` (BT now passes the nominal line straight to FollowPath), and
-   **delete** the BT node, its `bt_register_nodes` entry, `plugin_lib_names`
-   entry, and its tests in this PR. Verify the new goal's `setPlan()` propagates
-   through the wrapper to the inner follower (#35 mid-line re-send) — test it.
-5. **Config rollout (cross-repo, before June 4)** — point the `FollowPath`
-   controller plugin at the wrapper with crabbing as the inner, in
-   `bizzyboat.yaml` (echoboats) and `nav2_params.base.yaml` (seafloor), with
-   on-water validation before the survey.
+   hand-built `Costmap2D`; regression that the detour anchors at a non-zero
+   actual offset (the bug #57 names); `setPlan()` re-send propagates to the inner
+   (#35); corridor-blocked → delegate-to-inner-on-nominal. Solver tests stay in
+   utilities (PR1).
+4. **BT wiring + deletion** — remove `AdjustPathForObstacles` from `SurveyLine`
+   in `run_tasks.xml` (BT now passes the nominal line straight to FollowPath),
+   and **delete** the node (`adjust_path_for_obstacles.{h,cpp}`), its
+   `bt_register_nodes` entry, its `CMakeLists.txt` source (:74) + test target
+   (:306-316), and `test/test_adjust_path_for_obstacles.cpp`. (No
+   `plugin_lib_names` change — the node compiles into the
+   `marine_nav_behavior_tree` BT-plugins lib, which stays listed; only one node
+   is removed from it.)
+5. **Config flip (echoboats overlay only, before June 4)** — override the
+   `FollowPath` controller `plugin:` to the wrapper (inner = crabbing) in
+   **`bizzyboat_project11/config/nav2_overlay.yaml`** (the per-instance overlay),
+   *not* the shared `nav2_params.base.yaml`. This flips BizzyBoat alone and
+   leaves seafloor/ben on crabbing-direct. On-water validation before the survey.
 
 ## Files to Change
 
-| File | Change |
-|------|--------|
-| `marine_nav_utilities/{include,src}/…/corridor_solver.{h,cpp}` | New: pure solver moved here |
-| `marine_nav_utilities/test/test_corridor_solver.cpp` | Moved solver unit tests |
-| `marine_nav_behavior_tree/.../adjust_path_for_obstacles.{h,cpp}` | Delete (node + registration + plugin_lib_names + tests) |
-| `marine_nav_avoidance_controller/**` | New package: decorator controller + plugin.xml + tests |
-| `marine_nav_bt_task_navigator/behavior_trees/run_tasks.xml` | Drop `AdjustPathForObstacles` from `SurveyLine` |
-| `bizzyboat.yaml` / `nav2_params.base.yaml` *(echoboats / seafloor — separate PRs)* | FollowPath → wrapper(inner=crabbing) |
+| File | PR | Change |
+|------|----|--------|
+| `marine_nav_utilities/{include,src}/…/corridor_solver.{h,cpp}` | 1 | New: pure solver moved here |
+| `marine_nav_utilities/test/test_corridor_solver.cpp` + `CMakeLists.txt`/`package.xml` | 1 | Moved solver unit tests + build wiring |
+| `marine_nav_behavior_tree/.../adjust_path_for_obstacles.{h,cpp}` | 1→2 | PR1: include solver from utilities (no behavior change). PR2: delete |
+| `marine_nav_behavior_tree/CMakeLists.txt` (:74 src, :306-316 test) + `bt_register_nodes.cpp` + `test/test_adjust_path_for_obstacles.cpp` | 2 | Remove node source, test target, registration |
+| `marine_nav_avoidance_controller/**` (`CMakeLists.txt`, `package.xml`, `plugin.xml`, src, tests) | 2 | New decorator-controller package |
+| `marine_nav_bt_task_navigator/behavior_trees/run_tasks.xml` | 2 | Drop `AdjustPathForObstacles` from `SurveyLine` |
+| `bizzyboat_project11/config/nav2_overlay.yaml` *(echoboats — separate PR)* | 2-cfg | Override `FollowPath` plugin → wrapper(inner=crabbing), BizzyBoat-only |
 
 ## Principles Self-Check
 
@@ -82,25 +107,40 @@ correct host: the framework delivers a fresh, in-process costmap there.
 
 | If we change… | Also update… | Included? |
 |---|---|---|
-| Move solver to utilities | `marine_nav_behavior_tree` deps + includes; `package.xml` of both | Yes |
-| Remove BT node from tree | `run_tasks.xml`, `bt_register_nodes`, `plugin_lib_names`, BT tests | Yes |
-| New controller plugin | controller_server config in **echoboats + seafloor** repos | Yes — separate PRs, before June 4 |
-| `avoid_speed` mechanism change | crabbing `setSpeedLimit` semantics | Yes (verify) |
+| Move solver to utilities | `marine_nav_behavior_tree` + `marine_nav_utilities` `CMakeLists.txt`/`package.xml`; BT-node include | Yes (PR1) |
+| Remove BT node from tree | `run_tasks.xml`, `bt_register_nodes.cpp`, `CMakeLists.txt` (src + test), BT test file | Yes (PR2) — no `plugin_lib_names` change (lib stays) |
+| Flip BizzyBoat controller | `nav2_overlay.yaml` override only (NOT shared `nav2_params.base.yaml`) — leaves seafloor/ben on crabbing-direct | Yes (echoboats cfg PR) |
+| `avoid_speed` mechanism change | inner `setSpeedLimit` is whole-controller, not per-segment — behavior shift | Decide at impl (default whole-controller v1) |
 
 ## Decisions (resolved 2026-06-02)
 
 - **Host shape**: decorator wrapper owning an inner `CrabbingPathFollower` (tracker stays pure).
-- **Old BT node**: delete it in this PR (registration + `plugin_lib_names` + tests).
+- **Old BT node**: delete it (PR2) — node source, `bt_register_nodes` entry, `CMakeLists.txt` src+test, BT test file. (No `plugin_lib_names` change — the BT-plugins lib stays listed.)
 - **Package name**: `marine_nav_avoidance_controller`.
 - **Timing**: land plugin **and** flip controller config before the **June 4 dev freeze**, with on-water validation before the June 15 survey. (Roland's call; accepted risk of a live control-path change close to class — mitigate with on-water validation, not just CI.)
+
+## Acceptance Criteria
+
+- **Sim**: with a live local costmap, the followed path's *ahead* portion
+  re-plans as obstacles appear/clear ahead of the boat (#57's desired outcome),
+  and a deviation relaxes to nominal once the obstacle leaves the costmap.
+- **Sim**: the boat actually tracks the detour around a stationary obstacle (the
+  near-anchor no longer pins it to the line) — the #59 "never went around" fix.
+- **On-water** (before June 15): BizzyBoat bends around a real obstacle and the
+  CAMP overlay tracks the live costmap, not a line-start snapshot.
+- All existing crabbing-follower behavior unchanged when no obstacle is present
+  (wrapper passes through to the inner controller).
 
 ## Open Questions
 
 - Mid-line re-send (#35): confirm a new goal's `setPlan()` propagates through the wrapper to the inner — verify in code/test, don't assume.
+- `avoid_speed`: whole-controller slowdown (v1 default) vs. per-segment — confirm with Roland at PR2 impl.
 
 ## Estimated Scope
 
-Core change is one PR in `unh_marine_navigation` (solver extraction + new plugin
-package + tests + BT-node deletion); two dependent config PRs in echoboats and
-seafloor, all before June 4. Solver extraction could be split as a first stacked
-PR if review prefers.
+**PR1** (`unh_marine_navigation`): solver extraction to `marine_nav_utilities` +
+moved tests + build wiring — green on its own, no behavior change.
+**PR2** (`unh_marine_navigation`): new `marine_nav_avoidance_controller` package
++ tests + BT-node deletion + `run_tasks.xml`.
+**PR2-cfg** (`unh_echoboats_project11`): `nav2_overlay.yaml` controller-plugin
+override (BizzyBoat-only). All before June 4; seafloor/ben need no change.
