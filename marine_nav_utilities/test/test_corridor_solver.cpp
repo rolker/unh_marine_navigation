@@ -15,8 +15,10 @@
 
 using marine_nav_utilities::CorridorParams;
 using marine_nav_utilities::makeLateralOffsets;
+using marine_nav_utilities::planCorridorOffsets;
 using marine_nav_utilities::resampleStations;
 using marine_nav_utilities::solveCorridorOffsets;
+using marine_nav_utilities::Station;
 
 namespace
 {
@@ -187,4 +189,116 @@ TEST(SolveCorridorOffsets, RespectsLateralRateLimit)
   for (std::size_t i = 1; i < r->size(); ++i) {
     EXPECT_LE(std::abs((*r)[i] - (*r)[i - 1]), 1.0 + 1e-9);  // max_lateral_rate
   }
+}
+
+// --- planCorridorOffsets (node-free core of the controller avoider) --------
+
+namespace
+{
+// A straight survey line along +x at 1 m spacing, left-normal (0, 1).
+std::vector<Station> straightStations(std::size_t n)
+{
+  std::vector<Station> st;
+  for (std::size_t i = 0; i < n; ++i) {
+    Station s;
+    s.x = static_cast<double>(i);
+    s.y = 0.0;
+    s.nx = 0.0;
+    s.ny = 1.0;
+    s.yaw = 0.0;
+    st.push_back(s);
+  }
+  return st;
+}
+
+CorridorParams planParams()
+{
+  CorridorParams p = defaultParams();
+  p.max_xte = 3.0;        // wider corridor so the detour fits
+  p.w_smooth = 0.1;
+  return p;
+}
+}  // namespace
+
+TEST(PlanCorridorOffsets, ClearWaterReturnsNoDeviation)
+{
+  const auto stations = straightStations(20);
+  auto sample = [](double, double) { return 0.0; };  // all free
+  const auto r = planCorridorOffsets(
+    stations, sample, planParams(), 1.0, 4.0, /*robot*/ 2.0, 0.0, {});
+  ASSERT_TRUE(r.has_value());
+  for (double d : *r) {
+    EXPECT_NEAR(d, 0.0, 1e-9);
+  }
+}
+
+TEST(PlanCorridorOffsets, BendsAroundAnObstacleAheadAndReanchors)
+{
+  const auto stations = straightStations(20);
+  // Lethal blob straddling the line near x in [9,11], |y| < 0.75.
+  auto sample = [](double x, double y) -> double {
+    if (x >= 9.0 && x <= 11.0 && std::abs(y) < 0.75) {
+      return 254.0;
+    }
+    return 0.0;
+  };
+  const auto r = planCorridorOffsets(
+    stations, sample, planParams(), 1.0, 4.0, /*robot*/ 2.0, 0.0, {});
+  ASSERT_TRUE(r.has_value());
+  double peak = 0.0;
+  for (double d : *r) {
+    peak = std::max(peak, std::abs(d));
+  }
+  EXPECT_GE(peak, 0.75);                  // deviated clear of the blob
+  EXPECT_LE(peak, 3.0 + 1e-9);            // within the corridor
+  EXPECT_NEAR(r->back(), 0.0, 1e-9);      // re-anchors to the line at the end
+}
+
+TEST(PlanCorridorOffsets, AnchorBehindLetsTheBoatDeviateWherePinAtBoatCannot)
+{
+  // The #59 fix, demonstrated by contrast. An obstacle straddles the boat's own
+  // position (x in [8,10], boat at x=9). With anchor_behind=0 the detour's near
+  // anchor is pinned to d=0 *at the boat* (the old BT-node behaviour) — which
+  // lands the anchor on a lethal cell, so no corridor exists (nullopt). With
+  // anchor_behind>0 the anchor sits behind the boat, leaving the boat free to
+  // carry a non-zero offset and clear the obstacle.
+  const auto stations = straightStations(24);
+  auto sample = [](double x, double y) -> double {
+    if (x >= 8.0 && x <= 10.0 && std::abs(y) < 0.75) {
+      return 254.0;
+    }
+    return 0.0;
+  };
+  const double robot_x = 9.0;
+
+  const auto pinned_at_boat = planCorridorOffsets(
+    stations, sample, planParams(), 1.0, /*anchor_behind*/ 0.0, robot_x, 0.0, {});
+  EXPECT_FALSE(pinned_at_boat.has_value());  // boat pinned onto the obstacle
+
+  const auto anchored_behind = planCorridorOffsets(
+    stations, sample, planParams(), 1.0, /*anchor_behind*/ 4.0, robot_x, 0.0, {});
+  ASSERT_TRUE(anchored_behind.has_value());
+  EXPECT_GT(std::abs((*anchored_behind)[9]), 1e-6);  // boat free to deviate
+  EXPECT_NEAR(anchored_behind->front(), 0.0, 1e-9);  // still re-anchors behind
+}
+
+TEST(PlanCorridorOffsets, OutOfWindowReturnsNullopt)
+{
+  const auto stations = straightStations(20);
+  auto sample = [](double, double) { return -1.0; };  // entire line out of window
+  const auto r = planCorridorOffsets(
+    stations, sample, planParams(), 1.0, 4.0, 2.0, 0.0, {});
+  EXPECT_FALSE(r.has_value());
+}
+
+TEST(PlanCorridorOffsets, FullWallAheadIsInfeasible)
+{
+  const auto stations = straightStations(20);
+  // A wall across the whole corridor at x in [9,10] (all |y| lethal).
+  auto sample = [](double x, double) -> double {
+    return (x >= 9.0 && x <= 10.0) ? 254.0 : 0.0;
+  };
+  const auto r = planCorridorOffsets(
+    stations, sample, planParams(), 1.0, 4.0, 2.0, 0.0, {});
+  EXPECT_FALSE(r.has_value());
 }

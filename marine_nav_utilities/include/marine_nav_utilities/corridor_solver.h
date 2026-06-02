@@ -2,6 +2,7 @@
 #define MARINE_NAV_UTILITIES_CORRIDOR_SOLVER_H
 
 #include <cstddef>
+#include <functional>
 #include <optional>
 #include <vector>
 
@@ -61,6 +62,28 @@ std::optional<std::vector<double>> solveCorridorOffsets(
 // yields an empty result.
 std::vector<Station> resampleStations(
   const std::vector<geometry_msgs::msg::PoseStamped> & poses, double step);
+
+// Plan corridor offsets for a survey line given a costmap sampler — the
+// node-free core of the controller-layer avoider (#59). Encapsulates:
+//   * nearest-station selection for the robot at (robot_x, robot_y) (path frame),
+//   * the anchor-behind-boat active range (the #59 fix: the detour's near anchor
+//     is pinned to d=0 `anchor_behind_distance` metres *behind* the boat, so the
+//     boat itself rides the deviation instead of being yanked back to the line),
+//   * cost-matrix sampling, and the DP solve.
+// `sample(px, py)` returns the costmap cost at a path-frame point, or any
+// NEGATIVE value to mean out-of-window / impassable. Returns the per-station
+// offset for every station, or std::nullopt when the line is out of the costmap
+// window, has no interior to deviate, or the corridor is blocked. `prev_offsets`
+// feeds the temporal term (size must equal stations.size() to take effect).
+std::optional<std::vector<double>> planCorridorOffsets(
+  const std::vector<Station> & stations,
+  const std::function<double(double, double)> & sample,
+  const CorridorParams & params,
+  double station_step,
+  double anchor_behind_distance,
+  double robot_x,
+  double robot_y,
+  const std::vector<double> & prev_offsets);
 
 }  // namespace marine_nav_utilities
 

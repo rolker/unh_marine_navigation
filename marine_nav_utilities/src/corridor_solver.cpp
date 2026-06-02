@@ -222,4 +222,78 @@ std::vector<Station> resampleStations(
   return stations;
 }
 
+std::optional<std::vector<double>> planCorridorOffsets(
+  const std::vector<Station> & stations,
+  const std::function<double(double, double)> & sample,
+  const CorridorParams & params,
+  double station_step,
+  double anchor_behind_distance,
+  double robot_x,
+  double robot_y,
+  const std::vector<double> & prev_offsets)
+{
+  const std::size_t n = stations.size();
+  if (n < 3 || station_step <= 0.0 || !sample) {
+    return std::nullopt;
+  }
+
+  // Robot's nearest station.
+  std::size_t robot_station = 0;
+  double best_d = kInf;
+  for (std::size_t i = 0; i < n; ++i) {
+    const double d = std::hypot(stations[i].x - robot_x, stations[i].y - robot_y);
+    if (d < best_d) {
+      best_d = d;
+      robot_station = i;
+    }
+  }
+
+  // Anchor the detour entry a fixed distance behind the boat (#59 fix).
+  const int back = std::max(
+    0, static_cast<int>(std::lround(anchor_behind_distance / station_step)));
+  const std::size_t anchor_start =
+    (robot_station > static_cast<std::size_t>(back)) ? robot_station - back : 0;
+
+  // Active range: contiguous in-window stations from anchor_start (sample >= 0).
+  std::size_t active_begin = n;
+  for (std::size_t i = anchor_start; i < n; ++i) {
+    if (sample(stations[i].x, stations[i].y) >= 0.0) {
+      active_begin = i;
+      break;
+    }
+  }
+  if (active_begin >= n) {
+    return std::nullopt;  // nothing of the line is in the costmap window
+  }
+  std::size_t active_end = n;
+  for (std::size_t i = active_begin + 1; i < n; ++i) {
+    if (sample(stations[i].x, stations[i].y) < 0.0) {
+      active_end = i;
+      break;
+    }
+  }
+  if (active_end - active_begin < 3) {
+    return std::nullopt;  // no interior station to deviate
+  }
+
+  // Build the cost matrix (active rows sampled at each candidate offset; a
+  // negative sample == out-of-window == impassable for that cell).
+  const auto offsets = makeLateralOffsets(params.max_xte, params.lateral_step);
+  std::vector<std::vector<double>> costs(n, std::vector<double>(offsets.size(), 0.0));
+  for (std::size_t i = active_begin; i < active_end; ++i) {
+    for (std::size_t j = 0; j < offsets.size(); ++j) {
+      const double px = stations[i].x + offsets[j] * stations[i].nx;
+      const double py = stations[i].y + offsets[j] * stations[i].ny;
+      const double s = sample(px, py);
+      costs[i][j] = (s < 0.0) ? params.lethal_cost : s;
+    }
+  }
+
+  const std::vector<double> empty;
+  return solveCorridorOffsets(
+    costs, offsets, params,
+    (prev_offsets.size() == n) ? prev_offsets : empty,
+    active_begin, active_end);
+}
+
 }  // namespace marine_nav_utilities

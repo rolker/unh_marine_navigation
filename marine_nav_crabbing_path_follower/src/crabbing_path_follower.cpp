@@ -220,7 +220,16 @@ void CrabbingPathFollower::setPlan(const nav_msgs::msg::Path & path)
   global_pub_->publish(path);
   global_plan_ = path;
   current_segment_ = 0;
-  pid_->reset(true);
+  // Intentionally do NOT reset the PID here. A decorator controller
+  // (marine_nav_avoidance_controller, #59) re-issues setPlan every control
+  // cycle to feed a freshly reshaped path; an unconditional reset would wipe
+  // the cross-track integrator each tick and destroy crab compensation. The
+  // PID is instead reset only when it has gone stale — idle longer than
+  // pid_reset_threshold_ ("N seconds") — by the staleness guard in
+  // computeVelocityCommands, which is the genuine "new goal after a pause"
+  // case. current_segment_ is reset to 0 and re-advanced by the forward scan
+  // in computeVelocityCommands, so a same-tick re-plan still localises onto
+  // the boat's current segment.
 }
 
 
