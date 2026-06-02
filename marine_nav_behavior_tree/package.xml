@@ -13,6 +13,7 @@
   <depend>geometry_msgs</depend>
   <depend>marine_nav_interfaces</depend>
   <depend>marine_nav_tasks</depend>
+  <depend>marine_nav_utilities</depend>
   <depend>nav2_behavior_tree</depend>
   <depend>nav2_msgs</depend>
   <depend>nav2_util</depend>

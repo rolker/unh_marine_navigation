@@ -14,6 +14,7 @@ find_package(behaviortree_cpp 4 REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(marine_nav_interfaces REQUIRED)
 find_package(marine_nav_tasks REQUIRED)
+find_package(marine_nav_utilities REQUIRED)
 find_package(nav2_behavior_tree REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(nav2_util REQUIRED)
@@ -115,6 +116,7 @@ ament_target_dependencies(${PROJECT_NAME}_bt_plugins
   behaviortree_cpp
   geometry_msgs
   marine_nav_interfaces
+  marine_nav_utilities
   nav2_behavior_tree
   nav2_msgs
   nav2_util

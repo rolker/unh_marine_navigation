@@ -21,6 +21,7 @@ find_package(tf2_geometry_msgs REQUIRED)
 add_library(${PROJECT_NAME} SHARED
   src/utilities.cpp
   src/costmap_window.cpp
+  src/corridor_solver.cpp
 )
 
 add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
@@ -101,6 +102,12 @@ if(BUILD_TESTING)
     ${PROJECT_NAME}
     ${nav_msgs_TARGETS}
     rclcpp::rclcpp
+  )
+
+  ament_add_gtest(test_corridor_solver test/test_corridor_solver.cpp)
+  target_link_libraries(test_corridor_solver
+    ${PROJECT_NAME}
+    ${geometry_msgs_TARGETS}
   )
 endif()
 

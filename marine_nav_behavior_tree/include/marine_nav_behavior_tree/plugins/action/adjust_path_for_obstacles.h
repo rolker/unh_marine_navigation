@@ -15,60 +15,20 @@
 #include "rclcpp/rclcpp.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
 
+#include "marine_nav_utilities/corridor_solver.h"
+
 namespace marine_nav_behavior_tree
 {
 
-// Tunables for the corridor solver. Cross-track offset `d` is the cross-track
-// error by construction, so the XTE term is analytic (w_xte * d^2) and never
-// shares the costmap's cost budget. See .agent/work-plans/issue-30/plan.md.
-struct CorridorParams
-{
-  double max_xte = 6.0;            // corridor half-width (m); also the give-up bound
-  double lateral_step = 0.5;       // cross-track offset resolution (m)
-  double w_xte = 1.0;              // restoring-spring weight on d^2
-  double w_obs = 0.02;             // weight on graded obstacle cost [0..252]
-  double w_smooth = 2.0;           // weight on (d_i - d_{i-1})^2 between stations
-  double w_temporal = 0.0;         // weight on (d - prev_tick_d)^2 (chatter damping)
-  double max_lateral_rate = 1.0;   // max |d_i - d_{i-1}| between adjacent stations (m)
-  double lethal_cost = 253.0;      // sampled cost >= this is impassable (INSCRIBED/LETHAL)
-};
-
-// Build the symmetric set of candidate lateral offsets, guaranteed to include
-// exactly 0.0 at the centre index. e.g. max_xte=1.0, step=0.5 -> {-1,-0.5,0,0.5,1}.
-std::vector<double> makeLateralOffsets(double max_xte, double lateral_step);
-
-// Pure corridor dynamic program — no ROS, unit-testable with a hand-built cost
-// matrix. `obstacle_costs[i][j]` is the sampled costmap cost at station i,
-// offset column j (must match `offsets` size); a value >= params.lethal_cost is
-// impassable. `offsets` is the output of makeLateralOffsets (centre == 0).
-// `prev_offsets` feeds the temporal term (empty => treated as all-zero, term off).
-// Stations in [active_begin, active_end) are optimised; the rest, plus the two
-// active endpoints themselves, are pinned to d=0 so the result is a true detour
-// that re-anchors to the line. Returns the chosen offset per station, or
-// std::nullopt when no finite-cost path exists (corridor blocked).
-std::optional<std::vector<double>> solveCorridorOffsets(
-  const std::vector<std::vector<double>> & obstacle_costs,
-  const std::vector<double> & offsets,
-  const CorridorParams & params,
-  const std::vector<double> & prev_offsets,
-  std::size_t active_begin,
-  std::size_t active_end);
-
-// A 2D centreline station: position + unit left-normal, both in the path frame.
-struct Station
-{
-  double x = 0.0;
-  double y = 0.0;
-  double nx = 0.0;   // unit left-normal x (90deg CCW from tangent)
-  double ny = 0.0;   // unit left-normal y
-  double yaw = 0.0;  // tangent heading
-};
-
-// Resample a pose polyline into stations spaced ~`step` metres along arclength,
-// carrying the per-segment tangent and left-normal. Fewer than 2 input poses
-// yields an empty result.
-std::vector<Station> resampleStations(
-  const std::vector<geometry_msgs::msg::PoseStamped> & poses, double step);
+// The pure corridor solver (CorridorParams, Station, makeLateralOffsets,
+// solveCorridorOffsets, resampleStations) lives in marine_nav_utilities so it
+// can be shared with the controller-layer avoider (#59). Re-exported into this
+// namespace so existing call sites in this node are unchanged.
+using marine_nav_utilities::CorridorParams;
+using marine_nav_utilities::makeLateralOffsets;
+using marine_nav_utilities::resampleStations;
+using marine_nav_utilities::solveCorridorOffsets;
+using marine_nav_utilities::Station;
 
 // Optionally slow the boat through the avoidance manoeuvre by writing per-pose
 // timestamps on the contiguous deviating run of `path`. CrabbingPathFollower
