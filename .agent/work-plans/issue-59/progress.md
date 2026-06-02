@@ -58,3 +58,26 @@ issue: 59
 - [ ] (deferred — operator's call) PID integrator carries across a back-to-back new line within pid_reset_threshold_ (1 s); accept transient vs add decorator-driven new-goal reset — `crabbing_path_follower.cpp:218`
 - [ ] (sim-verify) server tracks nominal goal while inner tracks reshaped path — confirm progress-checker doesn't abort during a large deviation
 - Rejected false positives: zero header.stamp (intentional "latest TF" convention), lethal_cost 253 (INSCRIBED, correct), empty-matrix UB (already guarded)
+
+## Integrated Review
+**Status**: complete
+**When**: 2026-06-02 12:43 -0400
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+
+**PR**: #60 at `1aa628d` (post-merge of origin/jazzy)
+**Sources**: 2 (Copilot R1 @ `1c1f537`, Local Review (Pre-Push) @ `1c1f537`)
+**Cross-source confirmations**: 1
+**CI**: none configured on the repo
+
+### Findings
+- [ ] (cross-confirmed: Copilot + Local Review) per-tick `primary_->setPlan(reshaped)` re-publishes the inner plan + resets current_segment_=0 (O(N) scan) every cycle incl. clear water — low impact; optional fix: skip inner setPlan when not avoiding and nominal unchanged — `avoidance_controller.cpp:287`
+- [ ] (valid, Copilot) no gtests for the wrapper (delegation, lifecycle, avoid_speed state machine just changed) — add fake-inner + hand-built Costmap2D harness — `marine_nav_avoidance_controller/CMakeLists.txt`
+- [ ] (valid-but-intentional, Copilot) obstacle_avoidance_weight default 1.0 diverges from CorridorParams 0.02 — keep (field-validated); add rationale comment — `avoidance_controller.cpp:135`
+
+### Merge conflicts (resolved 1aa628d)
+- adjust_path_for_obstacles.{h,cpp}: jazzy #54 teardown fix vs deletion → deletion wins (node gone)
+- run_tasks.xml: jazzy #55 weight=1.0 on BT node vs node removal → removal wins (intent carried by echoboats#207)
+- kept jazzy #56 costmap-QoS fix (auto-merged)
+
+### False positives
+- (none — all 3 Copilot comments are valid or valid-but-intentional)
