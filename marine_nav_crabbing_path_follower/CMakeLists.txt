@@ -67,9 +67,11 @@ if(BUILD_TESTING)
 
   find_package(ament_cmake_gtest REQUIRED)
   ament_add_gtest(test_path_geometry test/test_path_geometry.cpp)
-  target_include_directories(test_path_geometry PRIVATE
-    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
-  ament_target_dependencies(test_path_geometry geometry_msgs)
+  if(TARGET test_path_geometry)
+    target_include_directories(test_path_geometry PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
+    ament_target_dependencies(test_path_geometry geometry_msgs)
+  endif()
 endif()
 
 ament_package()
