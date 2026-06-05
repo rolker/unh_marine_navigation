@@ -79,6 +79,62 @@ TEST_F(CaSafetyNodeTest, BoolToggleApplied)
   EXPECT_FALSE(node_->get_parameter("cancel_yaw_during_reverse").as_bool());
 }
 
+TEST_F(CaSafetyNodeTest, StopSpeedEpsValidatedAndDynamic)
+{
+  EXPECT_DOUBLE_EQ(node_->get_parameter("stop_speed_eps").as_double(), 0.05);
+  for (const double bad : {0.0, -0.1, std::nan(""), std::numeric_limits<double>::infinity()}) {
+    const auto r = node_->set_parameter(rclcpp::Parameter("stop_speed_eps", bad));
+    EXPECT_FALSE(r.successful) << "bad=" << bad;
+    EXPECT_DOUBLE_EQ(node_->get_parameter("stop_speed_eps").as_double(), 0.05);
+  }
+}
+
+TEST_F(CaSafetyNodeTest, SlowdownMinMaxOrderingEnforced)
+{
+  // default min 5, max 25 — pushing min above max must be rejected (cross-field).
+  const auto r = node_->set_parameter(rclcpp::Parameter("slowdown_min_length", 30.0));
+  EXPECT_FALSE(r.successful);
+  EXPECT_DOUBLE_EQ(node_->get_parameter("slowdown_min_length").as_double(), 5.0);
+  // A consistent pair set together is accepted.
+  const auto ok = node_->set_parameters(
+    {rclcpp::Parameter("slowdown_min_length", 8.0),
+      rclcpp::Parameter("slowdown_max_length", 20.0)});
+  EXPECT_TRUE(ok[0].successful);
+}
+
+// A non-finite upstream command must never reach the helm.
+TEST_F(CaSafetyNodeTest, NonFiniteCmdVelSanitized)
+{
+  auto helper = std::make_shared<rclcpp::Node>("ca_safety_test_helper");
+  auto pub = helper->create_publisher<geometry_msgs::msg::TwistStamped>(
+    "cmd_vel_smoothed", rclcpp::QoS(1));
+  geometry_msgs::msg::TwistStamped received;
+  bool got = false;
+  auto sub = helper->create_subscription<geometry_msgs::msg::TwistStamped>(
+    "piloting_mode/autonomous/cmd_vel", rclcpp::QoS(1),
+    [&](const geometry_msgs::msg::TwistStamped & m) {received = m; got = true;});
+
+  rclcpp::executors::SingleThreadedExecutor exec;
+  exec.add_node(node_);
+  exec.add_node(helper);
+
+  geometry_msgs::msg::TwistStamped cmd;
+  cmd.twist.linear.x = std::nan("");
+  cmd.twist.angular.z = std::numeric_limits<double>::infinity();
+
+  const auto deadline = std::chrono::steady_clock::now() + 5s;
+  while (!got && std::chrono::steady_clock::now() < deadline) {
+    pub->publish(cmd);
+    exec.spin_some();
+    std::this_thread::sleep_for(20ms);
+  }
+  ASSERT_TRUE(got) << "no cmd_vel_out received";
+  EXPECT_TRUE(std::isfinite(received.twist.linear.x));
+  EXPECT_TRUE(std::isfinite(received.twist.angular.z));
+  EXPECT_DOUBLE_EQ(received.twist.linear.x, 0.0);
+  EXPECT_DOUBLE_EQ(received.twist.angular.z, 0.0);
+}
+
 // With no obstacle source, the default passthrough policy must forward cmd_vel
 // unchanged (the node never silently stops the boat for lack of data).
 TEST_F(CaSafetyNodeTest, PassthroughWhenNoCloud)

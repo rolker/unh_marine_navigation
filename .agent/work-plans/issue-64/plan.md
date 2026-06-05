@@ -111,7 +111,8 @@ namespacing and frame-prefixing (the deployment's namespace + its roll/pitch-sta
 | `slowdown_width` / `stop_length` / `stop_width` | double / 6.0, 5.0, 4.0 m | finite, > 0 |
 | `reverse_speed` | double / 0.5 m/s | finite, > 0 |
 | `reverse_distance` / `reverse_duration` | double / 3.0 m, 4.0 s | finite, > 0 (hard backstop, odom-independent) |
-| `stop_speed_eps` | double / 0.05 m/s | startup; speed below which the boat is "stopped" (ends reverse brake) |
+| `stop_speed_eps` | double / 0.05 m/s | finite, > 0; speed below which the boat is "stopped" (ends reverse brake) |
+| `reverse_clear_debounce` | double / 1.0 s | finite, > 0; sustained-clear time before a reverse episode resets its backstop (flicker guard) |
 | `cancel_yaw_during_reverse` | bool / true | passthrough path (`false`) disabled until sim sign test |
 | `source_timeout` | double / 1.0 s | finite, > 0 |
 | `source_loss_behavior` | string / `passthrough` | one of `hold`,`passthrough`,`stop` |

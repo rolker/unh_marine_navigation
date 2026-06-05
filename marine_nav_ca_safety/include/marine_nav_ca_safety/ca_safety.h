@@ -18,6 +18,13 @@ inline bool isFinitePositive(double v)
   return std::isfinite(v) && v > 0.0;
 }
 
+/// Replace a non-finite command component with 0 so NaN/inf from upstream can
+/// never reach the helm. (A zeroed command coasts to a stop — safe.)
+inline double finiteOrZero(double v)
+{
+  return std::isfinite(v) ? v : 0.0;
+}
+
 /// A 2D obstacle point expressed in the node's computation (base) frame:
 /// x forward, y left, per REP-103.
 struct Point2
@@ -141,6 +148,32 @@ inline Twist2 applyStop(
   out.linear_x = (reverse_allowed && still_moving) ? -std::abs(p.reverse_speed) : 0.0;
   out.angular_z = p.cancel_yaw_during_reverse ? 0.0 : in.angular_z;
   return out;
+}
+
+/// Reverse-brake backstop: is reverse still permitted? Bounded by elapsed time
+/// always, and by traveled distance only when a start pose was captured
+/// (`have_distance`). Both limits are evaluated against caller-supplied measured
+/// quantities; the time bound is the odom-independent guarantee.
+inline bool reverseAllowed(
+  double elapsed_s, double duration_limit_s,
+  bool have_distance, double distance_m, double distance_limit_m)
+{
+  if (!(elapsed_s < duration_limit_s)) {
+    return false;
+  }
+  if (have_distance && !(distance_m < distance_limit_m)) {
+    return false;
+  }
+  return true;
+}
+
+/// A reverse-brake episode ends (and its backstop timers may reset) only after
+/// the Stop zone has been gone for longer than the debounce window. This makes
+/// the backstop cumulative across transient declassification (a flickering cloud
+/// must not keep restarting the timer and so permit unbounded reverse).
+inline bool reverseEpisodeEnded(double since_last_stop_s, double clear_debounce_s)
+{
+  return since_last_stop_s > clear_debounce_s;
 }
 
 /// Corners of a centered forward box `[0, length] x [-width/2, +width/2]`, ordered

@@ -59,7 +59,6 @@ public:
     stop_polygon_topic_ =
       declare_parameter<std::string>("stop_polygon_topic", "collision_monitor/stop_polygon");
     base_frame_ = declare_parameter<std::string>("base_frame", "base_link");
-    stop_speed_eps_ = declare_parameter<double>("stop_speed_eps", 0.05);
     const double viz_rate = declare_parameter<double>("viz_rate", 2.0);
     source_loss_behavior_ = parseSourceLoss(
       declare_parameter<std::string>("source_loss_behavior", "passthrough"));
@@ -85,6 +84,11 @@ public:
       "reverse_duration", 4.0, "Hard backstop: max reverse duration (s), independent of odom.");
     source_timeout_ =
       declareDynamicDouble("source_timeout", 1.0, "Max age of cloud/odom before considered lost (s).");
+    stop_speed_eps_ = declareDynamicDouble(
+      "stop_speed_eps", 0.05, "Forward speed below which the boat counts as stopped (ends reverse brake).");
+    reverse_clear_debounce_ = declareDynamicDouble(
+      "reverse_clear_debounce", 1.0,
+      "Sustained clear time before a reverse-brake episode resets its odom-independent backstop.");
     {
       rcl_interfaces::msg::ParameterDescriptor d;
       d.description =
@@ -136,6 +140,14 @@ public:
     viz_timer_ = create_wall_timer(
       std::chrono::duration<double>(1.0 / rate),
       std::bind(&CaSafetyNode::vizTimerCallback, this));
+
+    // Initialize time members from the node clock so the (guarded) age
+    // subtractions below never mix clock types under use_sim_time.
+    const auto t0 = get_clock()->now();
+    last_cloud_time_ = t0;
+    last_odom_time_ = t0;
+    reverse_start_time_ = t0;
+    last_stop_seen_ = t0;
   }
 
 private:
@@ -158,7 +170,7 @@ private:
     static const std::unordered_set<std::string> names{
       "ttc_time_constant", "slowdown_min_length", "slowdown_max_length", "slowdown_speed_floor",
       "slowdown_width", "stop_length", "stop_width", "reverse_speed", "reverse_distance",
-      "reverse_duration", "source_timeout"};
+      "reverse_duration", "source_timeout", "stop_speed_eps", "reverse_clear_debounce"};
     return names;
   }
 
@@ -206,6 +218,21 @@ private:
         break;
       }
     }
+    if (result.successful) {
+      // Cross-field: the slowdown corridor length range must be ordered.
+      // Reconstruct the effective values from this request plus current state.
+      double eff_min = slowdown_min_length_.load();
+      double eff_max = slowdown_max_length_.load();
+      for (const auto & p : parameters) {
+        double v;
+        if (p.get_name() == "slowdown_min_length" && numericFromParameter(p, v)) {eff_min = v;}
+        if (p.get_name() == "slowdown_max_length" && numericFromParameter(p, v)) {eff_max = v;}
+      }
+      if (eff_min > eff_max) {
+        result.successful = false;
+        result.reason = "slowdown_min_length must be <= slowdown_max_length";
+      }
+    }
     return result;
   }
 
@@ -230,7 +257,9 @@ private:
           n == "reverse_duration")
         {
           reverse_duration_ = v;
-        } else if (n == "source_timeout") {source_timeout_ = v;}
+        } else if (n == "source_timeout") {source_timeout_ = v;} else if (n == "stop_speed_eps") {
+          stop_speed_eps_ = v;
+        } else if (n == "reverse_clear_debounce") {reverse_clear_debounce_ = v;}
       } else if (n == "cancel_yaw_during_reverse" &&
         p.get_type() == rclcpp::ParameterType::PARAMETER_BOOL)
       {
@@ -300,31 +329,48 @@ private:
     }
   }
 
-  void resetReverse() {reverse_active_ = false;}
+  // End a reverse episode only after the Stop zone has been gone for the debounce
+  // window, so a flickering (best-effort) cloud cannot keep restarting the
+  // odom-independent backstop and permit unbounded reverse into the unsensed
+  // stern (F1).
+  void maybeEndReverseEpisode(const rclcpp::Time & t)
+  {
+    if (reverse_active_ &&
+      reverseEpisodeEnded((t - last_stop_seen_).seconds(), reverse_clear_debounce_.load()))
+    {
+      reverse_active_ = false;
+    }
+  }
 
   // Reverse-brake with a hard distance/duration backstop that does NOT depend on
   // odom, so an odom dropout mid-reverse cannot cause aft runaway.
   Twist2 doStop(const Twist2 & in, double speed, bool odom_fresh, const SafetyParams & p)
   {
     const rclcpp::Time t = now();
+    last_stop_seen_ = t;
     if (!reverse_active_) {
       reverse_active_ = true;
       reverse_start_time_ = t;
       reverse_start_has_pose_ = odom_fresh;
       reverse_start_x_ = odom_x_;
       reverse_start_y_ = odom_y_;
+    } else if (!reverse_start_has_pose_ && odom_fresh) {
+      // Odom recovered mid-episode: capture the start pose now so the distance
+      // backstop engages from here rather than staying disabled all episode (F2).
+      reverse_start_has_pose_ = true;
+      reverse_start_x_ = odom_x_;
+      reverse_start_y_ = odom_y_;
     }
-    const bool within_duration = (t - reverse_start_time_).seconds() < reverse_duration_.load();
-    bool within_distance = true;
-    if (odom_fresh && reverse_start_has_pose_) {
-      within_distance =
-        std::hypot(odom_x_ - reverse_start_x_, odom_y_ - reverse_start_y_) < reverse_distance_.load();
-    }
-    const bool reverse_allowed = within_duration && within_distance;
+    const double elapsed = (t - reverse_start_time_).seconds();
+    const bool have_distance = odom_fresh && reverse_start_has_pose_;
+    const double distance =
+      have_distance ? std::hypot(odom_x_ - reverse_start_x_, odom_y_ - reverse_start_y_) : 0.0;
+    const bool allowed = reverseAllowed(
+      elapsed, reverse_duration_.load(), have_distance, distance, reverse_distance_.load());
     // With odom stale we cannot tell we've stopped; keep braking until the
     // duration backstop ends it (treat as still moving).
     const double speed_for_stop = odom_fresh ? speed : std::numeric_limits<double>::infinity();
-    return applyStop(in, speed_for_stop, reverse_allowed, p, stop_speed_eps_);
+    return applyStop(in, speed_for_stop, allowed, p, stop_speed_eps_.load());
   }
 
   void cmdVelCallback(const geometry_msgs::msg::TwistStamped & msg)
@@ -341,8 +387,19 @@ private:
 
     std::vector<Point2> pts;
     const bool cloud_usable = use_cloud && transformCloud(pts);
+    if (cloud_usable && !cloud_fresh) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 2000,
+        "CA safety: acting on stale obstacle data (source_loss_behavior=hold).");
+    }
 
-    const Twist2 in{msg.twist.linear.x, msg.twist.angular.z};
+    // Never let a non-finite upstream command reach the helm.
+    if (!std::isfinite(msg.twist.linear.x) || !std::isfinite(msg.twist.angular.z)) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 2000,
+        "CA safety: non-finite cmd_vel input; zeroing affected components.");
+    }
+    const Twist2 in{finiteOrZero(msg.twist.linear.x), finiteOrZero(msg.twist.angular.z)};
     Twist2 out = in;
     Zone zone = Zone::Clear;
 
@@ -354,12 +411,12 @@ private:
       switch (zone) {
         case Zone::Clear:
           out = in;
-          resetReverse();
+          maybeEndReverseEpisode(t);
           break;
         case Zone::Slowdown:
           out = applySlowdown(
             in, slowdownScale(slow_range, slow_len, p.stop_length), p.slowdown_speed_floor);
-          resetReverse();
+          maybeEndReverseEpisode(t);
           break;
         case Zone::Stop:
           out = doStop(in, speed, odom_fresh, p);
@@ -374,7 +431,7 @@ private:
     } else {
       // Passthrough (default) or no cloud ever received.
       out = in;
-      resetReverse();
+      maybeEndReverseEpisode(t);
       if (have_cloud_) {
         RCLCPP_WARN_THROTTLE(
           get_logger(), *get_clock(), 2000,
@@ -437,7 +494,6 @@ private:
   // Construction-time config.
   std::string cmd_vel_in_topic_, cmd_vel_out_topic_, pointcloud_topic_, odom_topic_, state_topic_;
   std::string slowdown_polygon_topic_, stop_polygon_topic_, base_frame_;
-  double stop_speed_eps_{0.05};
   SourceLoss source_loss_behavior_{SourceLoss::Passthrough};
 
   // Live params.
@@ -445,6 +501,7 @@ private:
   std::atomic<double> slowdown_speed_floor_{0.1}, slowdown_width_{6.0}, stop_length_{5.0};
   std::atomic<double> stop_width_{4.0}, reverse_speed_{0.5}, reverse_distance_{3.0};
   std::atomic<double> reverse_duration_{4.0}, source_timeout_{1.0};
+  std::atomic<double> stop_speed_eps_{0.05}, reverse_clear_debounce_{1.0};
   std::atomic<bool> cancel_yaw_during_reverse_{true}, publish_visualization_{true};
 
   // Cached inputs (single-threaded executor; no extra locking).
@@ -459,6 +516,7 @@ private:
   bool reverse_active_{false};
   bool reverse_start_has_pose_{false};
   rclcpp::Time reverse_start_time_;
+  rclcpp::Time last_stop_seen_;
   double reverse_start_x_{0.0}, reverse_start_y_{0.0};
 
   Zone current_zone_{Zone::Clear};

@@ -16,6 +16,7 @@ import launch_ros.actions
 import launch_testing
 import launch_testing.actions
 from nav2_msgs.msg import CollisionMonitorState
+from nav_msgs.msg import Odometry
 import pytest
 import rclpy
 from rclpy.qos import QoSProfile, ReliabilityPolicy
@@ -111,6 +112,50 @@ class TestCaSafetyNode(unittest.TestCase):
 
         self.assertTrue(braked, 'node did not brake with an obstacle in the stop box')
         self.assertTrue(stop_state, 'no STOP CollisionMonitorState published for CAMP fill')
+
+    def test_closed_loop_stop_with_odom(self):
+        reliable = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE)
+        best_effort = QoSProfile(depth=5, reliability=ReliabilityPolicy.BEST_EFFORT)
+        cmd_pub = self.node.create_publisher(TwistStamped, 'cmd_vel_smoothed', reliable)
+        cloud_pub = self.node.create_publisher(
+            PointCloud2, 'collision_monitor/pointcloud', best_effort)
+        odom_pub = self.node.create_publisher(Odometry, 'odom', reliable)
+        outputs = []
+        self.node.create_subscription(
+            TwistStamped, 'piloting_mode/autonomous/cmd_vel',
+            lambda m: outputs.append(m), reliable)
+        self._spin(1.0)
+
+        def publish(odom_speed):
+            cloud_pub.publish(point_cloud2.create_cloud_xyz32(
+                _header(self.node, 'cloud_frame'), [(3.0, 0.0, 0.0)]))
+            cmd = TwistStamped()
+            cmd.twist.linear.x = 1.0
+            cmd_pub.publish(cmd)
+            odom = Odometry()
+            odom.twist.twist.linear.x = odom_speed
+            odom_pub.publish(odom)
+
+        # Moving forward in the stop box: should command reverse thrust to brake.
+        reversed_seen = False
+        deadline = time.time() + 8.0
+        while time.time() < deadline and not reversed_seen:
+            publish(1.0)
+            self._spin(0.2)
+            if outputs and outputs[-1].twist.linear.x < 0.0:
+                reversed_seen = True
+        self.assertTrue(reversed_seen, 'expected reverse thrust moving forward in stop box')
+
+        # Now report stopped: should hold zero, not keep reversing.
+        outputs.clear()
+        held_zero = False
+        deadline = time.time() + 8.0
+        while time.time() < deadline and not held_zero:
+            publish(0.0)
+            self._spin(0.2)
+            if outputs and outputs[-1].twist.linear.x == 0.0:
+                held_zero = True
+        self.assertTrue(held_zero, 'expected hold-zero once odom reports the boat stopped')
 
     def test_single_output_publisher(self):
         self._spin(1.0)

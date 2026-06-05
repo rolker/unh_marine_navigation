@@ -162,3 +162,40 @@ TEST(ForwardBoxCorners, ProducesCenteredForwardRectangle)
   EXPECT_DOUBLE_EQ(c[2].x, 0.0);
   EXPECT_DOUBLE_EQ(c[2].y, -2.0);
 }
+
+TEST(FiniteOrZero, ZeroesNonFinite)
+{
+  EXPECT_DOUBLE_EQ(finiteOrZero(1.5), 1.5);
+  EXPECT_DOUBLE_EQ(finiteOrZero(-2.0), -2.0);
+  EXPECT_DOUBLE_EQ(finiteOrZero(std::nan("")), 0.0);
+  EXPECT_DOUBLE_EQ(finiteOrZero(std::numeric_limits<double>::infinity()), 0.0);
+  EXPECT_DOUBLE_EQ(finiteOrZero(-std::numeric_limits<double>::infinity()), 0.0);
+}
+
+TEST(ReverseAllowed, BoundedByDurationAlways)
+{
+  // Within both bounds.
+  EXPECT_TRUE(reverseAllowed(1.0, 4.0, true, 1.0, 3.0));
+  // Over duration -> not allowed regardless of distance.
+  EXPECT_FALSE(reverseAllowed(4.0, 4.0, true, 0.0, 3.0));
+  EXPECT_FALSE(reverseAllowed(5.0, 4.0, false, 0.0, 3.0));
+}
+
+TEST(ReverseAllowed, DistanceOnlyWhenAvailable)
+{
+  // Distance over limit, and we have it -> blocked.
+  EXPECT_FALSE(reverseAllowed(1.0, 4.0, true, 3.0, 3.0));
+  EXPECT_FALSE(reverseAllowed(1.0, 4.0, true, 5.0, 3.0));
+  // Same distance but no pose captured (odom was stale) -> only duration bounds,
+  // so still allowed (the F2 degraded-but-bounded path).
+  EXPECT_TRUE(reverseAllowed(1.0, 4.0, false, 5.0, 3.0));
+}
+
+TEST(ReverseEpisodeEnded, RequiresSustainedClear)
+{
+  // Brief flicker out of Stop must NOT end the episode (backstop stays cumulative).
+  EXPECT_FALSE(reverseEpisodeEnded(0.2, 1.0));
+  EXPECT_FALSE(reverseEpisodeEnded(1.0, 1.0));
+  // Sustained clear beyond the debounce ends it.
+  EXPECT_TRUE(reverseEpisodeEnded(1.5, 1.0));
+}
