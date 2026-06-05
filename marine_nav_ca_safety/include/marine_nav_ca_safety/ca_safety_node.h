@@ -60,8 +60,15 @@ public:
       declare_parameter<std::string>("stop_polygon_topic", "collision_monitor/stop_polygon");
     base_frame_ = declare_parameter<std::string>("base_frame", "base_link");
     const double viz_rate = declare_parameter<double>("viz_rate", 2.0);
-    source_loss_behavior_ = parseSourceLoss(
-      declare_parameter<std::string>("source_loss_behavior", "passthrough"));
+    const std::string source_loss = declare_parameter<std::string>(
+      "source_loss_behavior", "passthrough");
+    if (source_loss != "hold" && source_loss != "passthrough" && source_loss != "stop") {
+      RCLCPP_WARN(
+        get_logger(),
+        "CA safety: unknown source_loss_behavior '%s'; using 'passthrough' "
+        "(valid: hold|passthrough|stop).", source_loss.c_str());
+    }
+    source_loss_behavior_ = parseSourceLoss(source_loss);
 
     // --- Live (dynamic) parameters: geometry/reverse tunables + toggles ---
     ttc_time_constant_ = declareDynamicDouble(
@@ -79,9 +86,11 @@ public:
     reverse_speed_ =
       declareDynamicDouble("reverse_speed", 0.5, "Reverse-brake setpoint magnitude (m/s).");
     reverse_distance_ = declareDynamicDouble(
-      "reverse_distance", 3.0, "Hard backstop: max reverse distance (m), independent of odom.");
+      "reverse_distance", 3.0,
+      "Max reverse distance (m). Enforced only while odom pose is available.");
     reverse_duration_ = declareDynamicDouble(
-      "reverse_duration", 4.0, "Hard backstop: max reverse duration (s), independent of odom.");
+      "reverse_duration", 4.0,
+      "Max reverse duration (s). The odom-INDEPENDENT hard backstop (always enforced).");
     source_timeout_ =
       declareDynamicDouble("source_timeout", 1.0, "Max age of cloud/odom before considered lost (s).");
     stop_speed_eps_ = declareDynamicDouble(
@@ -296,9 +305,22 @@ private:
 
   void odomCallback(const nav_msgs::msg::Odometry & msg)
   {
-    measured_speed_ = msg.twist.twist.linear.x;
-    odom_x_ = msg.pose.pose.position.x;
-    odom_y_ = msg.pose.pose.position.y;
+    const double v = msg.twist.twist.linear.x;
+    const double x = msg.pose.pose.position.x;
+    const double y = msg.pose.pose.position.y;
+    // Reject non-finite odom: a NaN speed would make applyStop()'s
+    // `measured_speed > stop_speed_eps` read false and hold zero instead of
+    // braking in the Stop zone. Dropping the sample lets odom age out to stale,
+    // so the reverse brake falls back to the duration backstop (safe).
+    if (!std::isfinite(v) || !std::isfinite(x) || !std::isfinite(y)) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 2000,
+        "CA safety: non-finite odom; sample dropped (odom ages to stale).");
+      return;
+    }
+    measured_speed_ = v;
+    odom_x_ = x;
+    odom_y_ = y;
     have_odom_ = true;
     last_odom_time_ = now();
   }
@@ -465,6 +487,17 @@ private:
 
   void vizTimerCallback()
   {
+    // Sole-helm-publisher diagnostic: exactly this node should publish the helm
+    // topic. >1 means the Collision Monitor (or another node) wasn't removed at
+    // cutover — surface it rather than let two publishers fight the helm silently.
+    const auto helm_pubs = count_publishers(cmd_vel_out_topic_);
+    if (helm_pubs > 1) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 5000,
+        "CA safety: %zu publishers on '%s' — expected only this node "
+        "(Collision Monitor not removed at cutover?).",
+        helm_pubs, cmd_vel_out_topic_.c_str());
+    }
     if (!publish_visualization_.load()) {
       return;
     }

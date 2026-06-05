@@ -85,7 +85,7 @@ Geometry/reverse tunables and the two toggles are **dynamically updatable**
 | `slowdown_width` | 6.0 m | |
 | `stop_length` / `stop_width` | 5.0 / 4.0 m | |
 | `reverse_speed` | 0.5 m/s | reverse-brake setpoint magnitude |
-| `reverse_distance` / `reverse_duration` | 3.0 m / 4.0 s | odom-independent hard backstop |
+| `reverse_distance` / `reverse_duration` | 3.0 m / 4.0 s | reverse backstop; **duration** is the odom-independent bound (always enforced), distance applies only while odom pose is available |
 | `reverse_clear_debounce` | 1.0 s | sustained-clear time before a reverse episode resets its backstop (flicker guard) |
 | `stop_speed_eps` | 0.05 m/s | speed below which the boat counts as stopped (ends reverse brake) |
 | `cancel_yaw_during_reverse` | true | passthrough (false) gated on the sim sign test |

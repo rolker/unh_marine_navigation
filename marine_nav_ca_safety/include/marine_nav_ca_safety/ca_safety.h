@@ -11,7 +11,7 @@ namespace marine_nav_ca_safety
 {
 
 /// A tunable is usable only if finite and positive. A NaN would otherwise slip
-/// past a bare `<= 0` test into arithmetic/clamp (undefined behavior). Shared by
+/// past a bare `<= 0` test and propagate through the arithmetic as NaN. Shared by
 /// the pure logic below and the node's parameter validation.
 inline bool isFinitePositive(double v)
 {

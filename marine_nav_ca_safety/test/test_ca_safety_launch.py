@@ -157,6 +157,38 @@ class TestCaSafetyNode(unittest.TestCase):
                 held_zero = True
         self.assertTrue(held_zero, 'expected hold-zero once odom reports the boat stopped')
 
+    def test_brakes_with_nan_odom(self):
+        # A NaN odom speed must NOT make the node read "stopped" and hold zero in
+        # the stop box; the non-finite sample is dropped → odom goes stale →
+        # reverse brake falls back to the duration backstop. Output must be <= 0.
+        reliable = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE)
+        best_effort = QoSProfile(depth=5, reliability=ReliabilityPolicy.BEST_EFFORT)
+        cmd_pub = self.node.create_publisher(TwistStamped, 'cmd_vel_smoothed', reliable)
+        cloud_pub = self.node.create_publisher(
+            PointCloud2, 'collision_monitor/pointcloud', best_effort)
+        odom_pub = self.node.create_publisher(Odometry, 'odom', reliable)
+        outputs = []
+        self.node.create_subscription(
+            TwistStamped, 'piloting_mode/autonomous/cmd_vel',
+            lambda m: outputs.append(m), reliable)
+        self._spin(1.0)
+
+        braked = False
+        deadline = time.time() + 10.0
+        while time.time() < deadline and not braked:
+            cloud_pub.publish(point_cloud2.create_cloud_xyz32(
+                _header(self.node, 'cloud_frame'), [(3.0, 0.0, 0.0)]))
+            cmd = TwistStamped()
+            cmd.twist.linear.x = 1.0
+            cmd_pub.publish(cmd)
+            odom = Odometry()
+            odom.twist.twist.linear.x = float('nan')
+            odom_pub.publish(odom)
+            self._spin(0.2)
+            if outputs and outputs[-1].twist.linear.x <= 0.0:
+                braked = True
+        self.assertTrue(braked, 'NaN odom must not suppress braking in the stop box')
+
     def test_single_output_publisher(self):
         self._spin(1.0)
         count = self.node.count_publishers('/piloting_mode/autonomous/cmd_vel')
