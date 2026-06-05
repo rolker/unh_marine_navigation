@@ -16,8 +16,8 @@ visualization (CAMP's yellow/red boxes; the fill is driven by a separate
 
 **The node is platform-agnostic.** It lives in the generic `unh_marine_navigation` core,
 so it uses **generic relative topic names and unprefixed frame-param defaults**; all
-namespacing and frame-prefixing (`bizzy/`, the roll/pitch-stabilized `…/base_link_level`
-frame) is applied externally by the launch/config (seafloor#43). This PR delivers the
+namespacing and frame-prefixing (the deployment's namespace + its roll/pitch-stabilized
+`…/base_link_level` frame) is applied externally by the launch/config (seafloor#43). This PR delivers the
 **node + tests only**.
 
 ## Approach
