@@ -18,7 +18,7 @@ issue: 71
 
 ### Findings
 - [x] (must-fix) setPlan stall: a shorter/sparser same-goal re-plan clamped current_segment_ to segment_count (the "done" sentinel), parking the boat — fixed, clamp to segment_count-1 — `crabbing_path_follower.cpp` setPlan
-- [ ] (must-fix, borderline) forward-only cursor can stick too far forward on a non-monotone same-goal path reshape (cursor never backs up); bounded one-segment backward correction proposed, pending design call — `crabbing_path_follower.cpp` computeVelocityCommands scan
+- [x] (must-fix, borderline) forward-stuck-on-reshape — fixed: bounded one-segment backward re-localization (alongTrackProjection, +3 gtests) — `crabbing_path_follower.cpp` scan
 - [x] (suggestion) look-ahead speed-scaled horizon uses commanded speed, not trajectory-derived per-pose speed — documented in-code
 - [x] (suggestion) progress passed as start_offset can be negative; lookaheadPoint clamps to 0 (horizon measured from segment start) — documented in-code
 
