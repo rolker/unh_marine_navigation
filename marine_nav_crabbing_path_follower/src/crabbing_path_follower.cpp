@@ -389,10 +389,12 @@ void CrabbingPathFollower::publish_visualization(
   colors[0].g = 0.25;
   colors[0].b = 0.25;
   colors[0].a = 0.5;
-  // current_color
-  colors[1].r = 0.25;
-  colors[1].g = 0.75;
-  colors[1].b = 0.25;
+  // current_color — magenta, not green: CAMP reserves red/green for the plan's
+  // editable/locked state (waypoint.cpp darkRed/darkGreen), so the active
+  // segment uses magenta to stay distinct from a locked (sent) plan line.
+  colors[1].r = 0.85;
+  colors[1].g = 0.1;
+  colors[1].b = 0.85;
   colors[1].a = 0.75;
   // future_color
   colors[2].r = 0.25;
