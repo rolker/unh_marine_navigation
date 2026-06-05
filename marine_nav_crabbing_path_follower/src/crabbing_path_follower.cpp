@@ -256,7 +256,21 @@ void CrabbingPathFollower::configure(
       double v = target.load();
       const std::string pname = plugin_name_ + suffix;
       nav2_util::declare_parameter_if_not_declared(node, pname, rclcpp::ParameterValue(v));
-      node->get_parameter(pname, v);
+      // Read generically and coerce integer -> double so `max_yaw_rate: 1` in
+      // YAML (parsed as an integer) doesn't throw InvalidParameterTypeException
+      // — the same operator footgun handled for default_speed above.
+      const rclcpp::Parameter param = node->get_parameter(pname);
+      const auto ptype = param.get_type();
+      if (ptype == rclcpp::ParameterType::PARAMETER_DOUBLE) {
+        v = param.as_double();
+      } else if (ptype == rclcpp::ParameterType::PARAMETER_INTEGER) {
+        v = static_cast<double>(param.as_int());
+      } else {
+        RCLCPP_WARN(
+          logger_, "CrabbingPathFollower: %s has non-numeric type; keeping %.3f",
+          pname.c_str(), target.load());
+        return;
+      }
       if (std::isfinite(v) && (exclusive_lo ? v > lo : v >= lo)) {
         target.store(v);
       } else {
