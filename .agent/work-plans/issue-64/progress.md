@@ -37,3 +37,23 @@ issue: 64
 - [ ] Stale/absent pointcloud behavior (passthrough / hold-last / fail-safe stop)
 - [ ] Confirm cmd_vel message type is TwistStamped against the live chain
 - [ ] Capture the safety-behavior decision (PR rationale vs project docs/decisions)
+
+## Plan Review
+**Status**: complete
+**When**: 2026-06-04 20:51 -04:00
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context)) (in-context — author self-review; incorporated an independent fresh-context sub-review)
+
+**Plan**: `.agent/work-plans/issue-64/plan.md` at `675dee1`
+**PR**: https://github.com/rolker/unh_marine_navigation/pull/68
+**Verdict**: changes-requested
+
+### Findings
+- [ ] (must-fix) Reflex cloud is in `bizzy/base_link_level` (stabilized, tf_prefixed), not `base_link`; add `tf2_sensor_msgs` dep + name the transform mechanism + handle tf_prefix + level-vs-base distinction — plan.md:31,33,70,84
+- [ ] (must-fix) Specify QoS per endpoint (pointcloud best-effort/sensor-data; state+polygons reliable depth1; cmd_vel matched to smoother/echo_helm) — stack has silent QoS-mismatch history (#56) — plan.md:32-48,70-77
+- [ ] (must-fix) Drive viz + CollisionMonitorState from an independent ~1-2 Hz timer, not piggybacked on cmd_vel (CAMP 2 s watchdog blanks fills if cmd_vel pauses); state cmd_vel_out behavior when input stops — plan.md:34,46-47
+- [ ] (must-fix) Sole-helm-publisher invariant + CM→node cutover ordering as explicit risk (wiring in seafloor#43); note CM-as-passthrough on non-reflex boats — plan.md:19-20,83
+- [ ] (must-fix) Make sim/integration validation concrete (scenarios+acceptance or launch_testing); GATE the reverse-yaw-passthrough path off until the yaw-sign-in-reverse sim test passes (issue's stated blocker, currently demoted to a live toggle) — plan.md:38,60-61,106,137
+- [ ] (suggestion) Rename package `marine_nav_ca_safety` (executable `ca_safety_node`) per REP-144 — plan.md:24,68,71
+- [ ] (suggestion) Justify the `nav2_msgs` coupling (one line) — plan.md:70
+- [ ] (suggestion) Specify odom-loss handling in reverse: duration/distance hard backstop independent of odom — plan.md:36-38,49-51
+- [ ] (suggestion) Add launch_testing artifact to Files table if adopting the integration-test finding — plan.md:66-77
