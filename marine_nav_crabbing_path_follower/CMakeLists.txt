@@ -11,6 +11,7 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(control_toolbox REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(marine_nav_utilities REQUIRED)
 find_package(nav2_core REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
@@ -36,6 +37,7 @@ target_compile_definitions(${PROJECT_NAME} PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNC
 
 ament_target_dependencies(${PROJECT_NAME}
   control_toolbox
+  geometry_msgs
   marine_nav_utilities
   nav2_core
   nav2_costmap_2d
@@ -62,6 +64,12 @@ install(FILES plugin.xml
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
+
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_path_geometry test/test_path_geometry.cpp)
+  target_include_directories(test_path_geometry PRIVATE
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
+  ament_target_dependencies(test_path_geometry geometry_msgs)
 endif()
 
 ament_package()

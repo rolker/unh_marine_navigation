@@ -1,7 +1,10 @@
 #include "marine_nav_crabbing_path_follower/crabbing_path_follower.h"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
+
+#include "marine_nav_crabbing_path_follower/path_geometry.hpp"
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav2_util/node_utils.hpp"
@@ -173,6 +176,23 @@ void CrabbingPathFollower::configure(
 
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".transform_tolerance", rclcpp::ParameterValue(transform_tolerance_));
   node->get_parameter(plugin_name_ + ".transform_tolerance", transform_tolerance_);
+
+  // Inner heading loop + pure-pursuit look-ahead (see header). All defaults
+  // reproduce the historical segment-azimuth behaviour, so nothing changes
+  // until these are tuned on the water.
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".heading_rate_gain", rclcpp::ParameterValue(heading_rate_gain_));
+  node->get_parameter(plugin_name_ + ".heading_rate_gain", heading_rate_gain_);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".max_yaw_rate", rclcpp::ParameterValue(max_yaw_rate_));
+  node->get_parameter(plugin_name_ + ".max_yaw_rate", max_yaw_rate_);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".lookahead_distance", rclcpp::ParameterValue(lookahead_distance_));
+  node->get_parameter(plugin_name_ + ".lookahead_distance", lookahead_distance_);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".lookahead_time", rclcpp::ParameterValue(lookahead_time_));
+  node->get_parameter(plugin_name_ + ".lookahead_time", lookahead_time_);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".lookahead_min_distance", rclcpp::ParameterValue(lookahead_min_distance_));
+  node->get_parameter(plugin_name_ + ".lookahead_min_distance", lookahead_min_distance_);
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".new_plan_goal_tolerance", rclcpp::ParameterValue(new_plan_goal_tolerance_));
+  node->get_parameter(plugin_name_ + ".new_plan_goal_tolerance", new_plan_goal_tolerance_);
+
   global_pub_ = node->create_publisher<nav_msgs::msg::Path>("received_global_plan", 1);
 }
 
@@ -218,18 +238,38 @@ void CrabbingPathFollower::setSpeedLimit(
 void CrabbingPathFollower::setPlan(const nav_msgs::msg::Path & path)
 {
   global_pub_->publish(path);
-  global_plan_ = path;
-  current_segment_ = 0;
-  // Intentionally do NOT reset the PID here. A decorator controller
+
+  // Progress-preserving localization. The avoidance decorator
   // (marine_nav_avoidance_controller, #59) re-issues setPlan every control
-  // cycle to feed a freshly reshaped path; an unconditional reset would wipe
-  // the cross-track integrator each tick and destroy crab compensation. The
-  // PID is instead reset only when it has gone stale — idle longer than
-  // pid_reset_threshold_ ("N seconds") — by the staleness guard in
-  // computeVelocityCommands, which is the genuine "new goal after a pause"
-  // case. current_segment_ is reset to 0 and re-advanced by the forward scan
-  // in computeVelocityCommands, so a same-tick re-plan still localises onto
-  // the boat's current segment.
+  // cycle with a freshly reshaped — but same-goal — path; a same-goal replan
+  // (IsPathValid failure) does likewise. Resetting current_segment_ to 0 each
+  // time made the forward scan in computeVelocityCommands re-localise from the
+  // path start, which during a weave/loop snaps the cursor *backward* and steps
+  // the cross-track reference 5-9 m (kicking the PID — root-caused 2026-06-04).
+  // Keep the cursor across same-goal re-issues; reset only when the goal (final
+  // pose) moves more than new_plan_goal_tolerance_ — a genuinely new line — so
+  // each new line still starts from its beginning. The PID is likewise not
+  // reset here (only by the staleness guard in computeVelocityCommands).
+  const auto & poses = path.poses;
+  bool new_line = true;
+  if (!poses.empty() && have_last_goal_) {
+    const auto & g = poses.back().pose.position;
+    const double moved = std::hypot(g.x - last_goal_.x, g.y - last_goal_.y);
+    new_line = moved > new_plan_goal_tolerance_;
+  }
+  if (new_line || current_segment_ < 0) {
+    current_segment_ = 0;
+  }
+  const int segment_count = std::max<int>(0, static_cast<int>(poses.size()) - 1);
+  if (current_segment_ > segment_count) {
+    current_segment_ = segment_count;  // new path is shorter than our progress
+  }
+  if (!poses.empty()) {
+    last_goal_ = poses.back().pose.position;
+    have_last_goal_ = true;
+  }
+
+  global_plan_ = path;
 }
 
 
@@ -349,9 +389,34 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
 
   RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: progress: " << progress << " cross_track_error: " << cross_track_error << " crab_angle: " << crab_angle.value() << " heading: " << heading.value() << " segment_azimuth: " << segment_azimuth.value());
 
-  AngleRadians target_heading = segment_azimuth +	crab_angle;
+  // Base heading: the local segment azimuth (default), or — with look-ahead
+  // enabled — the pure-pursuit bearing to a point `lookahead` metres ahead on
+  // the path, which anticipates bends instead of reacting to them. The look-
+  // ahead distance is fixed (lookahead_distance_) or speed-scaled
+  // (lookahead_time_ > 0: L = max(lookahead_min_distance_, V*time)).
+  AngleRadians base_heading = segment_azimuth;
+  double lookahead = lookahead_distance_;
+  if (lookahead_time_ > 0.0) {
+    lookahead = std::max(lookahead_min_distance_, target_speed * lookahead_time_);
+  }
+  if (lookahead > 0.0) {
+    const auto la = lookaheadPoint(
+      global_plan_.poses, current_segment_, progress, lookahead);
+    base_heading = AngleRadians(atan2(
+      la.y - pose_in_plan.pose.position.y,
+      la.x - pose_in_plan.pose.position.x));
+  }
 
-  cmd_vel.twist.angular.z = AngleRadiansZeroCentered(target_heading-heading).value();
+  AngleRadians target_heading = base_heading + crab_angle;
+
+  // Inner heading loop: proportional heading-error -> yaw rate, with a tunable
+  // gain and a clamp to the achievable yaw envelope. Defaults (gain 1.0, clamp
+  // +/-pi) reproduce the previous ZeroCentered-wrap behaviour. The
+  // velocity_smoother still enforces the physical rate/accel limits downstream.
+  const double heading_error =
+    AngleRadiansZeroCentered(target_heading - heading).value();
+  cmd_vel.twist.angular.z =
+    std::clamp(heading_rate_gain_ * heading_error, -max_yaw_rate_, max_yaw_rate_);
 
   rclcpp::Time segment_start_time = p1.header.stamp;
   rclcpp::Time segment_end_time = p2.header.stamp;
