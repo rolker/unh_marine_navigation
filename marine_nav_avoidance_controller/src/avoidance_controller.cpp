@@ -87,8 +87,11 @@ visualization_msgs::msg::MarkerArray buildAvoidanceMarkers(
   }
   arr.markers.push_back(adjusted_m);
 
+  // Amber, not red: CAMP reserves red/green for the plan's editable/locked
+  // state (waypoint.cpp darkRed/darkGreen), so the active-deviation band uses
+  // an amber "caution" hue to stay distinct from an editable plan line.
   auto band_m = base(2, visualization_msgs::msg::Marker::LINE_LIST, 1.6,
-      1.0, 0.15, 0.1, 0.9);
+      1.0, 0.6, 0.0, 0.9);
   for (std::size_t i = 0; i + 1 < stations.size(); ++i) {
     if (std::abs(offsets_d[i]) >= kDeviationEpsilon &&
       std::abs(offsets_d[i + 1]) >= kDeviationEpsilon)
@@ -102,7 +105,7 @@ visualization_msgs::msg::MarkerArray buildAvoidanceMarkers(
   }
 
   auto text_m = base(3, visualization_msgs::msg::Marker::TEXT_VIEW_FACING, 1.0,
-      1.0, 0.2, 0.15, 1.0);
+      1.0, 0.6, 0.0, 1.0);  // amber, matching the deviation band (see above)
   text_m.scale.z = 3.0;
   text_m.text = "AVOIDING";
   text_m.pose.position = adjusted_point(peak_i);

@@ -243,10 +243,13 @@ void Hover::publish_visualization(rclcpp::Time time)
   marker.type = visualization_msgs::msg::Marker::SPHERE;
   marker.pose.position =  target.pose.position;
   marker.pose.orientation.w = 1.0;
-  marker.color.r = 0.0;
-  marker.color.g = 1.0;
-  marker.color.b = 0.0;
-  marker.color.a = .75;
+  // Violet, not green, and more transparent: CAMP reserves red/green for the
+  // plan's editable/locked state (waypoint.cpp), so the hover radius uses a
+  // violet hue, dimmed so it doesn't dominate the chart underneath.
+  marker.color.r = 0.6;
+  marker.color.g = 0.2;
+  marker.color.b = 0.8;
+  marker.color.a = .35;
   marker.scale.x =  2.0*maximum_radius_;
   marker.scale.y = 2.0*maximum_radius_;
   marker.scale.z = 0.01;
@@ -262,10 +265,10 @@ void Hover::publish_visualization(rclcpp::Time time)
   inmarker.type = visualization_msgs::msg::Marker::SPHERE;
   inmarker.pose.position =  target.pose.position;
   inmarker.pose.orientation.w = 1.0;
-  inmarker.color.r = 0.0;
-  inmarker.color.g = 1.0;
-  inmarker.color.b = 0.2;
-  inmarker.color.a = .75;
+  inmarker.color.r = 0.7;
+  inmarker.color.g = 0.3;
+  inmarker.color.b = 0.9;
+  inmarker.color.a = .35;  // violet (see outer marker), dimmed
   inmarker.scale.x =  2.0*minimum_radius_;
   inmarker.scale.y = 2.0*minimum_radius_;
   inmarker.scale.z = 0.01;
