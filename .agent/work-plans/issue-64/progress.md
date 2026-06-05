@@ -22,3 +22,18 @@ issue: 64
 - [ ] Capture the safety-behavior decision (replace CM + autonomous reverse near obstacles) durably; operator-visible/configurable/abortable (CAMP annunciation)
 - [ ] Coordinate speed-scaled polygon config with seafloor #3 (model split, in flight); principled fix tracked at seafloor #42
 - [ ] Add /odom (mavros local_position/velocity_body) subscription; wire back-off into run_tasks.xml RecoveryNode
+
+## Plan Authored
+**Status**: complete
+**When**: 2026-06-04 20:08 -04:00
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+
+**Plan**: `.agent/work-plans/issue-64/plan.md` at `5ebde97`
+**PR**: https://github.com/rolker/unh_marine_navigation/pull/68 (`[PLAN]` prefix)
+**Phases**: single
+
+### Open questions
+- [ ] Replace vs augment the nav2 Collision Monitor (plan assumes replace)
+- [ ] Stale/absent pointcloud behavior (passthrough / hold-last / fail-safe stop)
+- [ ] Confirm cmd_vel message type is TwistStamped against the live chain
+- [ ] Capture the safety-behavior decision (PR rationale vs project docs/decisions)
