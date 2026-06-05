@@ -28,3 +28,24 @@ issue: 71
 
 ### Backward-compat (verified)
 Defaults (lookahead 0, gain 1.0, max_yaw_rate π) reproduce the prior behaviour exactly; the localization change in setPlan is intentionally always-on (the teleport bug fix).
+
+## Integrated Review
+**Status**: complete
+**When**: 2026-06-05 02:55 -04:00
+**By**: Claude Code Agent (Claude Opus 4.8)
+
+**PR**: #72 at `4bdc23a`
+**Sources**: 2 (Copilot R3 @ `2b6951c`, prior Local Review)
+**Cross-source confirmations**: 2
+
+### Findings
+- [x] (cross-confirmed: Copilot + Local Review) stall on shorter same-goal re-plan (clamp to "done" sentinel) — fixed earlier (clamp to segment_count-1)
+- [x] (cross-confirmed: Copilot + Local Review) forward-stuck cursor on same-goal reshape — fixed earlier (bounded one-segment backward re-localization)
+- [x] (valid, Copilot) new tuning params unvalidated → `std::clamp` lo>hi UB / NaN into cmd_vel — fixed: params now live-tunable + finite/lower-bound validated, atomic — `crabbing_path_follower.cpp`
+- [x] (valid, Copilot) gtest target setup unconditional (breaks when GTest disabled) — fixed: `if(TARGET ...)` guard — `CMakeLists.txt`
+
+### False positives
+- (Copilot) setPlan mutates plan/cursor without a mutex → data race — Nav2's controller_server serializes setPlan() and computeVelocityCommands() on one thread (only the param-service callback is cross-thread, handled via the atomics). No new race; matches the existing design.
+
+### Bonus
+The validation fix doubled as the on-water-tuning enabler: the new params are now settable via `ros2 param set` (previously configure-time only).
