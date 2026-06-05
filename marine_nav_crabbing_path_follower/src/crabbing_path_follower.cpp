@@ -1,7 +1,10 @@
 #include "marine_nav_crabbing_path_follower/crabbing_path_follower.h"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
+
+#include "marine_nav_crabbing_path_follower/path_geometry.hpp"
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav2_util/node_utils.hpp"
@@ -113,10 +116,42 @@ void CrabbingPathFollower::configure(
     [this, default_speed_name](const std::vector<rclcpp::Parameter> & params) {
       rcl_interfaces::msg::SetParametersResult result;
       result.successful = true;
-      for (const auto & p : params) {
-        if (p.get_name() != default_speed_name) {
-          continue;
+
+      // Coerce a numeric (double or integer) parameter; sets result.reason and
+      // returns false for a non-numeric type.
+      auto as_number = [&result](const rclcpp::Parameter & p, double & out) -> bool {
+        const auto t = p.get_type();
+        if (t == rclcpp::ParameterType::PARAMETER_DOUBLE) {out = p.as_double(); return true;}
+        if (t == rclcpp::ParameterType::PARAMETER_INTEGER) {
+          out = static_cast<double>(p.as_int());
+          return true;
         }
+        result.successful = false;
+        result.reason = p.get_name() +
+          " must be numeric (double or integer); got '" + p.value_to_string() + "'";
+        return false;
+      };
+      // Validate (finite + lower bound) and live-update one tuning atomic.
+      auto update = [this, &result](
+          std::atomic<double> & target, double v, double lo, bool exclusive_lo,
+          const char * pn) -> bool {
+        if (!(std::isfinite(v) && (exclusive_lo ? v > lo : v >= lo))) {
+          result.successful = false;
+          result.reason = std::string(pn) + " must be finite and " +
+            (exclusive_lo ? "> " : ">= ") + std::to_string(lo) + "; got " + std::to_string(v);
+          return false;
+        }
+        const double prev = target.load();
+        if (v != prev) {
+          target.store(v);
+          RCLCPP_INFO(logger_, "CrabbingPathFollower: %s updated %.3f -> %.3f", pn, prev, v);
+        }
+        return true;
+      };
+      const std::string base = plugin_name_;
+      for (const auto & p : params) {
+        const std::string & name = p.get_name();
+        if (name == default_speed_name) {
         // Accept PARAMETER_DOUBLE and PARAMETER_INTEGER (CLI `ros2 param set
         // ... 2` parses as integer; common operator mistake worth coercing).
         // Reject other types explicitly so callers see the error instead of
@@ -159,6 +194,43 @@ void CrabbingPathFollower::configure(
             "CrabbingPathFollower: default_speed updated %.3f -> %.3f m/s",
             prev_value, new_value);
         }
+        } else if (name == base + ".heading_rate_gain") {
+          double v;
+          if (!as_number(p, v) || !update(heading_rate_gain_, v, 0.0, true, "heading_rate_gain")) {
+            return result;
+          }
+        } else if (name == base + ".max_yaw_rate") {
+          double v;
+          if (!as_number(p, v) || !update(max_yaw_rate_, v, 0.0, true, "max_yaw_rate")) {
+            return result;
+          }
+        } else if (name == base + ".lookahead_distance") {
+          double v;
+          if (!as_number(p, v) ||
+            !update(lookahead_distance_, v, 0.0, false, "lookahead_distance"))
+          {
+            return result;
+          }
+        } else if (name == base + ".lookahead_time") {
+          double v;
+          if (!as_number(p, v) || !update(lookahead_time_, v, 0.0, false, "lookahead_time")) {
+            return result;
+          }
+        } else if (name == base + ".lookahead_min_distance") {
+          double v;
+          if (!as_number(p, v) ||
+            !update(lookahead_min_distance_, v, 0.0, false, "lookahead_min_distance"))
+          {
+            return result;
+          }
+        } else if (name == base + ".new_plan_goal_tolerance") {
+          double v;
+          if (!as_number(p, v) ||
+            !update(new_plan_goal_tolerance_, v, 0.0, false, "new_plan_goal_tolerance"))
+          {
+            return result;
+          }
+        }
       }
       return result;
     });
@@ -173,6 +245,47 @@ void CrabbingPathFollower::configure(
 
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".transform_tolerance", rclcpp::ParameterValue(transform_tolerance_));
   node->get_parameter(plugin_name_ + ".transform_tolerance", transform_tolerance_);
+
+  // Inner heading loop + pure-pursuit look-ahead (see header). All defaults
+  // reproduce the historical segment-azimuth behaviour, so nothing changes
+  // until tuned. Declared + validated here, kept live-tunable by the parameter
+  // callback below (same finite/lower-bound validation). exclusive_lo gates
+  // ">lo" (gains, max_yaw_rate) vs ">=lo" (look-ahead distances / tolerance).
+  auto read_validated = [&](const std::string & suffix, std::atomic<double> & target,
+      double lo, bool exclusive_lo) {
+      double v = target.load();
+      const std::string pname = plugin_name_ + suffix;
+      nav2_util::declare_parameter_if_not_declared(node, pname, rclcpp::ParameterValue(v));
+      // Read generically and coerce integer -> double so `max_yaw_rate: 1` in
+      // YAML (parsed as an integer) doesn't throw InvalidParameterTypeException
+      // — the same operator footgun handled for default_speed above.
+      const rclcpp::Parameter param = node->get_parameter(pname);
+      const auto ptype = param.get_type();
+      if (ptype == rclcpp::ParameterType::PARAMETER_DOUBLE) {
+        v = param.as_double();
+      } else if (ptype == rclcpp::ParameterType::PARAMETER_INTEGER) {
+        v = static_cast<double>(param.as_int());
+      } else {
+        RCLCPP_WARN(
+          logger_, "CrabbingPathFollower: %s has non-numeric type; keeping %.3f",
+          pname.c_str(), target.load());
+        return;
+      }
+      if (std::isfinite(v) && (exclusive_lo ? v > lo : v >= lo)) {
+        target.store(v);
+      } else {
+        RCLCPP_WARN(
+          logger_, "CrabbingPathFollower: %s=%.3f invalid; keeping %.3f",
+          pname.c_str(), v, target.load());
+      }
+    };
+  read_validated(".heading_rate_gain", heading_rate_gain_, 0.0, true);
+  read_validated(".max_yaw_rate", max_yaw_rate_, 0.0, true);
+  read_validated(".lookahead_distance", lookahead_distance_, 0.0, false);
+  read_validated(".lookahead_time", lookahead_time_, 0.0, false);
+  read_validated(".lookahead_min_distance", lookahead_min_distance_, 0.0, false);
+  read_validated(".new_plan_goal_tolerance", new_plan_goal_tolerance_, 0.0, false);
+
   global_pub_ = node->create_publisher<nav_msgs::msg::Path>("received_global_plan", 1);
 }
 
@@ -218,18 +331,42 @@ void CrabbingPathFollower::setSpeedLimit(
 void CrabbingPathFollower::setPlan(const nav_msgs::msg::Path & path)
 {
   global_pub_->publish(path);
-  global_plan_ = path;
-  current_segment_ = 0;
-  // Intentionally do NOT reset the PID here. A decorator controller
+
+  // Progress-preserving localization. The avoidance decorator
   // (marine_nav_avoidance_controller, #59) re-issues setPlan every control
-  // cycle to feed a freshly reshaped path; an unconditional reset would wipe
-  // the cross-track integrator each tick and destroy crab compensation. The
-  // PID is instead reset only when it has gone stale — idle longer than
-  // pid_reset_threshold_ ("N seconds") — by the staleness guard in
-  // computeVelocityCommands, which is the genuine "new goal after a pause"
-  // case. current_segment_ is reset to 0 and re-advanced by the forward scan
-  // in computeVelocityCommands, so a same-tick re-plan still localises onto
-  // the boat's current segment.
+  // cycle with a freshly reshaped — but same-goal — path; a same-goal replan
+  // (IsPathValid failure) does likewise. Resetting current_segment_ to 0 each
+  // time made the forward scan in computeVelocityCommands re-localise from the
+  // path start, which during a weave/loop snaps the cursor *backward* and steps
+  // the cross-track reference 5-9 m (kicking the PID — root-caused 2026-06-04).
+  // Keep the cursor across same-goal re-issues; reset only when the goal (final
+  // pose) moves more than new_plan_goal_tolerance_ — a genuinely new line — so
+  // each new line still starts from its beginning. The PID is likewise not
+  // reset here (only by the staleness guard in computeVelocityCommands).
+  const auto & poses = path.poses;
+  bool new_line = true;
+  if (!poses.empty() && have_last_goal_) {
+    const auto & g = poses.back().pose.position;
+    const double moved = std::hypot(g.x - last_goal_.x, g.y - last_goal_.y);
+    new_line = moved > new_plan_goal_tolerance_.load();
+  }
+  if (new_line || current_segment_ < 0) {
+    current_segment_ = 0;
+  }
+  const int segment_count = std::max<int>(0, static_cast<int>(poses.size()) - 1);
+  if (current_segment_ > segment_count) {
+    // A sparser/shorter same-goal re-plan left the cursor past the new path.
+    // Re-localize onto the last *traversable* segment, not segment_count —
+    // current_segment_ == segment_count is the "done" sentinel in
+    // computeVelocityCommands, which would stall the boat (zero cmd_vel).
+    current_segment_ = std::max(0, segment_count - 1);
+  }
+  if (!poses.empty()) {
+    last_goal_ = poses.back().pose.position;
+    have_last_goal_ = true;
+  }
+
+  global_plan_ = path;
 }
 
 
@@ -292,6 +429,25 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
   geometry_msgs::msg::PoseStamped p2;
   AngleRadians segment_azimuth;
 
+  // Bounded backward re-localization (at most one segment per cycle). The
+  // forward scan below only ever advances the cursor; if a same-goal path
+  // reshape moved a vertex *ahead* of the boat, the cursor would stay too far
+  // forward and measure cross-track against a segment the boat hasn't reached.
+  // If the boat now projects behind the current segment's start, step back one
+  // segment. The single-step bound is deliberate: it lets a reshape re-localize
+  // without a weave/loop snapping the cursor all the way back to the start (the
+  // regression this change fixes). current_segment_ is in [1, segment_count-1]
+  // inside this guard, so indexing current_segment_+1 stays in range.
+  if (current_segment_ > 0) {
+    const double proj = alongTrackProjection(
+      global_plan_.poses[current_segment_].pose.position,
+      global_plan_.poses[current_segment_ + 1].pose.position,
+      pose_in_plan.pose.position);
+    if (proj < 0.0) {
+      current_segment_--;
+    }
+  }
+
   bool current_segment_is_good = false;
 
   while(!current_segment_is_good)
@@ -349,9 +505,49 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
 
   RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: progress: " << progress << " cross_track_error: " << cross_track_error << " crab_angle: " << crab_angle.value() << " heading: " << heading.value() << " segment_azimuth: " << segment_azimuth.value());
 
-  AngleRadians target_heading = segment_azimuth +	crab_angle;
+  // Base heading: the local segment azimuth (default), or — with look-ahead
+  // enabled — the pure-pursuit bearing to a point `lookahead` metres ahead on
+  // the path, which anticipates bends instead of reacting to them. The look-
+  // ahead distance is fixed (lookahead_distance_) or speed-scaled
+  // (lookahead_time_ > 0: L = max(lookahead_min_distance_, V*time)).
+  // Snapshot the live-tunable atomics once so a mid-cycle `ros2 param set`
+  // can't tear the control law.
+  const double lookahead_distance = lookahead_distance_.load();
+  const double lookahead_time = lookahead_time_.load();
+  const double lookahead_min_distance = lookahead_min_distance_.load();
 
-  cmd_vel.twist.angular.z = AngleRadiansZeroCentered(target_heading-heading).value();
+  AngleRadians base_heading = segment_azimuth;
+  double lookahead = lookahead_distance;
+  if (lookahead_time > 0.0) {
+    // Speed-scaled horizon. Note target_speed here is the commanded speed
+    // (default_speed / speed-limit); the per-pose-timestamp trajectory speed
+    // is derived later (below), so lookahead_time scales off the commanded
+    // speed, not the trajectory-derived one.
+    lookahead = std::max(lookahead_min_distance, target_speed * lookahead_time);
+  }
+  if (lookahead > 0.0) {
+    // progress is the boat's signed projection along the current segment; it is
+    // clamped to [0, seg_len] inside lookaheadPoint, so a boat sitting behind
+    // the segment start measures the horizon from the segment start.
+    const auto la = lookaheadPoint(
+      global_plan_.poses, current_segment_, progress, lookahead);
+    base_heading = AngleRadians(atan2(
+      la.y - pose_in_plan.pose.position.y,
+      la.x - pose_in_plan.pose.position.x));
+  }
+
+  AngleRadians target_heading = base_heading + crab_angle;
+
+  // Inner heading loop: proportional heading-error -> yaw rate, with a tunable
+  // gain and a clamp to the achievable yaw envelope. Defaults (gain 1.0, clamp
+  // +/-pi) reproduce the previous ZeroCentered-wrap behaviour. The
+  // velocity_smoother still enforces the physical rate/accel limits downstream.
+  const double heading_error =
+    AngleRadiansZeroCentered(target_heading - heading).value();
+  const double heading_rate_gain = heading_rate_gain_.load();
+  const double max_yaw_rate = max_yaw_rate_.load();
+  cmd_vel.twist.angular.z =
+    std::clamp(heading_rate_gain * heading_error, -max_yaw_rate, max_yaw_rate);
 
   rclcpp::Time segment_start_time = p1.header.stamp;
   rclcpp::Time segment_end_time = p2.header.stamp;
