@@ -57,3 +57,24 @@ issue: 64
 - [ ] (suggestion) Justify the `nav2_msgs` coupling (one line) — plan.md:70
 - [ ] (suggestion) Specify odom-loss handling in reverse: duration/distance hard backstop independent of odom — plan.md:36-38,49-51
 - [ ] (suggestion) Add launch_testing artifact to Files table if adopting the integration-test finding — plan.md:66-77
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-06-04 22:33 -04:00
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+**Verdict**: changes-requested
+
+**Branch**: feature/issue-64 at `e2e811f`
+**Mode**: pre-push
+**Depth**: Deep (reason: safety-critical, replaces sole helm publisher)
+**Must-fix**: 4 | **Suggestions**: 4
+
+### Findings
+- [ ] (must-fix) Reverse backstop resets on transient declassification → runaway into unsensed stern (Claude+Copilot cross-confirmed) — `ca_safety_node.h` doStop/resetReverse
+- [ ] (must-fix) Distance backstop permanently disabled if odom stale at reverse start (Claude+Copilot) — `ca_safety_node.h:313`
+- [ ] (must-fix) Unvalidated input twist (NaN/inf) propagates to helm (Copilot) — `ca_safety_node.h` cmdVelCallback
+- [ ] (must-fix) stop_speed_eps unvalidated, not dynamic (Claude) — `ca_safety_node.h:62`
+- [ ] (suggestion) Enforce slowdown min<=max cross-field (Claude+Copilot)
+- [ ] (suggestion) source_loss hold uses stale cloud indefinitely — warn (Copilot)
+- [ ] (suggestion) Default rclcpp::Time members clock-type fragile — init from clock (Claude)
+- [ ] (suggestion) Integration test missing closed-loop stop + flicker coverage (Claude+Copilot)
