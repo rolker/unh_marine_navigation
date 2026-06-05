@@ -1,5 +1,5 @@
-#ifndef MARINE_NAV_CRABBING_PATH_FOLLOWER_PATH_GEOMETRY_H
-#define MARINE_NAV_CRABBING_PATH_FOLLOWER_PATH_GEOMETRY_H
+#ifndef MARINE_NAV_CRABBING_PATH_FOLLOWER__PATH_GEOMETRY_HPP_
+#define MARINE_NAV_CRABBING_PATH_FOLLOWER__PATH_GEOMETRY_HPP_
 
 #include <algorithm>
 #include <cmath>
@@ -63,4 +63,4 @@ inline geometry_msgs::msg::Point lookaheadPoint(
 
 }  // namespace marine_nav_crabbing_path_follower
 
-#endif  // MARINE_NAV_CRABBING_PATH_FOLLOWER_PATH_GEOMETRY_H
+#endif  // MARINE_NAV_CRABBING_PATH_FOLLOWER__PATH_GEOMETRY_HPP_

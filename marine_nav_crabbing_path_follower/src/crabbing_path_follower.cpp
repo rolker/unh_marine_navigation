@@ -262,7 +262,11 @@ void CrabbingPathFollower::setPlan(const nav_msgs::msg::Path & path)
   }
   const int segment_count = std::max<int>(0, static_cast<int>(poses.size()) - 1);
   if (current_segment_ > segment_count) {
-    current_segment_ = segment_count;  // new path is shorter than our progress
+    // A sparser/shorter same-goal re-plan left the cursor past the new path.
+    // Re-localize onto the last *traversable* segment, not segment_count —
+    // current_segment_ == segment_count is the "done" sentinel in
+    // computeVelocityCommands, which would stall the boat (zero cmd_vel).
+    current_segment_ = std::max(0, segment_count - 1);
   }
   if (!poses.empty()) {
     last_goal_ = poses.back().pose.position;
@@ -397,9 +401,16 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
   AngleRadians base_heading = segment_azimuth;
   double lookahead = lookahead_distance_;
   if (lookahead_time_ > 0.0) {
+    // Speed-scaled horizon. Note target_speed here is the commanded speed
+    // (default_speed / speed-limit); the per-pose-timestamp trajectory speed
+    // is derived later (below), so lookahead_time_ scales off the commanded
+    // speed, not the trajectory-derived one.
     lookahead = std::max(lookahead_min_distance_, target_speed * lookahead_time_);
   }
   if (lookahead > 0.0) {
+    // progress is the boat's signed projection along the current segment; it is
+    // clamped to [0, seg_len] inside lookaheadPoint, so a boat sitting behind
+    // the segment start measures the horizon from the segment start.
     const auto la = lookaheadPoint(
       global_plan_.poses, current_segment_, progress, lookahead);
     base_heading = AngleRadians(atan2(
