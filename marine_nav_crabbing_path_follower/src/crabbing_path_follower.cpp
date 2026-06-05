@@ -336,6 +336,25 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
   geometry_msgs::msg::PoseStamped p2;
   AngleRadians segment_azimuth;
 
+  // Bounded backward re-localization (at most one segment per cycle). The
+  // forward scan below only ever advances the cursor; if a same-goal path
+  // reshape moved a vertex *ahead* of the boat, the cursor would stay too far
+  // forward and measure cross-track against a segment the boat hasn't reached.
+  // If the boat now projects behind the current segment's start, step back one
+  // segment. The single-step bound is deliberate: it lets a reshape re-localize
+  // without a weave/loop snapping the cursor all the way back to the start (the
+  // regression this change fixes). current_segment_ is in [1, segment_count-1]
+  // inside this guard, so indexing current_segment_+1 stays in range.
+  if (current_segment_ > 0) {
+    const double proj = alongTrackProjection(
+      global_plan_.poses[current_segment_].pose.position,
+      global_plan_.poses[current_segment_ + 1].pose.position,
+      pose_in_plan.pose.position);
+    if (proj < 0.0) {
+      current_segment_--;
+    }
+  }
+
   bool current_segment_is_good = false;
 
   while(!current_segment_is_good)

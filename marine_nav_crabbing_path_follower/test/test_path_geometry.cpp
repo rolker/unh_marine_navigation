@@ -86,6 +86,45 @@ TEST(LookaheadPoint, OutOfRangeStartSegmentReturnsGoal)
   EXPECT_NEAR(p.x, 20.0, 1e-6);
 }
 
+namespace
+{
+geometry_msgs::msg::Point pt(double x, double y)
+{
+  geometry_msgs::msg::Point p;
+  p.x = x;
+  p.y = y;
+  return p;
+}
+}  // namespace
+
+using marine_nav_crabbing_path_follower::alongTrackProjection;
+
+// Along-track projection: sign and magnitude relative to the segment start.
+TEST(AlongTrackProjection, PositiveAheadNegativeBehind)
+{
+  auto a = pt(0, 0);
+  auto b = pt(10, 0);          // segment points +x
+  EXPECT_NEAR(alongTrackProjection(a, b, pt(4, 3)), 4.0, 1e-9);   // ahead (lateral offset ignored)
+  EXPECT_NEAR(alongTrackProjection(a, b, pt(0, 5)), 0.0, 1e-9);   // at the start
+  EXPECT_LT(alongTrackProjection(a, b, pt(-2, 1)), 0.0);          // behind the start -> negative
+}
+
+// The backward-correction trigger: a boat behind the current segment start.
+TEST(AlongTrackProjection, NegativeIsTheBackwardStepTrigger)
+{
+  auto a = pt(5, 5);
+  auto b = pt(5, 15);          // segment points +y
+  EXPECT_LT(alongTrackProjection(a, b, pt(7, 2)), 0.0);           // below a -> behind
+  EXPECT_GT(alongTrackProjection(a, b, pt(7, 9)), 0.0);           // above a -> ahead
+}
+
+// Degenerate (zero-length) segment must not divide by zero.
+TEST(AlongTrackProjection, ZeroLengthSegmentReturnsZero)
+{
+  auto a = pt(3, 3);
+  EXPECT_EQ(alongTrackProjection(a, a, pt(9, 9)), 0.0);
+}
+
 int main(int argc, char ** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);

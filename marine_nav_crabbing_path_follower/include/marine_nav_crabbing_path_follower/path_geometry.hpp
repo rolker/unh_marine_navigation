@@ -61,6 +61,23 @@ inline geometry_msgs::msg::Point lookaheadPoint(
   return poses[last].pose.position;
 }
 
+/// Signed along-track distance of point `p` projected onto the segment a->b,
+/// measured from `a`. Negative means `p` is behind the segment start. A
+/// degenerate (zero-length) segment returns 0.
+inline double alongTrackProjection(
+  const geometry_msgs::msg::Point & a,
+  const geometry_msgs::msg::Point & b,
+  const geometry_msgs::msg::Point & p)
+{
+  const double sx = b.x - a.x;
+  const double sy = b.y - a.y;
+  const double seg_len = std::hypot(sx, sy);
+  if (seg_len < 1e-9) {
+    return 0.0;
+  }
+  return ((p.x - a.x) * sx + (p.y - a.y) * sy) / seg_len;
+}
+
 }  // namespace marine_nav_crabbing_path_follower
 
 #endif  // MARINE_NAV_CRABBING_PATH_FOLLOWER__PATH_GEOMETRY_HPP_
