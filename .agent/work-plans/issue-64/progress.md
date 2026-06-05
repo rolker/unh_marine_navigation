@@ -80,3 +80,18 @@ issue: 64
 - [ ] (suggestion) Integration test missing closed-loop stop + flicker coverage (Claude+Copilot)
 
 **Resolved**: all 4 must-fix + 4 suggestions addressed in `7d0a7b9` (rebuilt + retested: 17 pure gtests, 12 node gtests, 4 launch tests, cppcheck + python lint green). Remaining colcon-test lint = repo-convention copyright/cpplint + uncrustify 0.78.1 drift only.
+
+## Integrated Review
+**Status**: complete
+**When**: 2026-06-05 01:58 -04:00
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+**PR**: #68
+**Sources**: Copilot PR review (5 inline comments)
+**Verdict**: all valid; addressed in `45e51ae`
+
+### Findings
+- [x] (valid, safety) odom NaN not sanitized → applyStop could hold zero instead of braking in the stop zone — drop non-finite odom → stale → duration backstop; +launch test (obstacle + NaN odom must brake)
+- [x] (valid) source_loss_behavior silently defaulted on unknown string → warn
+- [x] (valid) sole-helm-publisher invariant not enforced in code → warn if >1 publisher on cmd_vel_out
+- [x] (doc) reverse_distance "independent of odom" misleading → clarified (duration is the odom-independent bound)
+- [x] (doc) isFinitePositive "UB" comment → reworded (NaN propagation, not UB)
