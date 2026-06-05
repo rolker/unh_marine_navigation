@@ -78,3 +78,5 @@ issue: 64
 - [ ] (suggestion) source_loss hold uses stale cloud indefinitely — warn (Copilot)
 - [ ] (suggestion) Default rclcpp::Time members clock-type fragile — init from clock (Claude)
 - [ ] (suggestion) Integration test missing closed-loop stop + flicker coverage (Claude+Copilot)
+
+**Resolved**: all 4 must-fix + 4 suggestions addressed in `7d0a7b9` (rebuilt + retested: 17 pure gtests, 12 node gtests, 4 launch tests, cppcheck + python lint green). Remaining colcon-test lint = repo-convention copyright/cpplint + uncrustify 0.78.1 drift only.
