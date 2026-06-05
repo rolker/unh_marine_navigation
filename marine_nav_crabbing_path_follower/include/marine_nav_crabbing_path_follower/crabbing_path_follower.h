@@ -87,9 +87,12 @@ protected:
   // heading aims at a point that far ahead on the path (anticipates bends)
   // instead of the local segment azimuth. lookahead_time_ > 0 makes the
   // distance speed-scaled: L = max(lookahead_min_distance_, V * time).
-  // All default to 0 / segment-azimuth behaviour, so nothing changes until
-  // tuned. With look-ahead on, set the cross-track PID to I-only (the look-ahead
-  // distance becomes the cross-track-tightness dial; I keeps the current crab).
+  // Look-ahead is OFF by default: lookahead_distance_ and lookahead_time_ are
+  // both 0, so the base heading stays the segment azimuth (historical
+  // behaviour) until tuned. lookahead_min_distance_ (1.0) is only a floor that
+  // applies once lookahead_time_ > 0. With look-ahead on, set the cross-track
+  // PID to I-only (the look-ahead distance becomes the cross-track-tightness
+  // dial; I keeps the current crab).
   std::atomic<double> lookahead_distance_{0.0};
   std::atomic<double> lookahead_time_{0.0};
   std::atomic<double> lookahead_min_distance_{1.0};
