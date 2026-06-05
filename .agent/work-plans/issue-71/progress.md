@@ -49,3 +49,18 @@ Defaults (lookahead 0, gain 1.0, max_yaw_rate π) reproduce the prior behaviour 
 
 ### Bonus
 The validation fix doubled as the on-water-tuning enabler: the new params are now settable via `ros2 param set` (previously configure-time only).
+
+## Integrated Review
+**Status**: complete
+**When**: 2026-06-05 03:04 -04:00
+**By**: Claude Code Agent (Claude Opus 4.8)
+
+**PR**: #72 (Copilot R4 @ `1769196`)
+**Sources**: 1 (Copilot)
+**Cross-source confirmations**: 0
+
+### Findings
+- [x] (valid, Copilot) configure-time read_validated() used typed get_parameter -> throws on integer YAML (e.g. `max_yaw_rate: 1`) — fixed: generic get + int->double coercion (matches default_speed) — `crabbing_path_follower.cpp`
+
+### Carried-forward (already resolved)
+- stall clamp (segment_count-1): addressed; setPlan data race: false positive (Nav2 same-thread + atomics); bounded backward re-localization: addressed. GitHub re-anchors these unresolved comments to each new head; they describe superseded code.
