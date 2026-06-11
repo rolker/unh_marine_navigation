@@ -125,6 +125,101 @@ TEST(AlongTrackProjection, ZeroLengthSegmentReturnsZero)
   EXPECT_EQ(alongTrackProjection(a, a, pt(9, 9)), 0.0);
 }
 
+using marine_nav_crabbing_path_follower::slewToward;
+
+// Far from target: advance by exactly max_step toward it (both directions).
+TEST(SlewToward, AdvancesByMaxStepWhenFar)
+{
+  EXPECT_DOUBLE_EQ(slewToward(0.0, 5.0, 1.0), 1.0);     // up
+  EXPECT_DOUBLE_EQ(slewToward(0.0, -5.0, 1.0), -1.0);   // down
+  EXPECT_DOUBLE_EQ(slewToward(2.0, 5.0, 0.5), 2.5);
+}
+
+// Within one step: snap to the target, never overshoot.
+TEST(SlewToward, SnapsToTargetWhenWithinStep)
+{
+  EXPECT_DOUBLE_EQ(slewToward(4.8, 5.0, 1.0), 5.0);
+  EXPECT_DOUBLE_EQ(slewToward(-4.8, -5.0, 1.0), -5.0);
+  EXPECT_DOUBLE_EQ(slewToward(5.0, 5.0, 1.0), 5.0);     // already there
+}
+
+// The point of #66: an instantaneous reference step is ramped in over many
+// cycles, not jumped in one — then converges exactly.
+TEST(SlewToward, RampsAReferenceStepInsteadOfJumping)
+{
+  const double target = 5.0;   // a 5 m instantaneous reference step
+  const double step = 0.3;     // slew_rate * dt
+  double v = slewToward(0.0, target, step);
+  EXPECT_DOUBLE_EQ(v, 0.3);    // first cycle moves one step, not 5 m
+  for (int i = 0; i < 100 && v < target; ++i) {
+    v = slewToward(v, target, step);
+  }
+  EXPECT_DOUBLE_EQ(v, target);  // eventually converges
+}
+
+// Non-positive max_step disables limiting: returns the target unchanged.
+TEST(SlewToward, NonPositiveStepDisablesLimiting)
+{
+  EXPECT_DOUBLE_EQ(slewToward(0.0, 5.0, 0.0), 5.0);
+  EXPECT_DOUBLE_EQ(slewToward(0.0, 5.0, -1.0), 5.0);
+}
+
+using marine_nav_crabbing_path_follower::slewLimitError;
+
+// First call (initialized==false) seeds to raw and passes through (snap, not
+// a ramp from a stale held value) and flips initialized true.
+TEST(SlewLimitError, FirstCallSeedsAndPassesThrough)
+{
+  double slewed = -999.0;  // stale
+  bool init = false;
+  EXPECT_DOUBLE_EQ(slewLimitError(slewed, init, 4.0, 3.0, 0.1), 4.0);
+  EXPECT_TRUE(init);
+  EXPECT_DOUBLE_EQ(slewed, 4.0);
+}
+
+// rate <= 0 disables limiting: raw passes through (the historical default).
+TEST(SlewLimitError, ZeroRateDisablesLimiting)
+{
+  double slewed = 0.0;
+  bool init = true;
+  EXPECT_DOUBLE_EQ(slewLimitError(slewed, init, 5.0, 0.0, 0.1), 5.0);
+  EXPECT_DOUBLE_EQ(slewLimitError(slewed, init, 5.0, -1.0, 0.1), 5.0);
+}
+
+// Normal cycle: ramp toward raw by rate*dt, not a jump.
+TEST(SlewLimitError, RampsTowardRawByRateTimesDt)
+{
+  double slewed = 0.0;
+  bool init = true;
+  EXPECT_DOUBLE_EQ(slewLimitError(slewed, init, 5.0, 3.0, 0.1), 0.3);
+  EXPECT_DOUBLE_EQ(slewed, 0.3);
+}
+
+// Zero / duplicate-stamp cycle (dt <= 0) HOLDS the previous slewed value — a
+// replan landing on a zero-dt cycle must not leak the raw jump through.
+TEST(SlewLimitError, ZeroOrNegativeDtHoldsAndDoesNotLeakJump)
+{
+  double slewed = 1.0;
+  bool init = true;
+  EXPECT_DOUBLE_EQ(slewLimitError(slewed, init, 9.0, 3.0, 0.0), 1.0);    // held, not 9.0
+  EXPECT_DOUBLE_EQ(slewed, 1.0);
+  EXPECT_DOUBLE_EQ(slewLimitError(slewed, init, 9.0, 3.0, -0.05), 1.0);  // negative dt too
+  EXPECT_DOUBLE_EQ(slewed, 1.0);
+}
+
+// A reset (caller clears initialized) re-seeds to the current raw — snaps to
+// the live error instead of ramping out from a stale held value.
+TEST(SlewLimitError, ResetReseedsToCurrentRaw)
+{
+  double slewed = 2.0;
+  bool init = true;
+  slewLimitError(slewed, init, 5.0, 3.0, 0.1);  // ramps a little
+  init = false;                                 // simulate the PID-reset re-seed
+  EXPECT_DOUBLE_EQ(slewLimitError(slewed, init, 8.0, 3.0, 0.1), 8.0);
+  EXPECT_TRUE(init);
+  EXPECT_DOUBLE_EQ(slewed, 8.0);
+}
+
 int main(int argc, char ** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);

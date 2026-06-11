@@ -107,6 +107,19 @@ protected:
   geometry_msgs::msg::Point last_goal_;
   std::atomic<double> new_plan_goal_tolerance_{1.0};
 
+  // Cross-track-error slew limiter (#66). Caps how fast the cross-track error
+  // fed to the PID may change (m/s) so a discontinuous reference step — a
+  // planner replan or the avoidance decorator reshaping the line under the boat
+  // — is ramped in rather than slamming the controller into an over-correction
+  // (the hunting / 360-loop family). Genuine lateral drift changes at most at
+  // boat speed, well under a sane rate, so real tracking is untouched. 0.0
+  // disables (the default; historical behaviour until tuned). The rate is
+  // live-tunable, hence atomic; slewed_cross_track_error_ / slew_initialized_
+  // are control-loop state touched only in computeVelocityCommands, so plain.
+  std::atomic<double> cross_track_error_slew_rate_{0.0};
+  double slewed_cross_track_error_{0.0};
+  bool slew_initialized_{false};
+
   bool visualize_ = false;
   rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>::SharedPtr visualization_publisher_;
 
