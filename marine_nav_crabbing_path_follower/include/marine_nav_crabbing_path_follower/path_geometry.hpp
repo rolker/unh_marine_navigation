@@ -32,8 +32,9 @@ inline double slewToward(double current, double target, double max_step)
 ///   - first call after construction or a PID reset (`initialized` false): seed
 ///     to `raw` and pass it through (snap, don't ramp), so a post-gap resume
 ///     starts from the current error rather than a stale one;
-///   - `rate <= 0`: limiting disabled — pass `raw` unchanged (the historical
-///     default), without disturbing the held value;
+///   - `rate <= 0`: limiting disabled — pass `raw` through (the historical
+///     default); the held value is kept in step with `raw` (re-seeded), so a
+///     later enable (rate 0 -> >0) starts cleanly from the current error;
 ///   - `dt_s <= 0` (a zero / duplicate-stamp cycle): HOLD the previous slewed
 ///     value — a replan landing on a zero-dt cycle must not leak the raw jump
 ///     through and defeat the limiter;
