@@ -516,22 +516,15 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
   // Slew-limit the cross-track error fed to the PID (#66). A discontinuous
   // reference step — a planner replan or the avoidance decorator reshaping the
   // line under the boat — would otherwise jump this error several metres in one
-  // cycle and slam the proportional controller into an over-correction (the
-  // hunting / 360-loop family). Ramp it in at cross_track_error_slew_rate_ (m/s)
-  // instead: real lateral drift changes far slower than a sane rate, so genuine
-  // tracking is untouched, while an instantaneous jump is absorbed. On a fresh
-  // start (slew_initialized_ false) snap to the current value rather than ramp.
-  // Rate 0 disables (slewToward returns the target). The raw cross_track_error
-  // is still logged below as the true tracking error.
-  double pid_cross_track_error = cross_track_error;
-  if (slew_initialized_ && cross_track_error_slew_rate_.load() > 0.0) {
-    const double max_step = cross_track_error_slew_rate_.load() * std::max(dt.seconds(), 0.0);
-    slewed_cross_track_error_ = slewToward(slewed_cross_track_error_, cross_track_error, max_step);
-    pid_cross_track_error = slewed_cross_track_error_;
-  } else {
-    slewed_cross_track_error_ = cross_track_error;
-    slew_initialized_ = true;
-  }
+  // cycle and slam the controller into an over-correction (the hunting /
+  // 360-loop family; #250 RCA). slewLimitError ramps it in at
+  // cross_track_error_slew_rate_ (m/s) instead: real lateral drift changes far
+  // slower than a sane rate, so genuine tracking is untouched, while an
+  // instantaneous jump is absorbed. Rate 0 disables (passes the raw error). The
+  // raw cross_track_error is still logged below as the true tracking error.
+  const double pid_cross_track_error = slewLimitError(
+    slewed_cross_track_error_, slew_initialized_, cross_track_error,
+    cross_track_error_slew_rate_.load(), dt.seconds());
   auto crab_angle = AngleDegrees(pid_->compute_command(pid_cross_track_error, dt));
   AngleRadians heading(tf2::getYaw(pose_in_plan.pose.orientation));
 

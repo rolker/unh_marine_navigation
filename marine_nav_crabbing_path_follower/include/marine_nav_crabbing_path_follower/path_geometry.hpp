@@ -27,6 +27,32 @@ inline double slewToward(double current, double target, double max_step)
   return current + std::clamp(delta, -max_step, max_step);
 }
 
+/// Stateful slew-limit of the value (a cross-track error) fed to the PID (#66).
+/// Holds `slewed`/`initialized` across control cycles. Branches, in order:
+///   - first call after construction or a PID reset (`initialized` false): seed
+///     to `raw` and pass it through (snap, don't ramp), so a post-gap resume
+///     starts from the current error rather than a stale one;
+///   - `rate <= 0`: limiting disabled — pass `raw` unchanged (the historical
+///     default), without disturbing the held value;
+///   - `dt_s <= 0` (a zero / duplicate-stamp cycle): HOLD the previous slewed
+///     value — a replan landing on a zero-dt cycle must not leak the raw jump
+///     through and defeat the limiter;
+///   - otherwise: ramp `slewed` toward `raw` by at most `rate * dt_s`.
+/// Returns the (possibly slewed) value to feed the controller.
+inline double slewLimitError(
+  double & slewed, bool & initialized, double raw, double rate, double dt_s)
+{
+  if (initialized && rate > 0.0) {
+    if (dt_s > 0.0) {
+      slewed = slewToward(slewed, raw, rate * dt_s);
+    }
+    return slewed;
+  }
+  slewed = raw;
+  initialized = true;
+  return raw;
+}
+
 /// Walk `lookahead` metres forward along a piecewise-linear path and return the
 /// point reached — the pure-pursuit "look-ahead point".
 ///

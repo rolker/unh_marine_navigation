@@ -103,3 +103,12 @@ test on the next deployment.
 - **Default 0.0 (disabled)** matches the package convention (look-ahead/heading params all
   default to historical no-op) and avoids changing a shared controller's behaviour for sim +
   other platforms without per-platform validation; the deployed config opts in.
+- **Re-acquisition is throttled too, by design** (review-code adversarial finding). The
+  limiter caps the error *magnitude* rate, so a genuinely large offset — mission start far
+  from the line, a big avoidance excursion, or re-acquisition after a gap shorter than
+  `pid_reset_threshold_` — is also ramped in at `rate` m/s, not just replan steps. Choose the
+  deployed rate with re-acquisition in mind (not only anti-hunt); a gap longer than the reset
+  threshold re-seeds and snaps. The slew state lives in the testable `slewLimitError` helper.
+- **`dt <= 0` holds, not passes through** (review-code adversarial finding): a zero /
+  duplicate-stamp control cycle must not let `slewToward`'s "non-positive step = passthrough"
+  leak the raw jump and defeat the limiter; `slewLimitError` holds the previous value there.
