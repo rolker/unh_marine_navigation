@@ -48,3 +48,20 @@ issue: 66
 - [x] (suggestion) integration test gap; extracted testable `slewLimitError` + 5 wiring tests — `test_path_geometry.cpp`
 - [x] (suggestion) re-acquisition is also throttled (tuning hazard) — documented in plan + param guidance
 - Static analysis clean (18/18 gtest); Copilot + Claude adversarial both clear after fixes
+
+## Integrated Review
+**Status**: complete
+**When**: 2026-06-11 09:13 -0400
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+
+**PR**: #75 at `21045b5`
+**Sources**: 2 (Copilot @ `21045b5`, Local Review (Pre-Push) @ `21045b5`)
+**Cross-source confirmations**: 0
+**CI**: not fetched (network timeout) — re-check before merge
+
+### Findings
+- [ ] (valid, Copilot) `slewLimitError` doc claims rate<=0 disables "without disturbing the held value" but the disabled branch re-seeds `slewed = raw` — fix the DOC (the re-seed is intentional: clean off→on enable from the current error) — `path_geometry.hpp`
+- [ ] (valid, Copilot) PR #75 description still describes the full two-front plan; PR implements only the first-cut slew-limiter — update the PR body to match (plan file already descoped) — PR body
+
+### False positives
+- (none)
