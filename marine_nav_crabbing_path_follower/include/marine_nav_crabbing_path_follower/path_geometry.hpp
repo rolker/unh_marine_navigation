@@ -11,6 +11,22 @@
 namespace marine_nav_crabbing_path_follower
 {
 
+/// Slew `current` toward `target`, advancing by at most `max_step`. A
+/// non-positive `max_step` disables limiting (returns `target` unchanged), so a
+/// zero rate is a clean "off". Used to rate-limit the cross-track error fed to
+/// the cross-track PID (#66): a discontinuous reference step — a planner replan
+/// or the avoidance decorator reshaping the line under the boat — is ramped in
+/// instead of kicking the controller into an over-correction, while genuine
+/// lateral drift (far slower than a sane rate) passes through untouched.
+inline double slewToward(double current, double target, double max_step)
+{
+  if (!(max_step > 0.0)) {
+    return target;
+  }
+  const double delta = target - current;
+  return current + std::clamp(delta, -max_step, max_step);
+}
+
 /// Walk `lookahead` metres forward along a piecewise-linear path and return the
 /// point reached — the pure-pursuit "look-ahead point".
 ///

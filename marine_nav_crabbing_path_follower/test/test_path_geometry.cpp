@@ -125,6 +125,45 @@ TEST(AlongTrackProjection, ZeroLengthSegmentReturnsZero)
   EXPECT_EQ(alongTrackProjection(a, a, pt(9, 9)), 0.0);
 }
 
+using marine_nav_crabbing_path_follower::slewToward;
+
+// Far from target: advance by exactly max_step toward it (both directions).
+TEST(SlewToward, AdvancesByMaxStepWhenFar)
+{
+  EXPECT_DOUBLE_EQ(slewToward(0.0, 5.0, 1.0), 1.0);     // up
+  EXPECT_DOUBLE_EQ(slewToward(0.0, -5.0, 1.0), -1.0);   // down
+  EXPECT_DOUBLE_EQ(slewToward(2.0, 5.0, 0.5), 2.5);
+}
+
+// Within one step: snap to the target, never overshoot.
+TEST(SlewToward, SnapsToTargetWhenWithinStep)
+{
+  EXPECT_DOUBLE_EQ(slewToward(4.8, 5.0, 1.0), 5.0);
+  EXPECT_DOUBLE_EQ(slewToward(-4.8, -5.0, 1.0), -5.0);
+  EXPECT_DOUBLE_EQ(slewToward(5.0, 5.0, 1.0), 5.0);     // already there
+}
+
+// The point of #66: an instantaneous reference step is ramped in over many
+// cycles, not jumped in one — then converges exactly.
+TEST(SlewToward, RampsAReferenceStepInsteadOfJumping)
+{
+  const double target = 5.0;   // a 5 m instantaneous reference step
+  const double step = 0.3;     // slew_rate * dt
+  double v = slewToward(0.0, target, step);
+  EXPECT_DOUBLE_EQ(v, 0.3);    // first cycle moves one step, not 5 m
+  for (int i = 0; i < 100 && v < target; ++i) {
+    v = slewToward(v, target, step);
+  }
+  EXPECT_DOUBLE_EQ(v, target);  // eventually converges
+}
+
+// Non-positive max_step disables limiting: returns the target unchanged.
+TEST(SlewToward, NonPositiveStepDisablesLimiting)
+{
+  EXPECT_DOUBLE_EQ(slewToward(0.0, 5.0, 0.0), 5.0);
+  EXPECT_DOUBLE_EQ(slewToward(0.0, 5.0, -1.0), 5.0);
+}
+
 int main(int argc, char ** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);

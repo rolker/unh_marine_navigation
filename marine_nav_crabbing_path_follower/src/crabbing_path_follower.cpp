@@ -230,6 +230,13 @@ void CrabbingPathFollower::configure(
           {
             return result;
           }
+        } else if (name == base + ".cross_track_error_slew_rate") {
+          double v;
+          if (!as_number(p, v) ||
+            !update(cross_track_error_slew_rate_, v, 0.0, false, "cross_track_error_slew_rate"))
+          {
+            return result;
+          }
         }
       }
       return result;
@@ -285,6 +292,7 @@ void CrabbingPathFollower::configure(
   read_validated(".lookahead_time", lookahead_time_, 0.0, false);
   read_validated(".lookahead_min_distance", lookahead_min_distance_, 0.0, false);
   read_validated(".new_plan_goal_tolerance", new_plan_goal_tolerance_, 0.0, false);
+  read_validated(".cross_track_error_slew_rate", cross_track_error_slew_rate_, 0.0, false);
 
   global_pub_ = node->create_publisher<nav_msgs::msg::Path>("received_global_plan", 1);
 }
@@ -494,13 +502,37 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
   if(last_update_time_.nanoseconds() == 0 ||  (timestamp - last_update_time_) > pid_reset_threshold_ || (timestamp - last_update_time_).seconds() < 0.0)
   {
     pid_->reset();
+    // Re-seed the slew limiter on a fresh start (first call / post-gap resume /
+    // clock jump) so the next cycle snaps to the current cross-track error
+    // instead of ramping out from a stale value, matching the PID reset.
+    slew_initialized_ = false;
     last_update_time_ = timestamp;
   }
   auto dt = timestamp - last_update_time_;
   last_update_time_ = timestamp;
 
   auto cross_track_error = vehicle_distance*sin_error_azimuth;
-  auto crab_angle = AngleDegrees(pid_->compute_command(cross_track_error, dt));
+
+  // Slew-limit the cross-track error fed to the PID (#66). A discontinuous
+  // reference step — a planner replan or the avoidance decorator reshaping the
+  // line under the boat — would otherwise jump this error several metres in one
+  // cycle and slam the proportional controller into an over-correction (the
+  // hunting / 360-loop family). Ramp it in at cross_track_error_slew_rate_ (m/s)
+  // instead: real lateral drift changes far slower than a sane rate, so genuine
+  // tracking is untouched, while an instantaneous jump is absorbed. On a fresh
+  // start (slew_initialized_ false) snap to the current value rather than ramp.
+  // Rate 0 disables (slewToward returns the target). The raw cross_track_error
+  // is still logged below as the true tracking error.
+  double pid_cross_track_error = cross_track_error;
+  if (slew_initialized_ && cross_track_error_slew_rate_.load() > 0.0) {
+    const double max_step = cross_track_error_slew_rate_.load() * std::max(dt.seconds(), 0.0);
+    slewed_cross_track_error_ = slewToward(slewed_cross_track_error_, cross_track_error, max_step);
+    pid_cross_track_error = slewed_cross_track_error_;
+  } else {
+    slewed_cross_track_error_ = cross_track_error;
+    slew_initialized_ = true;
+  }
+  auto crab_angle = AngleDegrees(pid_->compute_command(pid_cross_track_error, dt));
   AngleRadians heading(tf2::getYaw(pose_in_plan.pose.orientation));
 
   RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: progress: " << progress << " cross_track_error: " << cross_track_error << " crab_angle: " << crab_angle.value() << " heading: " << heading.value() << " segment_azimuth: " << segment_azimuth.value());
