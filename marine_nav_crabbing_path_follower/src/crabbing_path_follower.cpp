@@ -237,6 +237,23 @@ void CrabbingPathFollower::configure(
           {
             return result;
           }
+        } else if (name == base + ".pid.gain_ref_speed") {
+          // >= 0: 0.0 disables the gain schedule (the default), so it is valid.
+          double v;
+          if (!as_number(p, v) ||
+            !update(pid_gain_ref_speed_, v, 0.0, false, "pid.gain_ref_speed"))
+          {
+            return result;
+          }
+        } else if (name == base + ".pid.gain_v_min") {
+          // > 0 (exclusive): the divisor floor must stay strictly positive so the
+          // gain schedule can never divide by zero / blow up at creep.
+          double v;
+          if (!as_number(p, v) ||
+            !update(pid_gain_v_min_, v, 0.0, true, "pid.gain_v_min"))
+          {
+            return result;
+          }
         }
       }
       return result;
@@ -293,6 +310,11 @@ void CrabbingPathFollower::configure(
   read_validated(".lookahead_min_distance", lookahead_min_distance_, 0.0, false);
   read_validated(".new_plan_goal_tolerance", new_plan_goal_tolerance_, 0.0, false);
   read_validated(".cross_track_error_slew_rate", cross_track_error_slew_rate_, 0.0, false);
+  // Cross-track gain schedule (#76). gain_ref_speed >= 0 (0 = disabled, the
+  // default); gain_v_min > 0 (the divisor floor must stay strictly positive).
+  // Sub-namespaced under .pid. to sit alongside .pid.reset_threshold_seconds.
+  read_validated(".pid.gain_ref_speed", pid_gain_ref_speed_, 0.0, false);
+  read_validated(".pid.gain_v_min", pid_gain_v_min_, 0.0, true);
 
   global_pub_ = node->create_publisher<nav_msgs::msg::Path>("received_global_plan", 1);
 }
@@ -526,6 +548,27 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
     slewed_cross_track_error_, slew_initialized_, cross_track_error,
     cross_track_error_slew_rate_.load(), dt.seconds());
   auto crab_angle = AngleDegrees(pid_->compute_command(pid_cross_track_error, dt));
+
+  // Speed-normalize the cross-track gain (#76). The outer loop's effective gain
+  // is proportional to commanded speed v (ė ≈ v·sin(crab)), so fixed PID gains
+  // lose stability margin as speed rises (a speed-dependent limit cycle; Lake
+  // Massabesic, unh_echoboats_project11#289). Scaling crab_angle by
+  // gain_ref_speed / max(v, v_min) cancels that plant gain v.
+  //
+  // We use the COMMANDED target_speed (the default_speed / speed-limit value from
+  // L410), NOT the measured speed and NOT the per-pose trajectory speed derived
+  // below. Using commanded speed keeps the gain term out of the measured-speed
+  // feedback path: a gain that varied with the boat's *measured* speed would
+  // itself be a dynamic element coupled into the loop (gain ↔ response feedback),
+  // which is exactly the kind of speed-dependent dynamics this fix removes. The
+  // gain_v_min floor keeps the divisor strictly positive so creep / station-keep
+  // (target_speed → 0) can't blow the gain up or divide by zero. Snapshot both
+  // atomics once (tear-free, matching the lookahead_* snapshot idiom). Default
+  // gain_ref_speed = 0 leaves crab_angle unchanged (disabled).
+  crab_angle = AngleDegrees(gainScheduleScale(
+    crab_angle.value(), pid_gain_ref_speed_.load(), pid_gain_v_min_.load(),
+    target_speed));
+
   AngleRadians heading(tf2::getYaw(pose_in_plan.pose.orientation));
 
   RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: progress: " << progress << " cross_track_error: " << cross_track_error << " crab_angle: " << crab_angle.value() << " heading: " << heading.value() << " segment_azimuth: " << segment_azimuth.value());

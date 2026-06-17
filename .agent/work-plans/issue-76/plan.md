@@ -30,7 +30,14 @@ configure + a `SetParameters` branch (with the `as_number` integer-coercion guar
 
 ## Approach
 
-1. **Extract the scaling as a pure function** — add
+> **Implementation status (feature/issue-76):** all 8 steps below are DONE.
+> Param keys are sub-namespaced under `.pid.` per the Plan Review finding
+> (`progress.md` Plan Review): `plugin_name_ + ".pid.gain_ref_speed"` /
+> `".pid.gain_v_min"` in the declare (`read_validated` suffix), read, and
+> SetParameters branches — mirroring `".pid.reset_threshold_seconds"`, not the
+> bare-suffix `lookahead_*` keys. No other deviations.
+
+1. **Extract the scaling as a pure function** — [DONE] add
    `gainScheduleScale(crab_angle_deg, gain_ref_speed, v_min, target_speed)` to
    `path_geometry.hpp` (the established home for pure, unit-testable control math).
    Contract: `gain_ref_speed <= 0` returns `crab_angle_deg` unchanged (disabled,
