@@ -148,3 +148,10 @@ configure + a `SetParameters` branch (with the `as_number` integer-coercion guar
 Single PR in `unh_marine_navigation` only. The `unh_echoboats_project11` overlay
 activation is **explicitly out of scope / deferred** to a separate follow-on issue
 (open it after the sim + on-water re-test of the 1.8 anchor).
+
+## Review Hardening (Pre-Push)
+
+Applied 3 non-blocking hardening items from the Local Review (Pre-Push): `isfinite`
+guard on `target_speed` in `gainScheduleScale` (NaN/Inf falls back to `v_min`), plus
+two test lock-ins in `test_gain_schedule.cpp` (negative `target_speed` floored to
+`v_min`; non-finite `target_speed` yields a finite result).

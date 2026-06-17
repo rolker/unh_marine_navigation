@@ -133,7 +133,11 @@ inline double gainScheduleScale(
   if (!(gain_ref_speed > 0.0)) {
     return crab_angle_deg;
   }
-  const double v = std::max(target_speed, v_min);
+  // A non-finite target_speed (NaN/Inf from a stale or wild estimate) would
+  // propagate through std::max into the divisor and command NaN crab; treat it
+  // as the floor so the result stays finite for finite crab_angle/gain_ref_speed/v_min.
+  const double safe_target_speed = std::isfinite(target_speed) ? target_speed : v_min;
+  const double v = std::max(safe_target_speed, v_min);
   return crab_angle_deg * gain_ref_speed / v;
 }
 

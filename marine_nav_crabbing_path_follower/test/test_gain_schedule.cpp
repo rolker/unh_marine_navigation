@@ -1,4 +1,5 @@
 #include <cmath>
+#include <limits>
 
 #include <gtest/gtest.h>
 
@@ -62,6 +63,33 @@ TEST(GainScheduleScale, ZeroTargetSpeedStaysFinite)
   const double r = gainScheduleScale(10.0, 2.0, 0.5, 0.0);
   EXPECT_TRUE(std::isfinite(r));
   EXPECT_DOUBLE_EQ(r, 10.0 * 2.0 / 0.5);  // divided by v_min, not 0
+}
+
+// A negative target_speed (a wild / backwards estimate) is floored to v_min by
+// the same std::max as the sub-floor creep case — the effective divisor is
+// v_min, never the negative value (which would flip the gain's sign).
+TEST(GainScheduleScale, FloorsNegativeTargetSpeedAtVMin)
+{
+  // v_min = 0.5, target_speed = -2.0 -> divides by 0.5, not -2.0.
+  EXPECT_DOUBLE_EQ(gainScheduleScale(10.0, 2.0, 0.5, -2.0), 10.0 * 2.0 / 0.5);
+  // Sign is preserved (not flipped by a negative divisor).
+  EXPECT_GT(gainScheduleScale(8.0, 1.8, 0.5, -1.0), 0.0);
+}
+
+// A non-finite target_speed (NaN/+Inf from a stale or wild speed estimate) must
+// not propagate into the crab command: the isfinite guard falls back to v_min
+// so the result stays finite for finite crab_angle/gain_ref_speed/v_min.
+TEST(GainScheduleScale, NonFiniteTargetSpeedStaysFinite)
+{
+  const double nan_v = std::numeric_limits<double>::quiet_NaN();
+  const double r_nan = gainScheduleScale(10.0, 2.0, 0.5, nan_v);
+  EXPECT_TRUE(std::isfinite(r_nan));
+  EXPECT_DOUBLE_EQ(r_nan, 10.0 * 2.0 / 0.5);  // fell back to v_min
+
+  const double inf_v = std::numeric_limits<double>::infinity();
+  const double r_inf = gainScheduleScale(10.0, 2.0, 0.5, inf_v);
+  EXPECT_TRUE(std::isfinite(r_inf));
+  EXPECT_DOUBLE_EQ(r_inf, 10.0 * 2.0 / 0.5);  // fell back to v_min
 }
 
 // Sign preservation: a negative crab angle stays negative after scaling (the
