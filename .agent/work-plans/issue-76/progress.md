@@ -79,3 +79,31 @@ PR lands in `unh_marine_navigation` only.
 - [ ] (suggestion) `gainScheduleScale` has no `isfinite` guard on `target_speed`; `std::max(NaN, v_min)` returns NaN, propagating to `crab_angle` when enabled. Cross-pass confirmed (Lens A + Lens B). Cannot occur in production — the only call site passes validator-guaranteed finite-positive `target_speed` — so it is pure-function-contract hardening, not a live defect. Optional: add `if (!std::isfinite(target_speed)) return crab_angle_deg;` + a test. — `path_geometry.hpp:130-138`
 - [ ] (suggestion) No integration-level test that the param callback rejects `pid.gain_v_min <= 0` / non-finite sets; the "atomic can never hold 0" invariant is proven by construction but not at the callback boundary. Consistent with the package's existing tunables (shared gap, not a regression). — `crabbing_path_follower.cpp:248-256`
 - [ ] (suggestion) Optional lock-in test: assert `gainScheduleScale(.., v_min, target_speed<0)` divides by `v_min` (negative-speed input is floored), documenting the contract edge. — `test_gain_schedule.cpp`
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-06-17 06:24 -04:00
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+**Verdict**: approved
+
+**Branch**: feature/issue-76 at `a2fd6af`
+**Mode**: pre-push
+**Depth**: Standard (reason: ~134 LOC across 5 changed source files in a core_ws Nav2 controller plugin; safety-relevant boat code; work plan present)
+**Must-fix**: 0 | **Suggestions**: 1
+
+Re-review after hardening commit `a2fd6af`, which applied the 3 non-blocking
+suggestions from the prior approved Local Review at `91bb181`: (1) `isfinite`
+guard on `target_speed` in the pure `gainScheduleScale` (non-finite falls back
+to `v_min`); (2) test lock-in for negative `target_speed` floored to `v_min`;
+(3) test lock-in for non-finite `target_speed` yielding a finite result. Both
+disjoint-lens Claude Adversarial passes (Lens A logic, Lens B systemic/safety)
+returned "sound, no regression vs 91bb181". gtest 9/9 PASS (verified by running
+the compiled `test_gain_schedule` binary). No lines exceed the 100-char ament
+limit in the new code. Hardening commit confirmed correct and complete; the
+isfinite guard is a strict superset — finite inputs traverse the identical path,
+so all pre-hardening behavior is preserved. The new params still default to
+disabled (`gain_ref_speed=0.0`); echoboats overlay activation is deliberately
+deferred (not a gap). Known local uncrustify 0.78.1 drift excluded per scope.
+
+### Findings
+- [ ] (suggestion) `NonFiniteTargetSpeedStaysFinite` exercises NaN and +Inf but not -Inf; `std::isfinite` handles -Inf identically so this is a coverage-completeness note, not a correctness gap (finite-negative flooring is already covered by `FloorsNegativeTargetSpeedAtVMin`). — `test_gain_schedule.cpp:82-93`
