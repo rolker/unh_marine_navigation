@@ -63,3 +63,19 @@ PR lands in `unh_marine_navigation` only.
 - [ ] (suggestion) `gain_v_min > 0` is the correct choice — divisor can never reach zero, confirmed. The plan's open-question flag (`>= 0` alternative) is resolved: keep `> 0`. — `plan.md:51`
 - [ ] (suggestion) SetParameters param name namespace: the plan names the params `pid.gain_ref_speed` / `pid.gain_v_min`. The existing `SetParameters` callback uses `base = plugin_name_` and branches on `base + ".lookahead_distance"` etc. The new branches will need to match `base + ".pid.gain_ref_speed"` (not `base + ".gain_ref_speed"`), consistent with `plugin_name_ + ".pid.reset_threshold_seconds"` at line 39. The plan's `read_validated` calls and `declare_parameter_if_not_declared` declarations must also use the `.pid.` sub-namespace. This is consistent with the plan's stated naming but worth making explicit so the implementer doesn't accidentally drop the `.pid.` prefix. — `plan.md:48,54`
 - [ ] (suggestion) All four review-issue action items are addressed by the plan: unit test (step 7), in-source rationale (steps 2+6), platform config deferred per operator decision (Consequences table), parameter doc noted as in-source-only (step 8). The platform-config action item from issue-review is legitimately deferred; no gap remains in this PR's scope.
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-06-16 22:33 -04:00
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+**Verdict**: approved
+
+**Branch**: feature/issue-76 at `91bb181`
+**Mode**: pre-push
+**Depth**: Standard (reason: ~133 LOC across 5 files in a core_ws Nav2 controller plugin; safety-relevant boat code; work plan present)
+**Must-fix**: 0 | **Suggestions**: 3
+
+### Findings
+- [ ] (suggestion) `gainScheduleScale` has no `isfinite` guard on `target_speed`; `std::max(NaN, v_min)` returns NaN, propagating to `crab_angle` when enabled. Cross-pass confirmed (Lens A + Lens B). Cannot occur in production — the only call site passes validator-guaranteed finite-positive `target_speed` — so it is pure-function-contract hardening, not a live defect. Optional: add `if (!std::isfinite(target_speed)) return crab_angle_deg;` + a test. — `path_geometry.hpp:130-138`
+- [ ] (suggestion) No integration-level test that the param callback rejects `pid.gain_v_min <= 0` / non-finite sets; the "atomic can never hold 0" invariant is proven by construction but not at the callback boundary. Consistent with the package's existing tunables (shared gap, not a regression). — `crabbing_path_follower.cpp:248-256`
+- [ ] (suggestion) Optional lock-in test: assert `gainScheduleScale(.., v_min, target_speed<0)` divides by `v_min` (negative-speed input is floored), documenting the contract edge. — `test_gain_schedule.cpp`
