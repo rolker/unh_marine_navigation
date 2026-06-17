@@ -104,6 +104,43 @@ inline geometry_msgs::msg::Point lookaheadPoint(
   return poses[last].pose.position;
 }
 
+/// Speed-normalize (gain-schedule) the cross-track PID output `crab_angle_deg`.
+///
+/// The outer cross-track loop has `ė ≈ v·sin(crab_angle) ≈ v·(p·e)`, so its
+/// effective gain is proportional to the commanded speed `v` (#76). With fixed
+/// PID gains the stability margin shrinks as speed rises, producing a
+/// speed-dependent cross-track limit cycle (observed at Lake Massabesic,
+/// unh_echoboats_project11#289). Scaling the PID output by
+/// `gain_ref_speed / v` cancels that broadband plant gain, holding the
+/// closed-loop response constant across speed: the controller behaves as if it
+/// were always running at `gain_ref_speed`.
+///
+/// Contract:
+///   - `gain_ref_speed <= 0`: disabled (the default) — returns `crab_angle_deg`
+///     unchanged, so there is no behavior change until a platform opts in
+///     (mirrors the `lookahead_time = 0` default-off idiom in this package).
+///   - otherwise: returns `crab_angle_deg * gain_ref_speed / max(target_speed, v_min)`.
+///     `v_min` floors the effective speed so creep / station-keep
+///     (`target_speed → 0`) can't blow the gain up (or divide by zero). The
+///     caller must pass a strictly-positive `v_min` (the parameter validator
+///     enforces `> 0`); `target_speed` may be any value, including 0.
+///
+/// Pure (not a method) so it can be unit-tested across speeds with no ROS
+/// scaffolding — the same reason `slewLimitError` / `lookaheadPoint` live here.
+inline double gainScheduleScale(
+  double crab_angle_deg, double gain_ref_speed, double v_min, double target_speed)
+{
+  if (!(gain_ref_speed > 0.0)) {
+    return crab_angle_deg;
+  }
+  // A non-finite target_speed (NaN/Inf from a stale or wild estimate) would
+  // propagate through std::max into the divisor and command NaN crab; treat it
+  // as the floor so the result stays finite for finite crab_angle/gain_ref_speed/v_min.
+  const double safe_target_speed = std::isfinite(target_speed) ? target_speed : v_min;
+  const double v = std::max(safe_target_speed, v_min);
+  return crab_angle_deg * gain_ref_speed / v;
+}
+
 /// Signed along-track distance of point `p` projected onto the segment a->b,
 /// measured from `a`. Negative means `p` is behind the segment start. A
 /// degenerate (zero-length) segment returns 0.

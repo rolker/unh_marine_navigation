@@ -72,6 +72,13 @@ if(BUILD_TESTING)
       "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
     ament_target_dependencies(test_path_geometry geometry_msgs)
   endif()
+
+  ament_add_gtest(test_gain_schedule test/test_gain_schedule.cpp)
+  if(TARGET test_gain_schedule)
+    target_include_directories(test_gain_schedule PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
+    ament_target_dependencies(test_gain_schedule geometry_msgs)
+  endif()
 endif()
 
 ament_package()

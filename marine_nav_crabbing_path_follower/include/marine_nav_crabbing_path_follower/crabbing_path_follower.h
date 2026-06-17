@@ -120,6 +120,21 @@ protected:
   double slewed_cross_track_error_{0.0};
   bool slew_initialized_{false};
 
+  // Cross-track gain schedule (speed-normalization, #76). The outer cross-track
+  // loop's effective gain is proportional to commanded speed v (ė ≈ v·sin(crab)),
+  // so fixed PID gains lose stability margin as speed rises — a speed-dependent
+  // cross-track limit cycle (Lake Massabesic, unh_echoboats_project11#289).
+  // Scaling the PID output crab_angle by gain_ref_speed / max(v, v_min) cancels
+  // that plant gain v, holding the closed-loop response constant across speed.
+  // pid_gain_ref_speed_ = 0.0 DISABLES it (the default; no behavior change until a
+  // platform opts in, mirroring lookahead_time_ = 0). pid_gain_v_min_ floors the
+  // divisor so creep / station-keep (v → 0) can't blow the gain up or divide by
+  // zero; its validator enforces > 0 (a floor of 0 would re-admit the blow-up).
+  // Both are live-tunable via the parameter callback, hence atomic (param-service
+  // thread writes while computeVelocityCommands reads on the controller thread).
+  std::atomic<double> pid_gain_ref_speed_{0.0};
+  std::atomic<double> pid_gain_v_min_{0.5};
+
   bool visualize_ = false;
   rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>::SharedPtr visualization_publisher_;
 
