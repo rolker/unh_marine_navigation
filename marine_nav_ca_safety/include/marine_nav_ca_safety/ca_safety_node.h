@@ -11,6 +11,7 @@
 
 #include "geometry_msgs/msg/polygon_stamped.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
+#include "marine_control/control_server.hpp"
 #include "marine_nav_ca_safety/ca_safety.h"
 #include "nav2_msgs/msg/collision_monitor_state.hpp"
 #include "nav_msgs/msg/odometry.hpp"
@@ -157,6 +158,11 @@ public:
     last_odom_time_ = t0;
     reverse_start_time_ = t0;
     last_stop_seen_ = t0;
+
+    // Expose the live tunables on the marine_control device panel. Done last so
+    // every parameter is declared and the validate/commit callbacks are
+    // registered before the control channel goes live.
+    setupControlServer();
   }
 
 private:
@@ -279,6 +285,43 @@ private:
         publish_visualization_ = p.as_bool();
       }
     }
+  }
+
+  // Expose the live CA-safety tunables on the marine_control device panel so the
+  // operator can retune slowdown/stop/reverse behavior live, bridgeable
+  // boat->operator (unh_marine_autonomy#140 / ADR-0003). Each control is backed
+  // by an already-declared dynamic parameter, so operator changes route through
+  // the existing onSetParameters validation (finite, > 0, ordered slowdown
+  // range) before onPostSetParameters commits them to the live atomics — the
+  // fire-and-forget change channel cannot bypass that validation (ADR-0003 D8.3).
+  // The descriptors (including cancel_yaw_during_reverse's unverified-false-path
+  // warning) carry through to the panel as the per-control help text.
+  void setupControlServer()
+  {
+    marine_control::ControlServerOptions opts;
+    opts.device_name = "Collision-Avoidance Safety";
+    control_server_ = std::make_shared<marine_control::ControlServer>(this, opts);
+
+    // Slowdown corridor.
+    control_server_->bind_parameter("ttc_time_constant", "s", "slowdown");
+    control_server_->bind_parameter("slowdown_min_length", "m", "slowdown");
+    control_server_->bind_parameter("slowdown_max_length", "m", "slowdown");
+    control_server_->bind_parameter("slowdown_speed_floor", "m/s", "slowdown");
+    control_server_->bind_parameter("slowdown_width", "m", "slowdown");
+    // Stop box.
+    control_server_->bind_parameter("stop_length", "m", "stop");
+    control_server_->bind_parameter("stop_width", "m", "stop");
+    control_server_->bind_parameter("stop_speed_eps", "m/s", "stop");
+    // Reverse brake.
+    control_server_->bind_parameter("reverse_speed", "m/s", "reverse");
+    control_server_->bind_parameter("reverse_distance", "m", "reverse");
+    control_server_->bind_parameter("reverse_duration", "s", "reverse");
+    control_server_->bind_parameter("reverse_clear_debounce", "s", "reverse");
+    control_server_->bind_parameter("cancel_yaw_during_reverse", "", "reverse");
+    // Source-loss handling.
+    control_server_->bind_parameter("source_timeout", "s", "source");
+    // Visualization.
+    control_server_->bind_parameter("publish_visualization", "", "visualization");
   }
 
   SafetyParams snapshotParams() const
@@ -556,6 +599,10 @@ private:
 
   OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
   PostSetParametersCallbackHandle::SharedPtr post_param_callback_handle_;
+  // Boat-side device-control server: publishes the live tunables as bridgeable
+  // marine_controls and applies operator changes via the validated parameter
+  // path. Constructed last in the constructor (setupControlServer).
+  std::shared_ptr<marine_control::ControlServer> control_server_;
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
   rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_vel_sub_;

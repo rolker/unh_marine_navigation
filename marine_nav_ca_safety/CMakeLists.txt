@@ -20,6 +20,7 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_sensor_msgs REQUIRED)
+find_package(marine_control REQUIRED)
 
 # Header-only logic + node class; exported as an INTERFACE library.
 add_library(${PROJECT_NAME} INTERFACE)
@@ -42,6 +43,7 @@ set(ca_safety_deps
   tf2_ros
   tf2_geometry_msgs
   tf2_sensor_msgs
+  marine_control
 )
 
 add_executable(ca_safety_node src/ca_safety_node.cpp)
@@ -83,6 +85,12 @@ if(BUILD_TESTING)
   # TF transform of a real cloud, and the braking reaction + single output publisher.
   find_package(launch_testing_ament_cmake REQUIRED)
   add_launch_test(test/test_ca_safety_launch.py)
+
+  # marine_control device-control wiring (unh_marine_autonomy#140 / ADR-0003):
+  # asserts the node advertises all 15 live tunables on ~/control/state, that an
+  # in-range change applies, and that the existing parameter validation (> 0 and
+  # the slowdown min <= max ordering) still rejects bad operator input.
+  add_launch_test(test/test_ca_safety_control.py)
 endif()
 
 ament_package()

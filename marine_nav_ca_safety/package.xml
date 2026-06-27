@@ -16,6 +16,7 @@
   <buildtool_depend>ament_cmake_ros</buildtool_depend>
 
   <depend>geometry_msgs</depend>
+  <depend>marine_control</depend>
   <depend>nav_msgs</depend>
   <depend>nav2_msgs</depend>
   <depend>sensor_msgs</depend>
@@ -27,6 +28,7 @@
   <depend>tf2_sensor_msgs</depend>
 
   <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>marine_control_interfaces</test_depend>
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
   <test_depend>launch_testing_ament_cmake</test_depend>
