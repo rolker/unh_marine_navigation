@@ -17,6 +17,8 @@
 #include "nav2_costmap_2d/cost_values.hpp"
 #include "nav2_util/node_utils.hpp"
 #include "pluginlib/class_list_macros.hpp"
+#include "rcl_interfaces/msg/floating_point_range.hpp"
+#include "rcl_interfaces/msg/parameter_descriptor.hpp"
 
 namespace marine_nav_avoidance_controller
 {
@@ -113,7 +115,112 @@ visualization_msgs::msg::MarkerArray buildAvoidanceMarkers(
 
   return arr;
 }
+
+// Single source of truth for the live operator-tunable parameters: the value
+// default, the built-in fallback range [min, max], panel units, UI group, and
+// help text. Both declareAvoidanceControlParams (declares them with descriptors)
+// and bindAvoidanceControls (binds them to the marine_control server) iterate
+// this, so a parameter is never declared and bound out of sync.
+struct AvoidanceTunable
+{
+  const char * suffix;
+  double default_value;
+  double default_min;
+  double default_max;
+  const char * units;
+  const char * group;
+  const char * description;
+};
+
+constexpr AvoidanceTunable kTunables[] = {
+  {"max_deviation", 6.0, 0.1, 100.0, "m", "geometry",
+    "Corridor half-width and the give-up bound (m)."},
+  {"along_track_spacing", 2.0, 0.1, 50.0, "m", "geometry",
+    "Station spacing along the line (m)."},
+  {"lateral_resolution", 0.5, 0.05, 10.0, "m", "geometry",
+    "Cross-track search resolution (m)."},
+  {"max_lateral_change", 1.0, 0.01, 50.0, "m", "geometry",
+    "Max cross-track change between stations (m)."},
+  {"anchor_behind_distance", 4.0, 0.0, 100.0, "m", "geometry",
+    "Distance behind the boat to anchor the detour entry (m; 0 = at boat)."},
+  {"line_following_weight", 1.0, 0.0, 1000.0, "", "weights",
+    "Higher = hug the nominal line."},
+  {"obstacle_avoidance_weight", 1.0, 0.0, 1000.0, "", "weights",
+    "Higher = deviate more around obstacles."},
+  {"smoothness_weight", 2.0, 0.0, 1000.0, "", "weights",
+    "Higher = smoother detours."},
+  {"chatter_damping_weight", 0.0, 0.0, 1000.0, "", "weights",
+    "Higher = steadier tick-to-tick."},
+  {"avoid_speed", 0.0, 0.0, 20.0, "m/s", "speed",
+    "Inner speed limit while deviating (m/s; 0 = off)."},
+};
 }  // namespace
+
+void declareAvoidanceControlParams(
+  const rclcpp_lifecycle::LifecycleNode::SharedPtr & node, const std::string & name)
+{
+  for (const auto & t : kTunables) {
+    const std::string base = name + "." + t.suffix;
+
+    // Startup-only bound parameter: [min, max] for the FloatingPointRange.
+    // Platforms override it per deployment; a malformed value (wrong size/type,
+    // non-finite, or min >= max) is rejected with a warning and the built-in
+    // default range is used instead. Declared dynamic_typing so a platform may
+    // write the bounds as an integer array (`[1, 10]`, the natural YAML form)
+    // without a type-mismatch throw at declare; integer arrays are coerced below.
+    rcl_interfaces::msg::ParameterDescriptor range_desc;
+    range_desc.dynamic_typing = true;
+    nav2_util::declare_parameter_if_not_declared(
+      node, base + "_range",
+      rclcpp::ParameterValue(std::vector<double>{t.default_min, t.default_max}), range_desc);
+
+    std::vector<double> range;
+    const auto range_value = node->get_parameter(base + "_range").get_parameter_value();
+    if (range_value.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE_ARRAY) {
+      range = range_value.get<std::vector<double>>();
+    } else if (range_value.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER_ARRAY) {
+      const auto ints = range_value.get<std::vector<int64_t>>();
+      range.assign(ints.begin(), ints.end());
+    }  // any other type leaves `range` empty -> malformed fallback below
+
+    double rmin = t.default_min;
+    double rmax = t.default_max;
+    if (range.size() == 2 && std::isfinite(range[0]) && std::isfinite(range[1]) &&
+      range[0] < range[1])
+    {
+      rmin = range[0];
+      rmax = range[1];
+    } else {
+      RCLCPP_WARN(
+        node->get_logger(),
+        "%s: malformed '%s_range' (need [min, max] with min < max); using "
+        "default [%g, %g].", name.c_str(), t.suffix, t.default_min, t.default_max);
+    }
+
+    rcl_interfaces::msg::FloatingPointRange fp_range;
+    fp_range.from_value = rmin;
+    fp_range.to_value = rmax;
+    fp_range.step = 0.0;  // continuous
+    rcl_interfaces::msg::ParameterDescriptor descriptor;
+    descriptor.description = t.description;
+    descriptor.floating_point_range.push_back(fp_range);
+
+    // Clamp the built-in default into the (possibly platform-narrowed) range so
+    // declaring it never trips rclcpp's initial-value range validation. A
+    // platform that overrides the *value* out of its own range fails loudly at
+    // declare time, which is the correct signal for a self-contradictory config.
+    const double initial = std::clamp(t.default_value, rmin, rmax);
+    nav2_util::declare_parameter_if_not_declared(
+      node, base, rclcpp::ParameterValue(initial), descriptor);
+  }
+}
+
+void bindAvoidanceControls(marine_control::ControlServer & server, const std::string & name)
+{
+  for (const auto & t : kTunables) {
+    server.bind_parameter(name + "." + t.suffix, t.units, t.group);
+  }
+}
 
 void AvoidanceController::configure(
   const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
@@ -133,16 +240,11 @@ void AvoidanceController::configure(
       nav2_util::declare_parameter_if_not_declared(node, name_ + "." + suffix, value);
     };
   declare("primary_controller", rclcpp::ParameterValue(std::string("")));
-  declare("max_deviation", rclcpp::ParameterValue(6.0));
-  declare("along_track_spacing", rclcpp::ParameterValue(2.0));
-  declare("lateral_resolution", rclcpp::ParameterValue(0.5));
-  declare("line_following_weight", rclcpp::ParameterValue(1.0));
-  declare("obstacle_avoidance_weight", rclcpp::ParameterValue(1.0));
-  declare("smoothness_weight", rclcpp::ParameterValue(2.0));
-  declare("chatter_damping_weight", rclcpp::ParameterValue(0.0));
-  declare("max_lateral_change", rclcpp::ParameterValue(1.0));
-  declare("anchor_behind_distance", rclcpp::ParameterValue(4.0));
-  declare("avoid_speed", rclcpp::ParameterValue(0.0));
+
+  // The live operator-tunable parameters are declared with FloatingPointRange
+  // descriptors whose bounds are platform-customisable via `<name>.<t>_range`
+  // startup params; this is also what the marine_control panel binds to.
+  declareAvoidanceControlParams(node, name_);
 
   const std::string primary_type =
     node->get_parameter(name_ + ".primary_controller").as_string();
@@ -180,6 +282,7 @@ void AvoidanceController::cleanup()
     primary_->cleanup();
   }
   viz_pub_.reset();
+  control_server_.reset();
 }
 
 void AvoidanceController::activate()
@@ -189,6 +292,24 @@ void AvoidanceController::activate()
   }
   if (viz_pub_) {
     viz_pub_->on_activate();
+  }
+
+  // Expose the live tunables on the marine_control panel while the controller is
+  // active (reset in deactivate/cleanup). The server attaches to the parent
+  // controller_server node; per-plugin topics keep multiple controllers from
+  // colliding on it. bind_parameter runs here, before any server callback can
+  // dispatch: the controller_server is single-threaded (nav2 default), so
+  // activate() owns the executor thread for the duration of this call, which
+  // satisfies the control_server.hpp bind-before-spin contract. Composing the
+  // controller_server into a multi-threaded executor would void that — don't,
+  // without revisiting the binding-table locking.
+  if (auto node = node_.lock()) {
+    marine_control::ControlServerOptions options;
+    options.device_name = "Survey Obstacle Avoidance (" + name_ + ")";
+    options.state_topic = "~/control/" + name_ + "/state";
+    options.change_topic = "~/control/" + name_ + "/change";
+    control_server_ = std::make_shared<marine_control::ControlServer>(node.get(), options);
+    bindAvoidanceControls(*control_server_, name_);
   }
 }
 
@@ -206,6 +327,9 @@ void AvoidanceController::deactivate()
   if (viz_pub_) {
     viz_pub_->on_deactivate();
   }
+  // Tear down the control channel so the panel stops advertising for an inactive
+  // controller (and the heartbeat/change sub are gone before re-activation).
+  control_server_.reset();
 }
 
 void AvoidanceController::setPlan(const nav_msgs::msg::Path & path)

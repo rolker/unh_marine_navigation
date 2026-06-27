@@ -18,10 +18,24 @@
 #include "tf2_ros/buffer.h"
 #include "visualization_msgs/msg/marker_array.hpp"
 
+#include "marine_control/control_server.hpp"
 #include "marine_nav_utilities/corridor_solver.h"
 
 namespace marine_nav_avoidance_controller
 {
+
+// Declare the live avoidance tunables on `node` under `<name>.*`, each with a
+// FloatingPointRange descriptor whose bounds come from a startup-only companion
+// parameter `<name>.<tunable>_range` ([min, max] double array) so platforms can
+// customise them. A malformed range falls back to a built-in default (warned).
+// Free function so the gtest can exercise the real declaration logic without a
+// full nav2 controller_server bring-up.
+void declareAvoidanceControlParams(
+  const rclcpp_lifecycle::LifecycleNode::SharedPtr & node, const std::string & name);
+
+// Bind the live avoidance tunables (declared by declareAvoidanceControlParams)
+// to `server` as marine_control controls, with their units and UI groups.
+void bindAvoidanceControls(marine_control::ControlServer & server, const std::string & name);
 
 // A decorator nav2_core::Controller that reshapes the followed path around
 // obstacles before delegating to an inner ("primary") controller. The inner
@@ -119,6 +133,13 @@ protected:
   // avoiding->clear transition that was_avoiding_ tracks.
   rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>::SharedPtr viz_pub_;
   bool was_avoiding_{false};
+
+  // Boat-side marine_control server, attached to the parent controller_server
+  // node. Publishes the live tunables as bridgeable controls and applies
+  // operator changes via the validated parameter path (FloatingPointRange).
+  // Lives only while the controller is active (created in activate, reset in
+  // deactivate/cleanup); per-plugin topics avoid collisions on the shared node.
+  std::shared_ptr<marine_control::ControlServer> control_server_;
 };
 
 }  // namespace marine_nav_avoidance_controller

@@ -11,6 +11,7 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(marine_control REQUIRED)
 find_package(marine_nav_utilities REQUIRED)
 find_package(nav2_core REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
@@ -43,6 +44,7 @@ target_link_libraries(${PROJECT_NAME}
 
 ament_target_dependencies(${PROJECT_NAME}
   geometry_msgs
+  marine_control
   marine_nav_utilities
   nav2_core
   nav2_costmap_2d
@@ -81,6 +83,22 @@ if(BUILD_TESTING)
   # marine_nav_utilities (test_corridor_solver). The controller's remaining code
   # is ROS plumbing (configure/lifecycle/delegate) + costmap sampling, validated
   # in sim + on-water per the #59 acceptance criteria.
+
+  # marine_control device-control wiring (unh_marine_autonomy#140 / ADR-0003):
+  # exercises the real declareAvoidanceControlParams / bindAvoidanceControls
+  # helpers against a LifecycleNode + ControlServer (no nav2 bring-up). Verifies
+  # the 10 tunables are advertised with their ranges/groups, a platform _range
+  # override is honoured, an in-range change applies, and an out-of-range change
+  # is rejected by the FloatingPointRange over the marine_control channel.
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_avoidance_control test/test_avoidance_control.cpp)
+  target_link_libraries(test_avoidance_control ${PROJECT_NAME})
+  ament_target_dependencies(test_avoidance_control
+    marine_control
+    marine_control_interfaces
+    rclcpp
+    rclcpp_lifecycle
+  )
 endif()
 
 ament_package()
