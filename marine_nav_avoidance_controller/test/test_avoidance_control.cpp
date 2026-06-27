@@ -16,6 +16,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -135,6 +136,24 @@ TEST_F(AvoidanceControlTest, PlatformRangeOverrideIsHonoured)
   marine_nav_avoidance_controller::declareAvoidanceControlParams(node, kName);
 
   marine_control::ControlServer server(node.get());  // default topics fine here
+  marine_nav_avoidance_controller::bindAvoidanceControls(server, kName);
+
+  const auto * max_dev = findItem(server.build_control_set(), "FollowPath.max_deviation");
+  ASSERT_NE(max_dev, nullptr);
+  EXPECT_DOUBLE_EQ(max_dev->min_value, 1.0);
+  EXPECT_DOUBLE_EQ(max_dev->max_value, 10.0);
+}
+
+TEST_F(AvoidanceControlTest, IntegerRangeOverrideIsAcceptedAndCoerced)
+{
+  // A platform may write the bounds as integers (`[1, 10]`, the natural YAML
+  // form). They must be accepted and coerced to doubles, not rejected with a
+  // parameter-type-mismatch throw that would fail controller bring-up.
+  auto node = makeNode(
+    {rclcpp::Parameter("FollowPath.max_deviation_range", std::vector<int64_t>{1, 10})});
+  marine_nav_avoidance_controller::declareAvoidanceControlParams(node, kName);
+
+  marine_control::ControlServer server(node.get());
   marine_nav_avoidance_controller::bindAvoidanceControls(server, kName);
 
   const auto * max_dev = findItem(server.build_control_set(), "FollowPath.max_deviation");

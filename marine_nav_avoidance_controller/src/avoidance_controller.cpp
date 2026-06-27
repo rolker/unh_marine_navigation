@@ -163,13 +163,25 @@ void declareAvoidanceControlParams(
     const std::string base = name + "." + t.suffix;
 
     // Startup-only bound parameter: [min, max] for the FloatingPointRange.
-    // Platforms override it per deployment; a malformed value (wrong size,
+    // Platforms override it per deployment; a malformed value (wrong size/type,
     // non-finite, or min >= max) is rejected with a warning and the built-in
-    // default range is used instead.
+    // default range is used instead. Declared dynamic_typing so a platform may
+    // write the bounds as an integer array (`[1, 10]`, the natural YAML form)
+    // without a type-mismatch throw at declare; integer arrays are coerced below.
+    rcl_interfaces::msg::ParameterDescriptor range_desc;
+    range_desc.dynamic_typing = true;
     nav2_util::declare_parameter_if_not_declared(
       node, base + "_range",
-      rclcpp::ParameterValue(std::vector<double>{t.default_min, t.default_max}));
-    const std::vector<double> range = node->get_parameter(base + "_range").as_double_array();
+      rclcpp::ParameterValue(std::vector<double>{t.default_min, t.default_max}), range_desc);
+
+    std::vector<double> range;
+    const auto range_value = node->get_parameter(base + "_range").get_parameter_value();
+    if (range_value.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE_ARRAY) {
+      range = range_value.get<std::vector<double>>();
+    } else if (range_value.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER_ARRAY) {
+      const auto ints = range_value.get<std::vector<int64_t>>();
+      range.assign(ints.begin(), ints.end());
+    }  // any other type leaves `range` empty -> malformed fallback below
 
     double rmin = t.default_min;
     double rmax = t.default_max;
