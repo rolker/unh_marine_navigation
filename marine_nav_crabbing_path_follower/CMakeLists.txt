@@ -81,6 +81,22 @@ if(BUILD_TESTING)
       "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
     ament_target_dependencies(test_gain_schedule geometry_msgs)
   endif()
+
+  # marine_control device-control wiring (unh_marine_autonomy#140 / ADR-0003 —
+  # the external marine_control device-control ADR, not this workspace's ADR-0003):
+  # exercises the real declareCrabbingDefaultSpeed / declareCrabbingControlParams /
+  # bindCrabbingControls helpers against a LifecycleNode + ControlServer (no nav2
+  # bring-up). Verifies the ten controls are advertised with their ranges/groups, a
+  # platform _range override is honoured, an in-range change applies, and an
+  # out-of-range change is rejected by the FloatingPointRange over the channel.
+  ament_add_gtest(test_crabbing_control test/test_crabbing_control.cpp)
+  target_link_libraries(test_crabbing_control ${PROJECT_NAME})
+  ament_target_dependencies(test_crabbing_control
+    marine_control
+    marine_control_interfaces
+    rclcpp
+    rclcpp_lifecycle
+  )
 endif()
 
 ament_package()
