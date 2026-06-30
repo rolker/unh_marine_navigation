@@ -189,3 +189,23 @@ legacy file is out of scope for this issue; flag for a dedicated style sweep.
 
 ### Next step
 review-code.
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-06-30 16:18 +00:00
+**By**: Claude Code Agent (Claude Opus)
+**Verdict**: approved
+
+**Branch**: feature/issue-84 at `b4f64a3`
+**Mode**: pre-push
+**Depth**: Deep (reason: 611 changed code lines >200; lifecycle/concurrency + cross-module marine_control integration)
+**Must-fix**: 0 | **Suggestions**: 6
+**Round**: 1 | **Ship**: recommended — no must-fix findings; both adversarial passes converged clean
+
+### Findings
+- [ ] (suggestion) Wrap-case topic collision is config-mitigated, not enforced — inner+wrapper ControlServers share topics unless deployment sets `marine_control.namespace`; no warn if forgotten (standalone path is correct). Cross-confirmed with plan-review must-fix A — `src/crabbing_path_follower.cpp:348-370`
+- [ ] (suggestion) `NamespaceParamDifferentiatesTopicsWhenWrapped` asserts hardcoded string literals, exercises no production namespace-read/fallback logic — `test/test_crabbing_control.cpp:200-225`
+- [ ] (suggestion) Platform `_range` narrower than the built-in default silently clamps the effective tunable value into range (documented, untested) — `src/crabbing_path_follower.cpp:298`
+- [ ] (suggestion) Negative-but-ordered `_range` (e.g. `[-5,-1]`) advertises a range the exclusive `>0` callback rejects → advertised range vs held value inconsistent; guard checks ordering not sign — `src/crabbing_path_follower.cpp:274-301`
+- [ ] (suggestion) `node_.lock()` failure in `activate()` silently no-ops (no server, no log); an RCLCPP_WARN would aid field debugging — `src/crabbing_path_follower.cpp:528`
+- [ ] (suggestion) Pre-existing package-wide lint debt (no copyright headers, long lines) — all `.cpp` cpplint hits are on untouched pre-existing lines; new test follows the package's established no-copyright convention; flag for a dedicated style sweep — `marine_nav_crabbing_path_follower/*`
