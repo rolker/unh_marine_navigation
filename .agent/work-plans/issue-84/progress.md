@@ -209,3 +209,95 @@ review-code.
 - [ ] (suggestion) Negative-but-ordered `_range` (e.g. `[-5,-1]`) advertises a range the exclusive `>0` callback rejects → advertised range vs held value inconsistent; guard checks ordering not sign — `src/crabbing_path_follower.cpp:274-301`
 - [ ] (suggestion) `node_.lock()` failure in `activate()` silently no-ops (no server, no log); an RCLCPP_WARN would aid field debugging — `src/crabbing_path_follower.cpp:528`
 - [ ] (suggestion) Pre-existing package-wide lint debt (no copyright headers, long lines) — all `.cpp` cpplint hits are on untouched pre-existing lines; new test follows the package's established no-copyright convention; flag for a dedicated style sweep — `marine_nav_crabbing_path_follower/*`
+
+## Implementation (review fix pass)
+**Status**: complete
+**When**: 2026-06-30 16:40 +00:00
+**By**: Claude Opus
+
+**Branch**: feature/issue-84
+**Commits**:
+- `6766314` fix(crabbing): harden marine_control error-handling per #84 review
+
+Operator-approved scope: address ONLY the three error-handling suggestions from
+the pre-push review; the other three (lint debt, namespace-test string literals,
+clamp doc) are explicitly deferred.
+
+### How each addressed finding was resolved
+
+1. **Silent `node_.lock()` no-op in `activate()`** (review finding
+   `src/crabbing_path_follower.cpp:528`) — added an `else` branch to the
+   `if (auto node = node_.lock())` block that warns without requiring the locked
+   node (uses the stored `logger_`, a `rclcpp::Logger` value set in
+   `configure()`, exactly as `deactivate()`/`cleanup()` already do). Control flow
+   is unchanged — the skip just became observable:
+   ```cpp
+   } else {
+     RCLCPP_WARN(
+       logger_,
+       "CrabbingPathFollower: parent node expired during activate() of plugin "
+       "%s; skipping marine_control panel wiring (no ControlServer created). "
+       "Tunables remain live in-process but will not be exposed topside.",
+       plugin_name_.c_str());
+   }
+   ```
+
+2. **Range-sign guard** (review finding `src/crabbing_path_follower.cpp:274-301`)
+   — tightened the well-formed-range condition in `declareCrabbingControlParams`
+   to also require the lower bound be at or above the tunable's valid floor
+   (`t.default_min`, which mirrors the callback's positivity/validity rule). A
+   negative-but-ordered range now falls back to the built-in default exactly like
+   a misordered or non-finite one (graceful-fallback philosophy preserved):
+   ```cpp
+   if (range.size() == 2 && std::isfinite(range[0]) && std::isfinite(range[1]) &&
+     range[0] < range[1] && range[0] >= t.default_min)
+   ```
+   The warning message was updated to state the floor:
+   `"need [min, max] with %g <= min < max"`. **Unit-tested** — added
+   `NegativeOrderedRangeFallsBackToDefault` to `test/test_crabbing_control.cpp`,
+   mirroring the existing `MalformedRangeFallsBackToDefault` (sets
+   `heading_rate_gain_range` to `[-5, -1]`, asserts the default `[0, 10]` is
+   advertised). Cleanly testable with the existing scaffolding, so it was added.
+
+3. **Resolved namespace not logged** (review finding
+   `src/crabbing_path_follower.cpp:348-370`) — added an `RCLCPP_INFO` in
+   `activate()` after the ControlServer is created, stating the resolved
+   namespace and the resulting topics:
+   ```cpp
+   RCLCPP_INFO(
+     logger_,
+     "CrabbingPathFollower: marine_control namespace '%s' -> topics "
+     "~/control/%s/state and ~/control/%s/change",
+     marine_control_namespace_.c_str(), marine_control_namespace_.c_str(),
+     marine_control_namespace_.c_str());
+   ```
+   This is the practical mitigation for the config-not-enforced wrap case (review
+   finding `:348-370`): a deployment that wrapped the follower but forgot to set
+   `marine_control.namespace` is now diagnosable from the logs.
+
+### Deferred (per operator instruction — left as-is)
+- Pre-existing package-wide lint debt (copyright headers / >100-char lines).
+- `NamespaceParamDifferentiatesTopicsWhenWrapped` asserting string literals.
+- Narrower-platform-range silent clamp (documented at `cpp` clamp site).
+
+### plan.md
+Not changed — the design is unchanged. The plan already describes the `_range`
+override as "malformed → fallback"; the negative-but-ordered case is a
+refinement of that same notion, and the two new logs are observability, not
+design. plan.md remains accurate.
+
+### Build result
+`./core_ws/build.sh marine_nav_crabbing_path_follower` — **PASS** (13.6s). Only
+pre-existing `-Wunused-parameter` / `-Wsign-compare` warnings in untouched code;
+no new warnings from the added lines.
+
+### Test result
+`./core_ws/test.sh marine_nav_crabbing_path_follower` — all gtest suites
+**green**: `test_crabbing_control` **8/8** (was 7; +`NegativeOrderedRangeFallsBackToDefault`),
+`test_gain_schedule` 9/9, `test_path_geometry` 18/18. The 44 reported failures
+are entirely the deferred pre-existing `ament_cpplint`/`ament_uncrustify` lint
+debt (copyright headers, header-guard style, long pre-existing lines); no gtest
+failures.
+
+### Next step
+Host re-review and publish (do NOT push / open PR per the exit contract).
