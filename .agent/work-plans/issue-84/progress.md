@@ -83,3 +83,19 @@ established pattern already present in `marine_nav_avoidance_controller` and
 
 ### Open questions
 - [ ] No open questions — plan is review-plan-ready.
+
+## Plan Review
+**Status**: complete
+**When**: 2026-06-30 15:13 +00:00
+**By**: Claude Code Agent (Claude Opus)
+
+**Plan**: `.agent/work-plans/issue-84/plan.md` at `2e799fe`
+**PR**: PR-less (--issue mode; local feature/issue-84)
+**Verdict**: changes-requested
+
+### Findings
+- [ ] (must-fix) Wrapped-by-avoidance topic collision: `marine_nav_avoidance_controller` configures its inner controller under the **same** name (`avoidance_controller.cpp:271`) and calls `primary_->activate()` (`:291`). Once the crabbing follower also creates a `ControlServer` in `activate()` on `~/control/<plugin_name_>/state|change`, a wrapped crabbing follower and its wrapper both advertise on identical topics → two colliding state publishers exposing different control sets; the panel sees an incoherent set. Standalone crabbing is fine. The plan's "per-plugin topics keep multiple controllers from colliding" assumes distinct names; the wrap case shares one. Decide before implementing: scope to standalone + document, differentiate the inner's topic/name when wrapped, or have the wrapper suppress/forward the inner's server. — `plan.md:4` (step 4) / Consequences table `plan.md:92-97`
+- [ ] (must-fix) `default_speed` won't receive a `FloatingPointRange` from `declareCrabbingControlParams()`: it is already declared at `crabbing_path_follower.cpp:43`, before any "before the read_validated block" insertion point, so the helper's `declare_parameter_if_not_declared` no-ops for it (the descriptor only attaches at first declaration). Moreover, attaching a range descriptor to `default_speed` changes declare-time validation and can preempt the existing graceful invalid-value fallback (`cpp:52-107`) — an out-of-range YAML value would now throw at declare instead of falling back. The plan treats all params uniformly; `default_speed` needs explicit handling (attach the descriptor at its existing declaration site with a range permissive enough to preserve the fallback, or exclude it from the generic helper and bind it separately). — `plan.md:21-37`
+- [ ] (must-fix) Missing test build dependencies: the new `test_crabbing_control.cpp` mirrors `test_avoidance_control.cpp`, which `#include`s `marine_control_interfaces/msg/*`. The sibling declares `<test_depend>marine_control_interfaces</test_depend>` (package.xml) and `ament_target_dependencies(test_avoidance_control marine_control marine_control_interfaces rclcpp rclcpp_lifecycle)` + `target_link_libraries(... ${PROJECT_NAME})`. The plan's step 8 adds only `<depend>marine_control</depend>` and step 9 omits `marine_control_interfaces` and the test-target link — the test won't build as written. — `plan.md:54-57`, `plan.md:71-73`
+- [ ] (suggestion) Param count mismatch: step 1 says "Params to expose (9)" but then lists 10 (`default_speed` + 9 others). Reconcile — likely tied to the `default_speed` handling decision above (9 simple tunables via the helper, `default_speed` handled separately). — `plan.md:27`
+- [ ] (suggestion) Confirm the ADR reference: "ADR-0003 (marine_control D4–D6)" is the external marine_control device-control ADR (cf. `test_avoidance_control.cpp:2` "unh_marine_autonomy#140 / ADR-0003"), not this workspace's ADR-0003 (`workspace-infrastructure-is-project-agnostic`). The plan complies by mirroring the avoidance pattern exactly; just disambiguate the citation. — `plan.md:90`
