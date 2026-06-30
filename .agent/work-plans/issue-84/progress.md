@@ -71,3 +71,15 @@ established pattern already present in `marine_nav_avoidance_controller` and
 - [ ] Confirm `CMakeLists.txt` is updated with `marine_control` find/link (not listed in acceptance criteria but required to build).
 - [ ] Confirm instantiation hook is `activate()` not `configure()` — check avoidance controller pattern vs. issue description wording.
 - [ ] Consider adding a test for the marine_control binding path.
+
+## Plan Authored
+**Status**: complete
+**When**: 2026-06-30 00:00 +00:00
+**By**: Claude Code Agent (Claude Sonnet)
+
+**Plan**: `.agent/work-plans/issue-84/plan.md` at `2e799fe`
+**Branch**: feature/issue-84 at `2e799fe`
+**Phases**: single
+
+### Open questions
+- [ ] No open questions — plan is review-plan-ready.
