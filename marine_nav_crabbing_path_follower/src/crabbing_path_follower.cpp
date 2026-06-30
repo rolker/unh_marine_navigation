@@ -3,16 +3,160 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <string>
+#include <vector>
 
 #include "marine_nav_crabbing_path_follower/path_geometry.hpp"
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav2_util/node_utils.hpp"
 #include "marine_nav_utilities/gz4d/angles.hpp"
+#include "rcl_interfaces/msg/floating_point_range.hpp"
+#include "rcl_interfaces/msg/parameter_descriptor.hpp"
 #include "rcl_interfaces/msg/set_parameters_result.hpp"
 
 namespace marine_nav_crabbing_path_follower
 {
+
+namespace
+{
+// Single source of truth for the nine live operator-tunable parameters exposed
+// through marine_control (default_speed is handled separately — see
+// declareCrabbingDefaultSpeed). For each: the value default, the built-in
+// fallback range [min, max], panel units, UI group, and help text. Both
+// declareCrabbingControlParams (declares them with descriptors) and
+// bindCrabbingControls (binds them to the marine_control server) iterate this,
+// so a parameter is never declared and bound out of sync. The [min, max] bounds
+// mirror the lower-bound validation the on-set-parameters callback already
+// enforces (exclusive ">0" gains are given a 0.0 panel floor; the callback still
+// rejects an exact 0). Mirrors avoidance_controller.cpp's kTunables.
+struct CrabbingTunable
+{
+  const char * suffix;
+  double default_value;
+  double default_min;
+  double default_max;
+  const char * units;
+  const char * group;
+  const char * description;
+};
+
+constexpr CrabbingTunable kTunables[] = {
+  {"heading_rate_gain", 1.0, 0.0, 10.0, "", "heading",
+    "Inner heading-loop proportional gain (yaw rate per heading error)."},
+  {"max_yaw_rate", M_PI, 0.0, 2.0 * M_PI, "rad/s", "heading",
+    "Yaw-rate clamp applied to the heading loop (rad/s)."},
+  {"lookahead_distance", 0.0, 0.0, 100.0, "m", "lookahead",
+    "Fixed pure-pursuit look-ahead distance (m; 0 = follow the segment azimuth)."},
+  {"lookahead_time", 0.0, 0.0, 30.0, "s", "lookahead",
+    "Speed-scaled look-ahead horizon (s; 0 = off, use the fixed distance)."},
+  {"lookahead_min_distance", 1.0, 0.0, 100.0, "m", "lookahead",
+    "Floor for the speed-scaled look-ahead distance (m; applies when time > 0)."},
+  {"new_plan_goal_tolerance", 1.0, 0.0, 100.0, "m", "tracking",
+    "Goal-pose move that counts as a genuinely new line and resets the cursor (m)."},
+  {"cross_track_error_slew_rate", 0.0, 0.0, 50.0, "m/s", "tracking",
+    "Cross-track-error slew-rate limit fed to the PID (m/s; 0 = off)."},
+  {"pid.gain_ref_speed", 0.0, 0.0, 20.0, "m/s", "pid",
+    "Reference speed for the cross-track gain schedule (m/s; 0 = disabled)."},
+  {"pid.gain_v_min", 0.5, 0.0, 20.0, "m/s", "pid",
+    "Divisor floor for the gain schedule (m/s; the callback enforces > 0)."},
+};
+
+// default_speed's panel range. Permissive enough that every physically
+// meaningful survey-USV speed is in range (so the bespoke configure-time
+// fallback, not the descriptor, handles invalid values); only a
+// self-contradictory out-of-range override fails loudly at declare. Matches the
+// avoidance sibling's avoid_speed bound (0..20 m/s).
+constexpr double kDefaultSpeedMin = 0.0;
+constexpr double kDefaultSpeedMax = 20.0;
+}  // namespace
+
+void declareCrabbingDefaultSpeed(
+  const rclcpp_lifecycle::LifecycleNode::SharedPtr & node, const std::string & name)
+{
+  rcl_interfaces::msg::FloatingPointRange fp_range;
+  fp_range.from_value = kDefaultSpeedMin;
+  fp_range.to_value = kDefaultSpeedMax;
+  fp_range.step = 0.0;  // continuous
+  rcl_interfaces::msg::ParameterDescriptor descriptor;
+  descriptor.description =
+    "Commanded survey speed (m/s). Live-tunable from the operator station and via "
+    "ros2 param set; both land on the same atomic.";
+  descriptor.floating_point_range.push_back(fp_range);
+  // Default 1.0 is within range, so a deployment that does not override it never
+  // throws. An out-of-range *override* fails loudly here; every in-range value
+  // (including 0 and the wrong-type/integer cases) still flows to the bespoke
+  // fallback in configure().
+  nav2_util::declare_parameter_if_not_declared(
+    node, name + ".default_speed", rclcpp::ParameterValue(1.0), descriptor);
+}
+
+void declareCrabbingControlParams(
+  const rclcpp_lifecycle::LifecycleNode::SharedPtr & node, const std::string & name)
+{
+  for (const auto & t : kTunables) {
+    const std::string base = name + "." + t.suffix;
+
+    // Startup-only bound parameter: [min, max] for the FloatingPointRange.
+    // Platforms override it per deployment; a malformed value (wrong size/type,
+    // non-finite, or min >= max) is rejected with a warning and the built-in
+    // default range is used instead. Declared dynamic_typing so a platform may
+    // write the bounds as an integer array (`[1, 10]`, the natural YAML form)
+    // without a type-mismatch throw at declare; integer arrays are coerced below.
+    rcl_interfaces::msg::ParameterDescriptor range_desc;
+    range_desc.dynamic_typing = true;
+    nav2_util::declare_parameter_if_not_declared(
+      node, base + "_range",
+      rclcpp::ParameterValue(std::vector<double>{t.default_min, t.default_max}), range_desc);
+
+    std::vector<double> range;
+    const auto range_value = node->get_parameter(base + "_range").get_parameter_value();
+    if (range_value.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE_ARRAY) {
+      range = range_value.get<std::vector<double>>();
+    } else if (range_value.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER_ARRAY) {
+      const auto ints = range_value.get<std::vector<int64_t>>();
+      range.assign(ints.begin(), ints.end());
+    }  // any other type leaves `range` empty -> malformed fallback below
+
+    double rmin = t.default_min;
+    double rmax = t.default_max;
+    if (range.size() == 2 && std::isfinite(range[0]) && std::isfinite(range[1]) &&
+      range[0] < range[1])
+    {
+      rmin = range[0];
+      rmax = range[1];
+    } else {
+      RCLCPP_WARN(
+        node->get_logger(),
+        "%s: malformed '%s_range' (need [min, max] with min < max); using "
+        "default [%g, %g].", name.c_str(), t.suffix, t.default_min, t.default_max);
+    }
+
+    rcl_interfaces::msg::FloatingPointRange fp_range;
+    fp_range.from_value = rmin;
+    fp_range.to_value = rmax;
+    fp_range.step = 0.0;  // continuous
+    rcl_interfaces::msg::ParameterDescriptor descriptor;
+    descriptor.description = t.description;
+    descriptor.floating_point_range.push_back(fp_range);
+
+    // Clamp the built-in default into the (possibly platform-narrowed) range so
+    // declaring it never trips rclcpp's initial-value range validation. A
+    // platform that overrides the *value* out of its own range fails loudly at
+    // declare time, which is the correct signal for a self-contradictory config.
+    const double initial = std::clamp(t.default_value, rmin, rmax);
+    nav2_util::declare_parameter_if_not_declared(
+      node, base, rclcpp::ParameterValue(initial), descriptor);
+  }
+}
+
+void bindCrabbingControls(marine_control::ControlServer & server, const std::string & name)
+{
+  server.bind_parameter(name + ".default_speed", "m/s", "speed");
+  for (const auto & t : kTunables) {
+    server.bind_parameter(name + "." + t.suffix, t.units, t.group);
+  }
+}
 
 void CrabbingPathFollower::configure(
   const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
@@ -40,7 +184,11 @@ void CrabbingPathFollower::configure(
   double pid_reset_threshold_seconds = node->get_parameter(plugin_name_ + ".pid.reset_threshold_seconds").as_double();
   pid_reset_threshold_ = rclcpp::Duration::from_seconds(pid_reset_threshold_seconds);
 
-  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".default_speed", rclcpp::ParameterValue(1.0));
+  // Declare default_speed with its marine_control FloatingPointRange descriptor
+  // (the panel binds to it). The bespoke type/finite/>0 fallback immediately
+  // below is unchanged: the [0, 20] range is permissive enough that every
+  // physically meaningful value still routes through that fallback.
+  declareCrabbingDefaultSpeed(node, plugin_name_);
   // Apply the same type + isfinite + >0 guard at configure-time that the
   // param callback below applies to live updates. Without this, an
   // invalid YAML/launch value (wrong type, NaN/Inf, <=0) propagates into
@@ -270,6 +418,15 @@ void CrabbingPathFollower::configure(
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".transform_tolerance", rclcpp::ParameterValue(transform_tolerance_));
   node->get_parameter(plugin_name_ + ".transform_tolerance", transform_tolerance_);
 
+  // Declare the nine live operator-tunables with FloatingPointRange descriptors
+  // (and their `<name>.<tunable>_range` startup overrides) BEFORE the
+  // read_validated block below, so the descriptor attaches at first declaration;
+  // read_validated's declare_parameter_if_not_declared then no-ops the
+  // declaration but still reads + validates the value into the atomic. This is
+  // also what the marine_control panel binds to. (default_speed was declared
+  // with its own descriptor above.)
+  declareCrabbingControlParams(node, plugin_name_);
+
   // Inner heading loop + pure-pursuit look-ahead (see header). All defaults
   // reproduce the historical segment-azimuth behaviour, so nothing changes
   // until tuned. Declared + validated here, kept live-tunable by the parameter
@@ -316,6 +473,30 @@ void CrabbingPathFollower::configure(
   read_validated(".pid.gain_ref_speed", pid_gain_ref_speed_, 0.0, false);
   read_validated(".pid.gain_v_min", pid_gain_v_min_, 0.0, true);
 
+  // marine_control panel namespace for the control topics created in activate().
+  // Defaults to plugin_name_, so a standalone controller's topics are
+  // byte-identical to before this change (~/control/<plugin_name_>/state|change).
+  // A controller wrapped under the SAME plugin name (marine_nav_avoidance_controller
+  // configures + activates its inner controller as plugin_name_, and itself
+  // advertises a ControlServer on ~/control/<plugin_name_>/...) sets this to a
+  // distinct value in its deployment config so the inner and wrapping servers
+  // don't collide on identical topics. The bound parameter NAMES stay
+  // <plugin_name_>.* regardless — only the panel channel is namespaced.
+  rcl_interfaces::msg::ParameterDescriptor ns_desc;
+  ns_desc.description =
+    "marine_control panel namespace for this controller's control topics "
+    "(~/control/<namespace>/state|change). Defaults to the plugin name; set to a "
+    "distinct value when this follower is wrapped (e.g. by the avoidance controller) "
+    "so the inner and wrapping ControlServers do not collide on identical topics.";
+  nav2_util::declare_parameter_if_not_declared(
+    node, plugin_name_ + ".marine_control.namespace",
+    rclcpp::ParameterValue(plugin_name_), ns_desc);
+  marine_control_namespace_ =
+    node->get_parameter(plugin_name_ + ".marine_control.namespace").as_string();
+  if (marine_control_namespace_.empty()) {
+    marine_control_namespace_ = plugin_name_;  // empty -> standalone layout
+  }
+
   global_pub_ = node->create_publisher<nav_msgs::msg::Path>("received_global_plan", 1);
 }
 
@@ -330,6 +511,9 @@ void CrabbingPathFollower::cleanup()
   // state. Aligns with the nav2 controller plugin idiom of mirroring
   // configure()'s resource acquisition in cleanup().
   params_cb_handle_.reset();
+  // Safety net: nav2 can call cleanup() without a prior deactivate(); tear down
+  // the marine_control server here too (mirrors avoidance_controller cleanup()).
+  control_server_.reset();
   RCLCPP_INFO(logger_, "Cleaning up controller plugin %s", plugin_name_.c_str());
 }
 
@@ -343,11 +527,41 @@ void CrabbingPathFollower::activate()
   }
   pid_->initialize_from_ros_parameters();
 
+  // Expose the live tunables on the marine_control panel while the controller is
+  // active (reset in deactivate/cleanup). The server attaches to the parent
+  // controller_server node. Dual-path invariant: an operator change arriving as
+  // a marine_control `change` message is applied by setting the bound parameter,
+  // which runs the SAME add_on_set_parameters_callback registered in configure()
+  // — so a panel change and a `ros2 param set` both land on the same std::atomic
+  // members and stay consistent. No second callback is needed.
+  //
+  // bind runs here, before any server callback can dispatch: the
+  // controller_server is single-threaded (nav2 default), so activate() owns the
+  // executor thread for the duration of this call, satisfying control_server.hpp's
+  // bind-before-spin contract. Composing the controller_server into a
+  // multi-threaded executor would void that — don't, without revisiting it.
+  //
+  // The topic namespace is marine_control_namespace_ (defaults to plugin_name_,
+  // reproducing the standalone layout; differentiated when wrapped — see
+  // configure()), so a wrapped follower and its wrapper never advertise on the
+  // same ~/control/<ns>/state|change topics.
+  if (auto node = node_.lock()) {
+    marine_control::ControlServerOptions options;
+    options.device_name = "Crabbing Path Follower (" + plugin_name_ + ")";
+    options.state_topic = "~/control/" + marine_control_namespace_ + "/state";
+    options.change_topic = "~/control/" + marine_control_namespace_ + "/change";
+    control_server_ = std::make_shared<marine_control::ControlServer>(node.get(), options);
+    bindCrabbingControls(*control_server_, plugin_name_);
+  }
+
   RCLCPP_INFO(logger_, "Activating controller plugin %s", plugin_name_.c_str());
 }
 
 void CrabbingPathFollower::deactivate()
 {
+  // Tear down the control channel so the panel stops advertising for an inactive
+  // controller (heartbeat/change sub gone before re-activation).
+  control_server_.reset();
   RCLCPP_INFO(logger_, "Deactivating controller plugin %s", plugin_name_.c_str());
 }
 

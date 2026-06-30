@@ -11,6 +11,7 @@
   <buildtool_depend>ament_cmake_ros</buildtool_depend>
   <depend>control_toolbox</depend>
   <depend>geometry_msgs</depend>
+  <depend>marine_control</depend>
   <depend>marine_nav_utilities</depend>
   <depend>nav2_core</depend>
   <depend>nav2_costmap_2d</depend>

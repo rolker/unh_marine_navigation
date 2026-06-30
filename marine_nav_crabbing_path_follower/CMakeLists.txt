@@ -12,6 +12,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(control_toolbox REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(marine_control REQUIRED)
 find_package(marine_nav_utilities REQUIRED)
 find_package(nav2_core REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
@@ -38,6 +39,7 @@ target_compile_definitions(${PROJECT_NAME} PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNC
 ament_target_dependencies(${PROJECT_NAME}
   control_toolbox
   geometry_msgs
+  marine_control
   marine_nav_utilities
   nav2_core
   nav2_costmap_2d
