@@ -99,3 +99,93 @@ established pattern already present in `marine_nav_avoidance_controller` and
 - [ ] (must-fix) Missing test build dependencies: the new `test_crabbing_control.cpp` mirrors `test_avoidance_control.cpp`, which `#include`s `marine_control_interfaces/msg/*`. The sibling declares `<test_depend>marine_control_interfaces</test_depend>` (package.xml) and `ament_target_dependencies(test_avoidance_control marine_control marine_control_interfaces rclcpp rclcpp_lifecycle)` + `target_link_libraries(... ${PROJECT_NAME})`. The plan's step 8 adds only `<depend>marine_control</depend>` and step 9 omits `marine_control_interfaces` and the test-target link — the test won't build as written. — `plan.md:54-57`, `plan.md:71-73`
 - [ ] (suggestion) Param count mismatch: step 1 says "Params to expose (9)" but then lists 10 (`default_speed` + 9 others). Reconcile — likely tied to the `default_speed` handling decision above (9 simple tunables via the helper, `default_speed` handled separately). — `plan.md:27`
 - [ ] (suggestion) Confirm the ADR reference: "ADR-0003 (marine_control D4–D6)" is the external marine_control device-control ADR (cf. `test_avoidance_control.cpp:2` "unh_marine_autonomy#140 / ADR-0003"), not this workspace's ADR-0003 (`workspace-infrastructure-is-project-agnostic`). The plan complies by mirroring the avoidance pattern exactly; just disambiguate the citation. — `plan.md:90`
+
+## Implementation
+**Status**: complete
+**When**: 2026-06-30 16:05 +00:00
+**By**: Claude Opus
+
+**Branch**: feature/issue-84
+**Commits**:
+- `e2ebc2f` feat(crabbing): expose path-follower params via marine_control
+- `89385e0` test(crabbing): cover marine_control device-control wiring
+- (this docs commit) plan.md sync + progress.md entry
+
+### Files changed
+- `marine_nav_crabbing_path_follower/include/.../crabbing_path_follower.h` —
+  added `#include "marine_control/control_server.hpp"`, `<memory>`/`<string>`/
+  `rclcpp_lifecycle` includes, three free-function declarations
+  (`declareCrabbingDefaultSpeed`, `declareCrabbingControlParams`,
+  `bindCrabbingControls`), and `marine_control_namespace_` + `control_server_`
+  members.
+- `marine_nav_crabbing_path_follower/src/crabbing_path_follower.cpp` — added the
+  `kTunables[]` table + the three helpers; wired `configure()` (default_speed
+  descriptor, 9-tunable declare before `read_validated`, namespace param),
+  `activate()` (ControlServer + bind + dual-path/namespace comments),
+  `deactivate()`/`cleanup()` (reset).
+- `marine_nav_crabbing_path_follower/package.xml` — `<depend>marine_control</depend>`
+  + `<test_depend>marine_control_interfaces</test_depend>`.
+- `marine_nav_crabbing_path_follower/CMakeLists.txt` — `find_package(marine_control)`
+  + lib dep; `test_crabbing_control` target (links `${PROJECT_NAME}`, deps
+  marine_control/marine_control_interfaces/rclcpp/rclcpp_lifecycle).
+- `marine_nav_crabbing_path_follower/test/test_crabbing_control.cpp` — new (7 tests).
+- `.agent/work-plans/issue-84/plan.md` — synced to the implemented design.
+
+### How each must-fix (A–D) was resolved
+- **A (wrap-case differentiation)** — implemented the config-driven namespace.
+  Declared `<plugin_name_>.marine_control.namespace` (string descriptor) in
+  `configure()`, default = `plugin_name_`, stored in `marine_control_namespace_`
+  (empty -> falls back to `plugin_name_`). `activate()` builds the ControlServer
+  topics as `~/control/<namespace>/state|change`. **Mechanism chosen**: a
+  deployment-set parameter (not automatic wrap-detection), because the avoidance
+  wrapper configures + activates its inner controller under the SAME
+  `plugin_name_` (`avoidance_controller.cpp:271`, `:291`) and itself advertises a
+  ControlServer on `~/control/<plugin_name_>/...` — there is no in-process signal
+  the inner can read to know it is wrapped, so the deployment config is the clean
+  hook. Unset behaviour is byte-identical to today's standalone layout; when
+  wrapped, the deployment sets the inner's namespace to a distinct value so the
+  two servers never collide. Bound parameter *names* stay `<plugin_name_>.*`
+  regardless — only the panel channel is namespaced. Documented in
+  `activate()`/`configure()` comments and plan.md Consequences. Verified by
+  topic-string reasoning and `NamespaceParamDifferentiatesTopicsWhenWrapped`.
+- **B (default_speed descriptor)** — `default_speed` is declared at its existing
+  site (`cpp:43`) via `declareCrabbingDefaultSpeed`, attaching a
+  `FloatingPointRange [0, 20]` m/s (matching the avoidance `avoid_speed` bound).
+  The range is permissive so the bespoke configure-time graceful fallback
+  (`cpp:52-107`) is preserved for every physically meaningful value (0, integer,
+  bool/wrong-type still route through it); only a self-contradictory out-of-range
+  *override* fails loudly at declare. Excluded from the generic helper and bound
+  separately in `bindCrabbingControls`.
+- **C (test build deps)** — `package.xml`: `<depend>marine_control</depend>` +
+  `<test_depend>marine_control_interfaces</test_depend>`. `CMakeLists.txt`:
+  `find_package(marine_control REQUIRED)` + lib dep; test target
+  `target_link_libraries(test_crabbing_control ${PROJECT_NAME})` +
+  `ament_target_dependencies(test_crabbing_control marine_control
+  marine_control_interfaces rclcpp rclcpp_lifecycle)` — mirrors avoidance.
+- **D (suggestions)** — param count reconciled in plan.md (9 simple tunables via
+  the helper + `default_speed` handled separately = 10 controls). ADR-0003
+  citation disambiguated as the *external* marine_control device-control ADR
+  (per `test_avoidance_control.cpp:2`), not this workspace's ADR-0003.
+
+### Build result
+`colcon build --packages-up-to marine_nav_crabbing_path_follower` — **PASS**
+(marine_control_interfaces, marine_nav_utilities, marine_control, then the
+follower). Only pre-existing `-Wunused-parameter` / `-Wsign-compare` warnings in
+untouched code.
+
+### Test result
+`colcon test` gtest suites — **all green**: `test_crabbing_control` **7/7**,
+`test_gain_schedule` 9/9, `test_path_geometry` 18/18.
+
+**Pre-existing lint debt (not introduced by #84)**: `ament_cpplint` and
+`ament_uncrustify` fail on `crabbing_path_follower.{h,cpp}` — wrong header-guard
+style (single-underscore), missing copyright headers, 12 pre-existing >100-char
+lines, and `if(...)`/brace style. Proven pre-existing by running
+`ament_uncrustify` on the pristine `HEAD` file ("1 files with code style
+divergence") and confirmed by the sibling `test_avoidance_control.cpp` (same
+no-copyright convention). New code is lint-clean (`ament_cpplint` on
+`test_crabbing_control.cpp` -> "No problems found"). A wholesale reformat of the
+legacy file is out of scope for this issue; flag for a dedicated style sweep.
+
+### Next step
+review-code.
