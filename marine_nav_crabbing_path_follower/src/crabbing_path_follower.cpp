@@ -120,16 +120,26 @@ void declareCrabbingControlParams(
 
     double rmin = t.default_min;
     double rmax = t.default_max;
+    // A well-formed override is two finite, ordered bounds whose lower bound is
+    // not below this tunable's valid floor (t.default_min). The floor mirrors
+    // the on-set-parameters callback's positivity/validity rule (see the
+    // kTunables comment): a negative-but-ordered range such as [-5, -1] is
+    // ordered yet advertises a band the callback rejects wholesale (every value
+    // < 0, and exactly 0 for the exclusive ">0" gains), leaving the advertised
+    // range inconsistent with anything that can actually be set. Treat such a
+    // range as malformed and fall back to the built-in default, same as a
+    // misordered or non-finite one.
     if (range.size() == 2 && std::isfinite(range[0]) && std::isfinite(range[1]) &&
-      range[0] < range[1])
+      range[0] < range[1] && range[0] >= t.default_min)
     {
       rmin = range[0];
       rmax = range[1];
     } else {
       RCLCPP_WARN(
         node->get_logger(),
-        "%s: malformed '%s_range' (need [min, max] with min < max); using "
-        "default [%g, %g].", name.c_str(), t.suffix, t.default_min, t.default_max);
+        "%s: malformed '%s_range' (need [min, max] with %g <= min < max); using "
+        "default [%g, %g].", name.c_str(), t.suffix, t.default_min,
+        t.default_min, t.default_max);
     }
 
     rcl_interfaces::msg::FloatingPointRange fp_range;
@@ -552,6 +562,33 @@ void CrabbingPathFollower::activate()
     options.change_topic = "~/control/" + marine_control_namespace_ + "/change";
     control_server_ = std::make_shared<marine_control::ControlServer>(node.get(), options);
     bindCrabbingControls(*control_server_, plugin_name_);
+    // Surface the resolved namespace + topics so a deployment that wrapped this
+    // follower but forgot to set `<plugin_name_>.marine_control.namespace` to a
+    // distinct value is diagnosable from the logs (the collision would
+    // otherwise only show up by inspecting the live topic graph). When unset
+    // the namespace is plugin_name_, so this also documents the standalone
+    // layout. This is the practical mitigation for the config-not-enforced wrap
+    // case (the inner + wrapping ControlServers share topics only if both
+    // resolve to the same namespace).
+    RCLCPP_INFO(
+      logger_,
+      "CrabbingPathFollower: marine_control namespace '%s' -> topics "
+      "~/control/%s/state and ~/control/%s/change",
+      marine_control_namespace_.c_str(), marine_control_namespace_.c_str(),
+      marine_control_namespace_.c_str());
+  } else {
+    // The weak parent-node pointer failed to lock — we can't create the
+    // ControlServer, so the marine_control panel wiring is silently skipped.
+    // Warn (via logger_, which is a stored rclcpp::Logger and needs no locked
+    // node) so a field operator sees that the tunables won't appear on the
+    // operator station; the controller itself still runs on its in-process
+    // atomics. Control flow is unchanged — this only makes the skip observable.
+    RCLCPP_WARN(
+      logger_,
+      "CrabbingPathFollower: parent node expired during activate() of plugin "
+      "%s; skipping marine_control panel wiring (no ControlServer created). "
+      "Tunables remain live in-process but will not be exposed topside.",
+      plugin_name_.c_str());
   }
 
   RCLCPP_INFO(logger_, "Activating controller plugin %s", plugin_name_.c_str());

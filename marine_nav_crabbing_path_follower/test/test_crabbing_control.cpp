@@ -197,6 +197,26 @@ TEST_F(CrabbingControlTest, MalformedRangeFallsBackToDefault)
   EXPECT_DOUBLE_EQ(gain->max_value, 10.0);
 }
 
+TEST_F(CrabbingControlTest, NegativeOrderedRangeFallsBackToDefault)
+{
+  // A negative-but-ordered range ([-5, -1]) is ordered yet advertises a band
+  // the on-set-parameters callback rejects wholesale (heading_rate_gain is an
+  // exclusive ">0" gain). The declare-time guard must treat it as malformed —
+  // consistently with how the callback treats values — and fall back to the
+  // built-in default range rather than advertise an unsettable band.
+  auto node = makeNode(
+    {rclcpp::Parameter("FollowPath.heading_rate_gain_range", std::vector<double>{-5.0, -1.0})});
+  declareAll(node, kName);
+
+  marine_control::ControlServer server(node.get());
+  marine_nav_crabbing_path_follower::bindCrabbingControls(server, kName);
+
+  const auto * gain = findItem(server.build_control_set(), "FollowPath.heading_rate_gain");
+  ASSERT_NE(gain, nullptr);
+  EXPECT_DOUBLE_EQ(gain->min_value, 0.0);
+  EXPECT_DOUBLE_EQ(gain->max_value, 10.0);
+}
+
 // A distinct marine_control.namespace yields distinct control topics, so a
 // wrapped follower and its wrapper don't collide. The bound parameter names are
 // unchanged (always <plugin_name_>.*) — only the panel channel is namespaced.
