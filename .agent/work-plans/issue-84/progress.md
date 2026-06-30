@@ -301,3 +301,30 @@ failures.
 
 ### Next step
 Host re-review and publish (do NOT push / open PR per the exit contract).
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-06-30 16:39 +00:00
+**By**: Claude Code Agent (Claude Opus)
+**Verdict**: approved
+
+**Branch**: feature/issue-84 at `e96390b`
+**Mode**: pre-push
+**Depth**: Deep (reason: cross-module marine_control lifecycle/concurrency integration; ~570 changed code lines)
+**Must-fix**: 0 | **Suggestions**: 2
+**Round**: 2 | **Ship**: recommended — no must-fix; round-1 findings addressed (commit `6766314`); two disjoint-lens adversarial passes converged clean
+
+### Findings
+- [ ] (suggestion) Empty-namespace fallback (`marine_control_namespace_` reset to `plugin_name_` when the param is `""`) is live but untested — `src/crabbing_path_follower.cpp:506-508`
+- [ ] (suggestion) FloatingPointRange floor is `0.0` for the exclusive `>0` gains, so a panel value of exactly 0 is advertised-in-range yet rejected by the on-set callback — by design and documented (`kTunables` comment), sibling-consistent; left as-is — `src/crabbing_path_follower.cpp:283-294`
+
+### Adversarial dispositions (rejected as false positives this round)
+- Lens A "descriptor 0.0 floor contradicts callback" → not must-fix: documented, intentional, matches the avoidance sibling (kept above as a low-priority suggestion).
+- Lens A "`InRangeChangeIsApplied` re-send loop masks dropped messages" → not a defect: re-sending until the value lands is the standard ROS 2 pub/sub discovery-race pattern; the test asserts the change applies, which is its purpose.
+- Lens A "`OutOfRangeChangeIsRejected` race / doesn't prove rejection" → sound: `999.0` exceeds the `[0,10]` FloatingPointRange and is rejected at the rclcpp range layer (never reaches the atomic); reliable+ordered QoS makes the landed sentinel prove delivery-then-rejection.
+- Lens A "clamp silently shifts effective default when value+range both overridden out of range" → incorrect: an out-of-range override *value* is validated against the descriptor at declare and throws loudly; `std::clamp` only sets the built-in default used when no override is present.
+
+### Deferred (carried from round 1, per operator instruction)
+- Pre-existing package-wide lint debt (no copyright headers, >100-char lines, header-guard/brace style on the legacy `.cpp`/`.h`). Static analysis this round: new `test_crabbing_control.cpp` is clean except the same `legal/copyright` convention the package already follows (sibling `test_avoidance_control.cpp` has no copyright header either).
+- `NamespaceParamDifferentiatesTopicsWhenWrapped` asserts string literals rather than exercising the production namespace-read/fallback.
+- Narrower-platform-`_range` silently clamps the built-in default value into range (documented at the clamp site).
