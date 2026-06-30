@@ -3,10 +3,13 @@
 
 #include <atomic>
 #include <cmath>
+#include <memory>
+#include <string>
 
 #include "geometry_msgs/msg/point.hpp"
 #include "nav2_core/controller.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp_lifecycle/lifecycle_node.hpp"
 #include "pluginlib/class_loader.hpp"
 #include "pluginlib/class_list_macros.hpp"
 //#include "project11/pid.h"
@@ -14,8 +17,39 @@
 #include "std_msgs/msg/float32.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
 
+#include "marine_control/control_server.hpp"
+
 namespace marine_nav_crabbing_path_follower
 {
+
+// Declare `<name>.default_speed` (the commanded survey speed) on `node` with a
+// FloatingPointRange descriptor so the marine_control panel renders it as a
+// bounded float. Kept separate from declareCrabbingControlParams below because
+// default_speed already has bespoke configure-time validation + graceful
+// fallback (invalid YAML/launch values fall back rather than aborting bring-up);
+// the range is deliberately permissive ([0, 20] m/s — wider than any realistic
+// survey-USV speed) so that fallback is preserved for every physically
+// meaningful value and only a self-contradictory out-of-range override fails
+// loudly at declare (matching the avoidance sibling's stance). Free function so
+// the gtest can declare default_speed identically without a full configure().
+void declareCrabbingDefaultSpeed(
+  const rclcpp_lifecycle::LifecycleNode::SharedPtr & node, const std::string & name);
+
+// Declare the live operator-tunable parameters on `node` under `<name>.*`, each
+// with a FloatingPointRange descriptor whose bounds come from a startup-only
+// companion parameter `<name>.<tunable>_range` ([min, max] array) so platforms
+// can customise them. A malformed range falls back to a built-in default
+// (warned). Mirrors marine_nav_avoidance_controller::declareAvoidanceControlParams.
+// Excludes default_speed (handled by declareCrabbingDefaultSpeed). Free function
+// so the gtest can exercise the real declaration logic without a full nav2
+// controller_server bring-up.
+void declareCrabbingControlParams(
+  const rclcpp_lifecycle::LifecycleNode::SharedPtr & node, const std::string & name);
+
+// Bind the live crabbing tunables (declared by declareCrabbingDefaultSpeed +
+// declareCrabbingControlParams) to `server` as marine_control controls, with
+// their units and UI groups. Binds default_speed plus the nine tunables.
+void bindCrabbingControls(marine_control::ControlServer & server, const std::string & name);
 
 class CrabbingPathFollower : public nav2_core::Controller
 {
@@ -142,6 +176,25 @@ protected:
   // without this `desired_speed_` is captured once at configure() and
   // never updated.
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr params_cb_handle_;
+
+  // marine_control panel namespace for this controller's control topics
+  // (~/control/<namespace>/state|change), read from
+  // `<plugin_name_>.marine_control.namespace` in configure(). Defaults to
+  // plugin_name_, which reproduces the standalone topic layout byte-for-byte.
+  // When this follower is wrapped under the SAME plugin name (e.g. by
+  // marine_nav_avoidance_controller, which configures + activates its inner
+  // controller as plugin_name_), the deployment sets this to a distinct value so
+  // the inner ControlServer and the wrapper's ControlServer don't both advertise
+  // on identical topics (two state publishers -> an incoherent panel set).
+  std::string marine_control_namespace_;
+
+  // Boat-side marine_control server, attached to the parent controller_server
+  // node. Publishes the live tunables as bridgeable controls and applies
+  // operator changes via the validated parameter path (the same atomics the
+  // on-set-parameters callback writes, so the marine_control `change` path and
+  // `ros2 param set` stay consistent). Lives only while the controller is active
+  // (created in activate, reset in deactivate/cleanup).
+  std::shared_ptr<marine_control::ControlServer> control_server_;
 };
 
 
