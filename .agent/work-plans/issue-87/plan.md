@@ -57,9 +57,12 @@ add anticipation in a follow-on issue.
    (reject if `v > 1.0`) using the same `result.successful = false` + early-
    return pattern the existing callback uses.
 
-6. **Apply `turnSpeedFactor` in `computeVelocityCommands`** — after
-   `gainScheduleScale` (which produces the final `crab_angle`), before the
-   `cos_crab` division (line 879). Snapshot both new atomics once per cycle:
+6. **Apply `turnSpeedFactor` in `computeVelocityCommands`** — (Plan Review) pin
+   the site to **immediately before** the `cos_crab` division (line ~879), i.e.
+   **after** the trajectory-speed rederivation block (~L871-877,
+   `target_speed = segment_distance/dt.seconds();`). Inserting earlier (~L821
+   after `gainScheduleScale`) would be clobbered by that block on timestamped
+   trajectories. Snapshot both new atomics once per cycle just before applying:
    ```cpp
    const double turn_max_crab = turn_speed_max_crab_deg_.load();
    const double turn_min_factor = turn_speed_min_factor_.load();
@@ -92,7 +95,8 @@ add anticipation in a follow-on issue.
 | `include/marine_nav_crabbing_path_follower/crabbing_path_follower.h` | Add `turn_speed_max_crab_deg_`, `turn_speed_min_factor_` atomics with doc comments |
 | `src/crabbing_path_follower.cpp` | Add two `kTunables` entries; two `read_validated` calls; two callback branches (with upper-bound check for `min_factor`); `turnSpeedFactor` call in `computeVelocityCommands`; DEBUG log for regulated speed |
 | `test/test_turn_speed_factor.cpp` | New unit-test file for `turnSpeedFactor` (7 test cases) |
-| `CMakeLists.txt` | Add `ament_add_gtest(test_turn_speed_factor ...)` |
+| `test/test_crabbing_control.cpp` | (Plan Review must-fix) Control set grows 10→12: bump both `ASSERT_EQ(..., 10u)` size assertions to `12u`, update the "ten controls" doc comment to "twelve", and assert the two new controls' group (`speed`), units (`deg` / dimensionless), and ranges (`[0,90]` / `[0,1]`) |
+| `CMakeLists.txt` | Add `ament_add_gtest(test_turn_speed_factor ...)`; update the "ten controls" comment on `test_crabbing_control` to "twelve" |
 
 ## Principles Self-Check
 
@@ -117,13 +121,13 @@ add anticipation in a follow-on issue.
 | If we change... | Also update... | Included in plan? |
 |---|---|---|
 | New params in `kTunables[]` | `declareCrabbingControlParams` / `bindCrabbingControls` pick them up automatically; no marine_control-side changes needed | Yes |
-| Speed precedence (#32) | Regulation is a `*=` on `target_speed` after the precedence winner (default_speed → speed_limit_ cap → trajectory speed override) and before the `cos_crab` division — same slot as `speed_limit_` cap; no new speed source | Yes |
+| Speed precedence (#32) | Regulation is applied to `target_speed` **after** the full precedence chain (default_speed → `speed_limit_` cap at ~L687 → trajectory-speed override at ~L871-877, which itself overwrites the `speed_limit_` result on timestamped trajectories) and **immediately before** the `cos_crab` division — so it regulates whatever speed actually feeds `linear.x` on both paths; no new speed source | Yes |
 | DEBUG log for regulated speed | Add one `RCLCPP_DEBUG_STREAM` line showing the regulated `target_speed` before the `cos_crab` line | Yes (step 6) |
 | `min_factor` upper-bound validation | The generic `update()` lambda only checks a lower bound; add an explicit `v > 1.0` rejection in the `min_factor` callback branch | Yes (step 5) |
 
 ## Open Questions
 
-- [ ] Sim acceptance criterion: no specific gazebo launch / scenario is pinned in the package. The regulation behavior can be validated via topic logging (`/autonomous/cmd_vel`, `/odom`) on a zig-zag path; if a dedicated sim scenario is required before merge, it must be added to the plan.
+- [x] Sim acceptance criterion — **RESOLVED (waived in favor of topic-logging validation)**. No dedicated gazebo scenario/launch exists in this package, and adding one is out of scope for a backward-compatible, default-off change whose core behavior is fully covered by the pure-function unit tests. Field/sim validation is therefore closed as: with `turn_speed_max_crab_deg > 0`, log `cmd_vel` (surge `linear.x`) against `crab_angle` during a turn on a zig-zag/boustrophedon path and confirm surge is regulated *down* as `|crab_angle|` grows (vs. the current inflation). This closes the review-issue "Simulation-First Validation" watch: the unit tests are the merge gate; the topic-logging recipe is the on-water acceptance check. A dedicated sim scenario, if later desired, is a follow-on.
 
 ## Estimated Scope
 

@@ -77,3 +77,71 @@ issue: 87
 ### Notes
 - Verified against source: `gainScheduleScale` (`path_geometry.hpp:130`), `kTunables[]` (`crabbing_path_follower.cpp:44`), param callback + `update()` lambda (`:293`), `computeVelocityCommands` regulation site (`:819-880`), test/CMake patterns. The plan's function/param/test approach matches existing patterns precisely; only the must-fix consequence gap and the two placement/ordering clarifications need addressing before implementation.
 - Independent review (plan authored by a Sonnet-model agent; this review by a fresh-context Opus sub-agent).
+
+## Implementation
+**Status**: complete
+**When**: 2026-07-01 02:15 +00:00
+**By**: Claude Opus
+
+**Branch**: feature/issue-87
+**Commits**: `67f30ca` (feature + tests), plan/progress sync follows
+
+### What was implemented (plan.md steps 1–8)
+- **`turnSpeedFactor()`** added to `path_geometry.hpp` — pure inline function,
+  `clamp(1 - |crab_angle_deg| / max_crab_deg, min_factor, 1.0)`; disabled
+  (returns 1.0) when `max_crab_deg <= 0`; NaN/Inf crab → `min_factor`.
+- **Two atomics** in `crabbing_path_follower.h`: `turn_speed_max_crab_deg_`
+  (0.0, disables) and `turn_speed_min_factor_` (0.3), with doc comment.
+- **Two `kTunables[]` entries** (`turn_speed_max_crab_deg` deg/[0,90], group
+  `speed`; `turn_speed_min_factor` dimensionless/[0,1], group `speed`) — picked
+  up automatically by `declareCrabbingControlParams`/`bindCrabbingControls`.
+- **Two `read_validated` calls** in `configure()` (both `lo=0.0, exclusive_lo=false`).
+- **Two callback branches** in the on-set-parameters callback.
+- **Applied `turnSpeedFactor`** in `computeVelocityCommands` (see placement below),
+  with a DEBUG log of the regulation factor + regulated speed.
+- **`test/test_turn_speed_factor.cpp`** (7 cases) + wired in `CMakeLists.txt`.
+
+### Plan Review findings folded in (all four)
+- **[must-fix] `test_crabbing_control.cpp` updated.** Both size assertions
+  `10u → 12u` (advertise + wrapped-namespace tests), doc comment "ten"→"twelve",
+  and added group/units/range assertions for both new controls
+  (`speed` / `deg`+`[0,90]` and `speed` / dimensionless+`[0,1]`). Also bumped the
+  CMake "ten controls" comment and the cpp/header "nine tunables" comments to
+  "twelve"/"eleven" for accuracy.
+- **[suggestion] Insertion point pinned** immediately before the `cos_crab`
+  division, i.e. AFTER the trajectory-speed rederivation block
+  (`target_speed = segment_distance/dt.seconds();`), so regulation is not
+  clobbered on timestamped trajectories. Both atomics snapshotted once just before.
+- **[suggestion] Bound-check order:** the `turn_speed_min_factor` `v > 1.0`
+  rejection runs BEFORE `update()` stores the atomic (out-of-range never committed).
+- **[suggestion] Sim scenario closed:** waived in favor of topic-logging
+  validation (recorded in `plan.md` Open Questions) — unit tests are the merge
+  gate; on-water check logs `cmd_vel.linear.x` vs `crab_angle` during a turn.
+
+### Build / test result — PASS
+- Build: `colcon build --packages-up-to marine_nav_crabbing_path_follower
+  --symlink-install` (build.sh needed `--packages-up-to` because the worktree
+  core_ws src only carries `unh_marine_navigation`; `marine_control*` deps are
+  symlinked from the main layer and had not been built). **4 packages finished,
+  0 errors.** Only pre-existing warnings (unused-parameter, sign-compare in
+  unrelated code); nothing from the new code.
+- Test: `colcon test --packages-select marine_nav_crabbing_path_follower`.
+  All gtest suites pass:
+  - `test_turn_speed_factor` — **7/7 pass**
+  - `test_crabbing_control` — **8/8 pass**
+  - `test_gain_schedule` — 9/9 pass
+  - `test_path_geometry` — 18/18 pass
+  Remaining ament_lint failures (copyright, cpplint include-order, uncrustify)
+  are **pre-existing package-wide conditions**: this package has never carried
+  copyright headers, and the new test file matches `test_gain_schedule.cpp`'s
+  include layout byte-for-byte. `ament_uncrustify` reports **no divergence** on
+  the edited/new files; `ament_cpplint` reports only the same copyright +
+  gtest-include-order patterns the sibling files already carry. No active
+  pre-commit hook is configured for this repo worktree; commit ran clean.
+
+### Deviations from plan.md
+- Build invocation used `--packages-up-to` instead of the raw `build.sh <pkg>`
+  (deps not yet built in this fresh worktree). No source-level deviation.
+- Also updated the "nine"/"ten" wording in `crabbing_path_follower.{h,cpp}` and
+  `CMakeLists.txt` (beyond the must-fix's test-file scope) so all count comments
+  stay consistent at eleven tunables / twelve controls.
