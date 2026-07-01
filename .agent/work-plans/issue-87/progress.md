@@ -246,3 +246,30 @@ Verdict is **changes-requested** → host (`/run-issue`) dispatches **address-fi
 ### Next step
 Lifecycle: **Implementation** → **review-code** (re-review the fixes). Hand off to a fresh-context sub-agent:
 `.agent/scripts/dispatch_subagent.sh --mode in-process --issue 87 --skill review-code`
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-07-01 03:04 +00:00
+**By**: Claude Code Agent (Claude Opus)
+**Verdict**: approved
+
+**Branch**: feature/issue-87 at `6207afc`
+**Mode**: pre-push
+**Depth**: Deep (reason: safety-relevant vessel surge control + live-tunable concurrency; ~311 changed code lines ≥200)
+**Must-fix**: 0 | **Suggestions**: 0
+**Round**: 3 | **Ship**: recommended — round-2 must-fix (RCLCPP_WARN format/arg mismatch) and suggestion (DEBUG relabel) both verified fixed; no new defects; change is default-off, backward-compatible, and fully unit-tested.
+
+### Findings
+- [ ] No issues found. LGTM.
+
+### Notes
+- **Round-2 fixes verified**: RCLCPP_WARN now has 6 format specifiers (`%s %s %g %s %g %g`) bound to 6 args — `max%s` gets the ternary `char*`, no unconsumed trailing arg (`src/crabbing_path_follower.cpp:155-160`). Post-regulation DEBUG log relabeled "regulated target_speed" (`:955`).
+- **Verified false positive** (adversarial Lens A, proposed must-fix): claimed startup upper-bound gap for `turn_speed_min_factor` → `std::clamp` UB when `min_factor > 1.0`. Refuted independently: `declareCrabbingControlParams` (`:483`) attaches the `[0, ≤1]` FloatingPointRange descriptor BEFORE `read_validated` (`:535`); the `ceiling_ok` guard (`:145-148`) caps override ceilings at 1.0; rclcpp rejects a YAML value > 1.0 at declare (throws, configure fails loudly), and the callback (`:441-457`) rejects live updates > 1.0. The atomic can never hold > 1.0, so the clamp is never called with `lo > hi`. Same finding refuted in rounds 1 and 2.
+- **Below-threshold, dropped**: (a) a configure-time test that a raw value > 1.0 fails at declare would test rclcpp's own guarantee, not this package's code (the `_range` ceiling clamp is already covered by `TurnSpeedMinFactorRangeCeilingClampedToDefault`); (b) `min_factor = 0` is operator-reachable and would fully stop the boat at max crab, but that is a deliberate platform-tunable floor with a safe non-zero default (0.3) and the feature is default-off — intended operator latitude, not a defect.
+- **Confirmed safe** (both lenses): `AngleDegrees::value()` returns degrees (matches `turnSpeedFactor`'s contract, consistent with the adjacent `gainScheduleScale` call); `turnSpeedFactor` ∈ `[min_factor, 1.0]` so surge can only decrease; non-finite crab → `min_factor`, no non-finite `linear.x`; single-snapshot load of the two independent atomics matches the lookahead_*/gain-schedule idiom; regulation lands after trajectory rederivation and before `cos_crab`, on both speed paths.
+- **Static analysis**: no new lint conditions. The two long `RCLCPP_DEBUG_STREAM` lines (`:950`, `:955`) match the package convention (11 lines > 99 ch already on `origin/jazzy`, 4 debug-stream); no trailing whitespace on added lines. Copyright/cpplint-include-order/uncrustify remain pre-existing package-wide conditions.
+- **Plan drift**: none — all planned files changed, no scope creep. **Governance**: Human control/transparency, Consequences, Safety First, ADR-0008 all Pass; Simulation-First Watch (sim scenario waived for topic-logging, unchanged). Copilot Adversarial off (default; network unavailable regardless).
+
+### Next step
+Lifecycle: **Local Review** (approved) → push / open PR → **triage-reviews**. Verdict is **approved** with 0 must-fix, so the diff is shippable; hand off to a fresh-context sub-agent after push:
+`.agent/scripts/dispatch_subagent.sh --mode in-process --issue 87 --skill triage-reviews`
