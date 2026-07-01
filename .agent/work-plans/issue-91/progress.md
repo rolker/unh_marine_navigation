@@ -130,3 +130,26 @@ Per Plan Review sug 3, the simulator was NOT run in this container. At **review-
 
 ### Deviations from plan.md
 None. Approach and all four planned tests implemented as specified, with the 3 Plan Review suggestions folded in.
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-07-01 13:53 +00:00
+**By**: Claude Code Agent (Claude Opus)
+**Verdict**: approved
+
+**Branch**: feature/issue-91 at `acf8bea`
+**Mode**: pre-push
+**Depth**: Deep (reason: 344 total changed lines >200 + safety-relevant control-law change; code portion alone is Standard-sized)
+**Must-fix**: 0 | **Suggestions**: 4
+**Round**: 1 | **Ship**: recommended — no must-fix findings; clean, well-scoped control-law fix, 22/22 gtests re-verified locally, static analysis clean on changed lines.
+
+### Findings
+- [ ] (suggestion) Comment at `:905-907` credits the `max_yaw_rate` clamp as the discrete-step bound, but at default params it is a no-op — the external `velocity_smoother` is the real bound (see `crabbing_path_follower.h:108-109`) — `src/crabbing_path_follower.cpp:905`
+- [ ] (suggestion) Segment-tangent `base_heading` can toggle across a vertex cycle-to-cycle on dense/short-segment plans (chatter); no hysteresis and no worst-case (hairpin) test — `include/marine_nav_crabbing_path_follower/path_geometry.hpp:143`
+- [ ] (suggestion) Mixed-reference bend regime: `base_heading` (ahead segment) + `crab_angle` (current segment) superposed; convergence provable only in the straight regime; transition untested — `src/crabbing_path_follower.cpp:936`
+- [ ] (suggestion/owed) Sim/log monotonic cross-track decay acceptance check still unverified — could not run in offline container (no simulator); owed before merge — `n/a`
+
+### Notes
+- Lens A (logic/correctness): no findings — traced `lookaheadSegmentAzimuth` against `lookaheadPoint` line-by-line (byte-identical traversal → same segment landing), independently verified all 4 test assertions, no boundary/OOB defects.
+- Static analysis: cpplint + cppcheck clean on all changed lines; new function has zero findings. Pre-existing package-wide lint (legal/copyright, line-length) exists on untouched lines — not attributable to this PR.
+- Plan drift: none. Governance: all consequences addressed; ADR-0008/0013 compliant.
