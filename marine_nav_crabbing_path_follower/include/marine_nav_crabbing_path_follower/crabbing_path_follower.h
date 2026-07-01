@@ -48,7 +48,7 @@ void declareCrabbingControlParams(
 
 // Bind the live crabbing tunables (declared by declareCrabbingDefaultSpeed +
 // declareCrabbingControlParams) to `server` as marine_control controls, with
-// their units and UI groups. Binds default_speed plus the nine tunables.
+// their units and UI groups. Binds default_speed plus the eleven tunables.
 void bindCrabbingControls(marine_control::ControlServer & server, const std::string & name);
 
 class CrabbingPathFollower : public nav2_core::Controller
@@ -168,6 +168,23 @@ protected:
   // thread writes while computeVelocityCommands reads on the controller thread).
   std::atomic<double> pid_gain_ref_speed_{0.0};
   std::atomic<double> pid_gain_v_min_{0.5};
+
+  // Turn-speed regulation (#87). computeVelocityCommands commands
+  // linear.x = target_speed / cos(crab_angle); when the cross-track PID drives a
+  // large crab angle on a turn, that division inflates the surge exactly when the
+  // boat is turning hardest (+18% commanded surge, +60% modelled current draw in
+  // turns vs. straights; field data 2026-06-30). turnSpeedFactor() pre-multiplies
+  // target_speed by clamp(1 - |crab_angle| / turn_speed_max_crab_deg_,
+  // turn_speed_min_factor_, 1.0) to counter that inflation, slowing the boat in
+  // proportion to how hard it is crabbing.
+  // turn_speed_max_crab_deg_ = 0.0 DISABLES it (the default; no behavior change
+  // until a platform opts in, mirroring pid_gain_ref_speed_ = 0). When enabled,
+  // turn_speed_min_factor_ (default 0.3) floors the factor so the boat never
+  // stalls mid-turn — 30% of target_speed at maximum regulation. Both are
+  // live-tunable via the parameter callback, hence atomic (param-service thread
+  // writes while computeVelocityCommands reads on the controller thread).
+  std::atomic<double> turn_speed_max_crab_deg_{0.0};
+  std::atomic<double> turn_speed_min_factor_{0.3};
 
   bool visualize_ = false;
   rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>::SharedPtr visualization_publisher_;

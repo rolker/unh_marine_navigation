@@ -7,8 +7,8 @@
 // declareCrabbingDefaultSpeed / declareCrabbingControlParams / bindCrabbingControls
 // helpers — the actual code the plugin runs — against a bare LifecycleNode and a
 // real ControlServer, with no nav2 bring-up. It checks that:
-//   - all ten controls (default_speed + nine tunables) are advertised with their
-//     default FloatingPointRange, UI group, and units;
+//   - all twelve controls (default_speed + eleven tunables) are advertised with
+//     their default FloatingPointRange, UI group, and units;
 //   - a platform `<name>.<t>_range` startup override is honoured (and integer
 //     bounds are coerced; a malformed range falls back to the default);
 //   - an in-range change over the marine_control channel is applied; and
@@ -116,7 +116,7 @@ TEST_F(CrabbingControlTest, AdvertisesAllControlsWithRangesAndGroups)
   marine_nav_crabbing_path_follower::bindCrabbingControls(server, kName);
 
   const ControlSet set = server.build_control_set();
-  ASSERT_EQ(set.items.size(), 10u);
+  ASSERT_EQ(set.items.size(), 12u);
 
   // default_speed: handled separately from the generic helper, with its own
   // permissive panel range so the configure-time fallback is preserved.
@@ -145,6 +145,23 @@ TEST_F(CrabbingControlTest, AdvertisesAllControlsWithRangesAndGroups)
   ASSERT_NE(vmin, nullptr);
   EXPECT_EQ(vmin->group, "pid");
   EXPECT_EQ(vmin->units, "m/s");
+
+  // Turn-speed regulation (#87): two new controls in the "speed" group.
+  const auto * max_crab = findItem(set, "FollowPath.turn_speed_max_crab_deg");
+  ASSERT_NE(max_crab, nullptr);
+  EXPECT_EQ(max_crab->type, ControlItem::TYPE_FLOAT);
+  EXPECT_EQ(max_crab->group, "speed");
+  EXPECT_EQ(max_crab->units, "deg");
+  EXPECT_DOUBLE_EQ(max_crab->min_value, 0.0);
+  EXPECT_DOUBLE_EQ(max_crab->max_value, 90.0);
+
+  const auto * min_factor = findItem(set, "FollowPath.turn_speed_min_factor");
+  ASSERT_NE(min_factor, nullptr);
+  EXPECT_EQ(min_factor->type, ControlItem::TYPE_FLOAT);
+  EXPECT_EQ(min_factor->group, "speed");
+  EXPECT_EQ(min_factor->units, "");
+  EXPECT_DOUBLE_EQ(min_factor->min_value, 0.0);
+  EXPECT_DOUBLE_EQ(min_factor->max_value, 1.0);
 }
 
 TEST_F(CrabbingControlTest, PlatformRangeOverrideIsHonoured)
@@ -240,7 +257,7 @@ TEST_F(CrabbingControlTest, NamespaceParamDifferentiatesTopicsWhenWrapped)
   // Both bind the same parameter set; only the channel differs.
   marine_control::ControlServer s1(node.get(), standalone);
   marine_nav_crabbing_path_follower::bindCrabbingControls(s1, kName);
-  ASSERT_EQ(s1.build_control_set().items.size(), 10u);
+  ASSERT_EQ(s1.build_control_set().items.size(), 12u);
 }
 
 class CrabbingControlChannelTest : public CrabbingControlTest
