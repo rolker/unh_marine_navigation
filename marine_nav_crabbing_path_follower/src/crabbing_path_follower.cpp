@@ -948,8 +948,10 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
   // the tangent of the segment `lookahead` metres AHEAD while crab_angle still
   // corrects cross-track on the CURRENT segment, so during the vertex transition
   // the superposition is a heuristic, not a proven-convergent law. It is bounded
-  // (crab_angle is clamped and base_heading steps by at most one segment's
-  // turn), self-corrects once the boat and its look-ahead point are on the same
+  // (crab_angle is clamped; base_heading steps by the turn at each crossed
+  // vertex — usually one per cycle, but on dense/short-segment plans the
+  // look-ahead point may cross several vertices in a single cycle),
+  // self-corrects once the boat and its look-ahead point are on the same
   // segment again, and — being the whole point of #91 — anticipates the bend
   // rather than reacting to it. The bend-regime transition is verified by the
   // sim/log monotonic cross-track decay check owed at review-code (no offline
