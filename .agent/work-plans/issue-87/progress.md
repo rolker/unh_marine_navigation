@@ -225,3 +225,24 @@ Lifecycle: **Implementation** → **review-code** (re-review the fixes). Hand of
 
 ### Next step
 Verdict is **changes-requested** → host (`/run-issue`) dispatches **address-findings** to work the open must-fix + suggestion from this entry, then re-dispatches **review-code**. The diff is not pushed until a pre-push review comes back approved.
+
+## Implementation
+**Status**: complete
+**When**: 2026-07-01 02:55 +00:00
+**By**: Claude Code Agent (Claude Opus)
+
+**Branch**: feature/issue-87 at `a87d79b`
+**Addressed**: `## Local Review (Pre-Push)` (changes-requested, `feature/issue-87` at `a5616d8`, 2026-07-01 02:48 +00:00) — its 1 must-fix + 1 suggestion
+**Commits**: `5616137`, `a87d79b`
+
+### Actions
+- [x] (must-fix) Corrected `RCLCPP_WARN` format/arg mismatch in the malformed-`_range` diagnostic — removed the stray `t.default_min` before the ternary, so the 6 format specifiers (`%s %s %g %s %g %g`) now bind to their intended args (`max%s` gets the ternary `char*`, no unconsumed trailing arg). — `src/crabbing_path_follower.cpp:155`
+- [x] (suggestion) Relabeled the post-regulation DEBUG log from "target_speed (after potential trajectory derivation)" to "regulated target_speed" so the printed `regulated_target_speed` value is described accurately (the crab-angle→linear.x term on this line is unique, so the line is relabeled rather than dropped). — `src/crabbing_path_follower.cpp:955`
+
+### Checks
+- `colcon build --packages-select marine_nav_crabbing_path_follower` — clean (only pre-existing unused-parameter / sign-compare warnings, unrelated to these edits; the prior `-Wformat` issue is resolved).
+- `colcon test --packages-select marine_nav_crabbing_path_follower` — all functional gtest suites pass (test_crabbing_control 10, test_gain_schedule 9, test_path_geometry 18, test_turn_speed_factor 7; 0 failures). Remaining test-result failures are the pre-existing package-wide cpplint copyright/include_order and uncrustify conditions (noted in the source review's Notes), not introduced here.
+
+### Next step
+Lifecycle: **Implementation** → **review-code** (re-review the fixes). Hand off to a fresh-context sub-agent:
+`.agent/scripts/dispatch_subagent.sh --mode in-process --issue 87 --skill review-code`
