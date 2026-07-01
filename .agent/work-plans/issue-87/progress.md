@@ -214,7 +214,7 @@ Lifecycle: **Implementation** → **review-code** (re-review the fixes). Hand of
 
 ### Findings
 - [x] (must-fix) `RCLCPP_WARN` format/argument mismatch: `%s` (`max%s`) gets a `double`, the next `%g` gets a `char*`, plus one extra unconsumed arg — UB, corrupts the malformed-`_range` diagnostic (`max(null)` + garbage), latent crash. Introduced in `11b2ded`; the `TurnSpeedMinFactorRangeCeilingClampedToDefault` test exercises this path. Fix: remove the stray `t.default_min` before the ternary. — `src/crabbing_path_follower.cpp:155`
-- [ ] (suggestion) Reused DEBUG line now prints `regulated_target_speed` under the label "target_speed (after potential trajectory derivation)" — now the post-regulation value; relabel or drop (the `:950` regulation log already shows both). — `src/crabbing_path_follower.cpp:955`
+- [x] (suggestion) Reused DEBUG line now prints `regulated_target_speed` under the label "target_speed (after potential trajectory derivation)" — now the post-regulation value; relabel or drop (the `:950` regulation log already shows both). — `src/crabbing_path_follower.cpp:955`
 
 ### Notes
 - **Verified false positive** (adversarial Lens A proposed as must-fix): claimed startup upper-bound gap for `turn_speed_min_factor` (read_validated checks only `>= 0`). Refuted: `declareCrabbingControlParams` (`:483`) attaches the `[0, ≤1]` FloatingPointRange descriptor BEFORE `read_validated` (`:535`), and the `ceiling_ok` guard (`:145-148`) guarantees the descriptor ceiling can never exceed 1.0 — a YAML override >1 fails loudly at declare. Matches round-1's already-verified finding (a).

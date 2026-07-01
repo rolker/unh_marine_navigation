@@ -952,7 +952,7 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
   double cos_crab = std::max(cos(crab_angle), 0.5);
   cmd_vel.twist.linear.x = regulated_target_speed/cos_crab;
 
-  RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: target_speed (after potential trajectory derivation): " << regulated_target_speed << " adjusted for crab angle: " << cmd_vel.twist.linear.x);
+  RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: regulated target_speed: " << regulated_target_speed << " adjusted for crab angle: " << cmd_vel.twist.linear.x);
 
   if(visualize_)
   {
