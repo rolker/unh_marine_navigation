@@ -8,6 +8,7 @@
 #include "marine_nav_crabbing_path_follower/path_geometry.hpp"
 
 using marine_nav_crabbing_path_follower::lookaheadPoint;
+using marine_nav_crabbing_path_follower::lookaheadSegmentAzimuth;
 
 namespace
 {
@@ -84,6 +85,57 @@ TEST(LookaheadPoint, OutOfRangeStartSegmentReturnsGoal)
   auto path = makePath({{0, 0}, {20, 0}});
   auto p = lookaheadPoint(path, 5, 0.0, 3.0);
   EXPECT_NEAR(p.x, 20.0, 1e-6);
+}
+
+// The acceptance-criteria test: the look-ahead azimuth is the PATH TANGENT and
+// therefore independent of the boat's cross-track offset. Two boats with
+// different offsets project to the same along-track spot; both must get the
+// segment azimuth (0 rad for an eastbound straight), not a boat-to-point
+// bearing that would tilt with the offset.
+TEST(LookaheadSegmentAzimuth, StraightLineIsBoatPositionIndependent)
+{
+  auto path = makePath({{0, 0}, {20, 0}});  // eastbound, azimuth 0
+  // Same along-track projection (offset 5 m into segment 0), same look-ahead:
+  // the function takes no boat position at all, so the result is the segment
+  // azimuth regardless of any cross-track error the caller may be off by.
+  EXPECT_NEAR(lookaheadSegmentAzimuth(path, 0, 5.0, 10.0), 0.0, 1e-9);
+}
+
+// Look-ahead reaching past a vertex returns the NEXT segment's azimuth — the
+// tangent the boat should anticipate, not the segment it is currently on.
+TEST(LookaheadSegmentAzimuth, AnticipatesNextSegmentPastBend)
+{
+  // A(0,0) -> B(20,0) -> C(30,10): straight east, then a 45° left bend at B.
+  auto path = makePath({{0, 0}, {20, 0}, {30, 10}});
+  // Projected at x = 16 (offset 16 on seg 0), look 10 m: 4 m to B, then 6 m up
+  // B->C, so the look-ahead point lands on segment B->C (azimuth atan2(10,10)).
+  EXPECT_NEAR(
+    lookaheadSegmentAzimuth(path, 0, 16.0, 10.0), std::atan2(10.0, 10.0), 1e-9);
+  // A short horizon stays on the current segment (azimuth 0).
+  EXPECT_NEAR(lookaheadSegmentAzimuth(path, 0, 16.0, 1.0), 0.0, 1e-9);
+}
+
+// Past the end of the path, clamp to the FINAL segment's azimuth (mirrors
+// lookaheadPoint's goal-clamp) rather than folding into the 0.0 degenerate.
+TEST(LookaheadSegmentAzimuth, ClampsToFinalSegmentPastEnd)
+{
+  // Final segment B->C points north-east (azimuth atan2(10,10) = pi/4).
+  auto path = makePath({{0, 0}, {20, 0}, {30, 10}});
+  EXPECT_NEAR(
+    lookaheadSegmentAzimuth(path, 0, 0.0, 1000.0), std::atan2(10.0, 10.0), 1e-9);
+  // A start segment already past the last segment also clamps to the final one.
+  EXPECT_NEAR(
+    lookaheadSegmentAzimuth(path, 9, 0.0, 3.0), std::atan2(10.0, 10.0), 1e-9);
+}
+
+// Degenerate paths return 0.0 and must not read out of bounds.
+TEST(LookaheadSegmentAzimuth, HandlesDegeneratePaths)
+{
+  double a = -1.0;
+  EXPECT_NO_THROW(a = lookaheadSegmentAzimuth({}, 0, 0.0, 5.0));
+  EXPECT_EQ(a, 0.0);
+  auto single = makePath({{3, 4}});
+  EXPECT_EQ(lookaheadSegmentAzimuth(single, 0, 0.0, 5.0), 0.0);
 }
 
 namespace

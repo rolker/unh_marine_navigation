@@ -94,3 +94,39 @@ gated on stable look-ahead). No blocking dependency on open issues.
 - [ ] (suggestion) Note in the updated comment block that the segment-tangent `base_heading` steps discretely at vertex crossings (bounded by the `max_yaw_rate` clamp) — `plan.md:38`
 - [ ] (suggestion) Confirm the sim/log monotonic cross-track decay acceptance check is run manually at review-code (it's not an automated deliverable). — `plan.md:66`
 - [ ] (info) Plan correctly determined the DEBUG log at `crabbing_path_follower.cpp:897` needs no change — it logs `segment_azimuth` (current segment, line 815), not `base_heading`; the review-issue log action item is discharged.
+
+## Implementation
+**Status**: complete
+**When**: 2026-07-01 13:00 +00:00
+**By**: Claude Opus
+
+**Branch**: feature/issue-91
+**Plan**: `.agent/work-plans/issue-91/plan.md`
+
+### What changed
+- **`path_geometry.hpp`** — added pure inline `lookaheadSegmentAzimuth(poses, start_seg, start_offset, lookahead) → double`. Walks the path with the SAME forward-only traversal as `lookaheadPoint` and returns the azimuth (`atan2(dy, dx)`, radians) of the segment CONTAINING the look-ahead point.
+- **`src/crabbing_path_follower.cpp`** — replaced the boat-to-look-ahead-point `atan2` bearing (`~:930-932`) with `base_heading = AngleRadians(lookaheadSegmentAzimuth(global_plan_.poses, current_segment_, progress, lookahead));`. The preceding `lookaheadPoint(...)` call and `la_point` are KEPT — the #90 curvature block reuses `la_point` as its third circumfit point. Updated the comment block (`~:899`) from "pure-pursuit bearing to a point" to "path tangent at the look-ahead point", explaining the no-double-count rationale.
+- **`test/test_path_geometry.cpp`** — 4 new `LookaheadSegmentAzimuth` tests.
+
+### Plan Review suggestions applied (all 3 mandatory)
+1. **Past-end / out-of-range clamp → FINAL segment azimuth** (not `0.0`): implemented via a `start_seg > last - 1` early return AND the loop's `i == last - 1` fallthrough, mirroring `lookaheadPoint`'s goal-clamp. Only empty path, single point, and all-coincident/zero-length inputs return `0.0` (`atan2(0,0)` is naturally 0). Covered by `ClampsToFinalSegmentPastEnd` (both horizon-overshoot and past-end `start_seg`).
+2. **Comment note on discrete vertex-crossing steps**: the updated comment states `base_heading` steps discretely as the look-ahead point crosses a vertex, bounded downstream by the `max_yaw_rate` clamp.
+3. **Manual sim check owed at review-code** — see below.
+
+### Tests (`LookaheadSegmentAzimuth`)
+- `StraightLineIsBoatPositionIndependent` (the AC test — function takes no boat position, returns segment azimuth).
+- `AnticipatesNextSegmentPastBend` (past a vertex → next segment azimuth; short horizon → current).
+- `ClampsToFinalSegmentPastEnd` (overshoot and past-end start both → final segment azimuth).
+- `HandlesDegeneratePaths` (empty + single-point → 0.0, no crash).
+
+### ⚠ Manual verification owed at review-code
+Per Plan Review sug 3, the simulator was NOT run in this container. At **review-code**, run the sim with `lookahead_time` = 0 vs 1–2 s and confirm cross-track error decays **monotonically** (no growing oscillation) with look-ahead enabled. This is a manual review-code deliverable, not an automated test.
+
+### Build / test result (ACTUAL)
+- Build: `colcon build --packages-up-to marine_nav_crabbing_path_follower --symlink-install` → **succeeded** (used the fallback; `build.sh` alone failed because underlay deps weren't yet built in this worktree). Only pre-existing unused-parameter / sign-compare warnings.
+- Test: `colcon test --packages-select marine_nav_crabbing_path_follower` + `colcon test-result --verbose`.
+  - **All functional gtest suites PASS**: `test_path_geometry` **22/22** (18 prior + 4 new), `test_crabbing_control` 10/10, `test_curvature_speed_factor` 15/15, `test_gain_schedule` 9/9, `test_turn_speed_factor` 7/7 — **0 failures, 0 errors** across all gtests.
+  - The 51 `colcon test-result` failures are **pre-existing package-wide lint only** (cpplint `legal/copyright`, `build/include_order`; uncrustify on `crabbing_path_follower.{h,cpp}`) — noted, not fixed per instructions.
+
+### Deviations from plan.md
+None. Approach and all four planned tests implemented as specified, with the 3 Plan Review suggestions folded in.

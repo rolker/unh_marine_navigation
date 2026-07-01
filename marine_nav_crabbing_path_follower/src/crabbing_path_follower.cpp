@@ -897,9 +897,15 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
   RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: progress: " << progress << " cross_track_error: " << cross_track_error << " crab_angle: " << crab_angle.value() << " heading: " << heading.value() << " segment_azimuth: " << segment_azimuth.value());
 
   // Base heading: the local segment azimuth (default), or — with look-ahead
-  // enabled — the pure-pursuit bearing to a point `lookahead` metres ahead on
-  // the path, which anticipates bends instead of reacting to them. The look-
-  // ahead distance is fixed (lookahead_distance_) or speed-scaled
+  // enabled — the path tangent at the look-ahead point `lookahead` metres ahead
+  // on the path (the azimuth of the segment that point falls on), which
+  // anticipates bends instead of reacting to them. Deliberately NOT the
+  // boat-to-point bearing: that would fold cross-track correction into
+  // base_heading and double-count with the crab PID, which already corrects
+  // cross-track error (#91). This segment-tangent base_heading steps discretely
+  // as the look-ahead point crosses a vertex from one segment to the next; the
+  // step is bounded downstream by the max_yaw_rate clamp on the yaw command. The
+  // look-ahead distance is fixed (lookahead_distance_) or speed-scaled
   // (lookahead_time_ > 0: L = max(lookahead_min_distance_, V*time)).
   // Snapshot the live-tunable atomics once so a mid-cycle `ros2 param set`
   // can't tear the control law.
@@ -927,9 +933,8 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
     // the segment start measures the horizon from the segment start.
     la_point = lookaheadPoint(
       global_plan_.poses, current_segment_, progress, lookahead);
-    base_heading = AngleRadians(atan2(
-      la_point.y - pose_in_plan.pose.position.y,
-      la_point.x - pose_in_plan.pose.position.x));
+    base_heading = AngleRadians(lookaheadSegmentAzimuth(
+      global_plan_.poses, current_segment_, progress, lookahead));
   }
 
   AngleRadians target_heading = base_heading + crab_angle;
