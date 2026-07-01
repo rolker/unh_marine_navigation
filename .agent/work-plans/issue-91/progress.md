@@ -67,3 +67,15 @@ gated on stable look-ahead). No blocking dependency on open issues.
 ### Actions
 - [ ] Add `lookaheadSegmentAzimuth` (or combined `lookaheadPointAndSegment`) to `path_geometry.hpp` and unit-test it in `test_path_geometry.cpp`.
 - [ ] Verify/update DEBUG log string at line 897 after changing the `base_heading` computation.
+
+## Plan Authored
+**Status**: complete
+**When**: 2026-07-01 12:00 +00:00
+**By**: Claude Code Agent (Claude Sonnet)
+
+**Plan**: `.agent/work-plans/issue-91/plan.md` at `3c60486`
+**Branch**: feature/issue-91 at `3c60486`
+**Phases**: single
+
+### Open questions
+- [ ] No open questions — plan is review-plan-ready.
