@@ -74,3 +74,15 @@ unit tests. This is the same shape and size as #87 — a single focused PR in
 - [ ] Resolve curvature algorithm (3-point circumfit recommended) in the work plan.
 - [ ] Confirm param naming: prefer `turn_speed_curvature_min_radius` for namespace consistency.
 - [ ] Clarify whether curvature regulation shares `turn_speed_min_factor_` or introduces its own floor param.
+
+## Plan Authored
+**Status**: complete
+**When**: 2026-07-01 00:00 +00:00
+**By**: Claude Code Agent (Claude Sonnet)
+
+**Plan**: `.agent/work-plans/issue-89/plan.md` at `256e2f2`
+**Branch**: feature/issue-89 at `256e2f2`
+**Phases**: single
+
+### Open questions
+- [ ] No open questions — plan is review-plan-ready.
