@@ -147,9 +147,31 @@ None. Approach and all four planned tests implemented as specified, with the 3 P
 - [x] (suggestion) Comment at `:905-907` credits the `max_yaw_rate` clamp as the discrete-step bound, but at default params it is a no-op — the external `velocity_smoother` is the real bound (see `crabbing_path_follower.h:108-109`) — `src/crabbing_path_follower.cpp:905`
 - [x] (suggestion) Segment-tangent `base_heading` can toggle across a vertex cycle-to-cycle on dense/short-segment plans (chatter); no hysteresis and no worst-case (hairpin) test — `include/marine_nav_crabbing_path_follower/path_geometry.hpp:143`
 - [x] (suggestion) Mixed-reference bend regime: `base_heading` (ahead segment) + `crab_angle` (current segment) superposed; convergence provable only in the straight regime; transition untested — `src/crabbing_path_follower.cpp:936`
-- [ ] (suggestion/owed) Sim/log monotonic cross-track decay acceptance check still unverified — could not run in offline container (no simulator); owed before merge — `n/a`
+- [x] (suggestion/owed) Sim/log monotonic cross-track decay acceptance check still unverified — could not run in offline container (no simulator); owed before merge — `n/a` (deferred: no simulator in this offline container — a manual review-code/merge deliverable, not addressable via code change; still owed before merge)
 
 ### Notes
 - Lens A (logic/correctness): no findings — traced `lookaheadSegmentAzimuth` against `lookaheadPoint` line-by-line (byte-identical traversal → same segment landing), independently verified all 4 test assertions, no boundary/OOB defects.
 - Static analysis: cpplint + cppcheck clean on all changed lines; new function has zero findings. Pre-existing package-wide lint (legal/copyright, line-length) exists on untouched lines — not attributable to this PR.
 - Plan drift: none. Governance: all consequences addressed; ADR-0008/0013 compliant.
+
+## Implementation
+**Status**: complete
+**When**: 2026-07-01 14:09 +00:00
+**By**: Claude Code Agent (Claude Opus)
+
+**Branch**: feature/issue-91 at `fc424d1`
+**Addressed**: `## Local Review (Pre-Push)` (When 2026-07-01 13:53 +00:00, at `acf8bea`)
+**Commits**: `178d069`, `de0182c`, `fc424d1`
+
+Consumed the four unchecked suggestions from the pre-push review. Three fixed via
+code/doc/test changes; one deferred (no simulator offline). All 5 gtest suites
+re-verified locally after the changes: `test_path_geometry` 23/23 (22 prior + 1
+new hairpin), `test_crabbing_control` 10/10, `test_curvature_speed_factor` 15/15,
+`test_gain_schedule` 9/9, `test_turn_speed_factor` 7/7 — 0 failures. Build clean
+(only pre-existing unused-parameter / sign-compare warnings on untouched lines).
+
+### Actions
+- [x] Correct discrete-step rate-bound comment: `max_yaw_rate_` defaults to ±pi rad/s (~180°/s) so the controller-level clamp is effectively a no-op at default params; the external `velocity_smoother` is the real rate limiter. Comment rewritten to credit it, cross-referencing `crabbing_path_follower.h:107-111` — `src/crabbing_path_follower.cpp:905` (`178d069`)
+- [x] Add worst-case (hairpin) test `HairpinReversalStepsByNearlyPi` characterizing the near-π single-cycle `base_heading` step at a ~180° reversal, and documenting that this pure geometry helper deliberately has no hysteresis (smoothing is the downstream `velocity_smoother`'s job) — `test/test_path_geometry.cpp` (`de0182c`). Hysteresis itself is a separate design change with its own state/tuning, out of scope for the #91 bug fix (deferred to a follow-up).
+- [x] Document the mixed-reference bend-regime limitation at the `target_heading = base_heading + crab_angle` superposition: proven-convergent only in the straight (same-segment) regime; the bend transition is a bounded, self-correcting heuristic verified by the owed sim check, not a unit test — `src/crabbing_path_follower.cpp:936` (`fc424d1`)
+- [x] Sim/log monotonic cross-track decay acceptance check — `n/a` (deferred: no simulator in this offline container; a manual review-code/merge deliverable, not a code change — still owed before merge, as the review itself flagged)
