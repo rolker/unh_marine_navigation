@@ -208,3 +208,25 @@ group/units/range assertions, and updated the CMake and header count comments.
 - Static analysis: cppcheck clean on new code; ament_cpplint findings (copyright, include-order, line-length) are pre-existing repo convention, mirrored from the merged sibling `test_turn_speed_factor.cpp` (#87), not a gating check. Silence-filtered.
 - Dropped one Lens B false positive: the `circumscribedRadius` doc comment (path_geometry.hpp:189 vs 216) is internally consistent (`|cross| = 2·Area`), not contradictory.
 - Two disjoint-lens Claude Adversarial passes (A: logic/correctness; B: systemic/safety) both returned zero must-fix.
+
+## Implementation
+**Status**: complete
+**When**: 2026-07-01 04:32 +00:00
+**By**: Claude Code Agent (Claude Opus)
+
+**Branch**: feature/issue-89 at `a61857d`
+**Addressed**: Local Review (Pre-Push) — When 2026-07-01 04:22 +00:00, branch `9ebcf68` (0 must-fix, 2 suggestions)
+**Commits**: `5e975d8` (test), `a61857d` (help text)
+
+### Actions
+- [x] (suggestion) End-to-end test of the curvature wiring over a multi-segment `global_plan_` — `marine_nav_crabbing_path_follower/test/test_curvature_speed_factor.cpp`. Added a `CurvatureWiring` suite (6 cases) that mirrors the composition at `crabbing_path_follower.cpp:991-1006`: a `regulate()` helper selects the along-track foot / half-lookahead / full-lookahead points off a real multi-segment `PoseStamped` plan via `lookaheadPoint()`, feeds them to `circumscribedRadius`/`curvatureSpeedFactor`, and composes with the reactive `turnSpeedFactor` via `min()`. Covers: straight plan → no curvature slowdown; L-shaped corner → radius exactly 12.5 m → factor 0.5 (pins fit-point selection + geometry); `progress`>0 shifts the foot mid-segment; `min()` composition with either regulator governing; and the disabled (`curvature_min_radius`=0) no-op on a curved plan. Kept at the pure-function composition level (not a full ROS-lifecycle `calculate()` harness — none exists in this package and one would be disproportionate for a suggestion); the helper carries a comment requiring it be kept in lockstep with the call site.
+- [x] (suggestion) Noted the shared `turn_speed_min_factor` floor in the param help text — `marine_nav_crabbing_path_follower/src/crabbing_path_follower.cpp:65-68`. The `kTunables` description now states the floor applies to BOTH turn-speed regulators (the reactive `turn_speed_max_crab_deg` one and the anticipatory `turn_speed_curvature_min_radius` one), matching the internal doc-comment note at `path_geometry.hpp:243-244`.
+
+### Build & test (ACTUAL)
+- `colcon build --packages-select marine_nav_crabbing_path_follower --symlink-install` → 1 package finished (only pre-existing `-Wunused-parameter`/`-Wsign-compare` warnings in untouched code).
+- `colcon test --packages-select marine_nav_crabbing_path_follower`: functional gtest suites ALL PASS — `test_curvature_speed_factor` now 15/15 (9 unit + 6 new wiring), `test_crabbing_control` 10/10, others unchanged. Pre-existing package-wide lint (cpplint copyright/include-order/line-length + uncrustify) remains, unchanged from the reviewed diff — documented as non-gating repo convention mirrored from sibling test files (#87), NOT introduced here.
+
+### Next step
+Lifecycle: Implementation → review-code (re-review the fixes). Hand off to a fresh-context sub-agent:
+
+    .agent/scripts/dispatch_subagent.sh --mode in-process --issue 89 --skill review-code
