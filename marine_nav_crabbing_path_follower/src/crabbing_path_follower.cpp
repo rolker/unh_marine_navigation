@@ -903,8 +903,12 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
   // boat-to-point bearing: that would fold cross-track correction into
   // base_heading and double-count with the crab PID, which already corrects
   // cross-track error (#91). This segment-tangent base_heading steps discretely
-  // as the look-ahead point crosses a vertex from one segment to the next; the
-  // step is bounded downstream by the max_yaw_rate clamp on the yaw command. The
+  // as the look-ahead point crosses a vertex from one segment to the next. That
+  // step is smoothed downstream by the external velocity_smoother, which
+  // enforces the physical yaw rate/accel limits: the controller-level
+  // max_yaw_rate_ clamp on the yaw command (crabbing_path_follower.h:107-111)
+  // defaults to ±pi rad/s and so is effectively a no-op at default params — a
+  // safety bound, not the real rate limiter. The
   // look-ahead distance is fixed (lookahead_distance_) or speed-scaled
   // (lookahead_time_ > 0: L = max(lookahead_min_distance_, V*time)).
   // Snapshot the live-tunable atomics once so a mid-cycle `ros2 param set`
