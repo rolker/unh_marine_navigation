@@ -357,3 +357,36 @@ TEST_F(CrabbingControlChannelTest, OutOfRangeChangeIsRejected)
   EXPECT_LE(paramValue("heading_rate_gain"), 10.0);
   EXPECT_DOUBLE_EQ(paramValue("heading_rate_gain"), 8.0);
 }
+
+TEST_F(CrabbingControlChannelTest, TurnSpeedMinFactorAboveOneIsRejected)
+{
+  buildServerAndClient();
+  EXPECT_DOUBLE_EQ(paramValue("turn_speed_min_factor"), 0.3);  // default
+
+  // Drive to a known in-range baseline first.
+  ASSERT_TRUE(
+    spinUntil(
+      [this] {
+        sendChange("FollowPath.turn_speed_min_factor", 0.5);
+        return std::abs(paramValue("turn_speed_min_factor") - 0.5) < 1e-9;
+      }));
+
+  // turn_speed_min_factor is a surge fraction: values > 1.0 are rejected — by
+  // the [0,1] FloatingPointRange descriptor and, redundantly, by the on-set
+  // callback's explicit `v > 1.0` branch (the one callback branch with an
+  // upper-bound check). Send an out-of-range value then an in-range sentinel;
+  // RELIABLE ordered delivery means a landed sentinel proves the bad change was
+  // delivered and rejected, not merely dropped.
+  sendChange("FollowPath.turn_speed_min_factor", 2.0);
+  ASSERT_TRUE(
+    spinUntil(
+      [this] {
+        sendChange("FollowPath.turn_speed_min_factor", 0.7);
+        return std::abs(paramValue("turn_speed_min_factor") - 0.7) < 1e-9;
+      }))
+    << "sentinel after the out-of-range change never landed";
+
+  // The out-of-range value must never have taken effect (cap held at 1.0).
+  EXPECT_LE(paramValue("turn_speed_min_factor"), 1.0);
+  EXPECT_DOUBLE_EQ(paramValue("turn_speed_min_factor"), 0.7);
+}
