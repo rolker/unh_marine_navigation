@@ -58,3 +58,22 @@ issue: 87
 ### Open questions
 - [ ] Sim acceptance criterion: no specific gazebo launch / scenario is pinned in the package — validate via topic logging on a zig-zag path or add a dedicated sim scenario before merge.
 - [ ] Signal choice resolved: crab-angle magnitude (over path curvature) — rationale recorded in plan §Context.
+
+## Plan Review
+**Status**: complete
+**When**: 2026-07-01 01:56 +00:00
+**By**: Claude Code Agent (Claude Opus)
+
+**Plan**: `.agent/work-plans/issue-87/plan.md` at `d27982b`
+**PR**: PR-less (`--issue` mode; `gh` unauthenticated in this worktree — issue/review-issue context read from the persisted `## Issue Review` entry)
+**Verdict**: changes-requested
+
+### Findings
+- [ ] (must-fix) Adding two `kTunables` entries grows the advertised control set 10→12, breaking existing `test_crabbing_control.cpp` size assertions (`ASSERT_EQ(..., 10u)` at test lines 119 & 243, plus "ten controls" doc comment L10 and CMake comment L89). Add `test/test_crabbing_control.cpp` to scope (bump to `12u`; assert the two new controls' group/units/range). Plan omits this file and its Consequences "no marine_control-side changes needed" claim is incomplete — `plan.md:87-95`, `plan.md:119`.
+- [ ] (suggestion) Pin the `turnSpeedFactor` insertion point to immediately before line 879 (`cos_crab`), i.e. AFTER the trajectory-speed rederivation block at cpp lines 871-877 (`target_speed = segment_distance/dt.seconds();`). The prose "after `gainScheduleScale`" spans that block; inserting at ~L821 silently clobbers regulation on timestamped trajectories. Also correct "same slot as `speed_limit_` cap" — `speed_limit_` is applied at ~cpp L687 and is itself overwritten by the trajectory block — `plan.md:60-70`, `plan.md:120`.
+- [ ] (suggestion) `min_factor` upper-bound check (`v > 1.0`) must run BEFORE `update()` stores the atomic, else an out-of-range value is committed before rejection returns — `plan.md:54-58`, `plan.md:122`.
+- [ ] (suggestion) review-issue action "pin a concrete sim scenario" remains open (`plan.md:124-126`); either pin the scenario or explicitly waive it in favor of topic-logging validation to close the "Simulation-First Validation" watch.
+
+### Notes
+- Verified against source: `gainScheduleScale` (`path_geometry.hpp:130`), `kTunables[]` (`crabbing_path_follower.cpp:44`), param callback + `update()` lambda (`:293`), `computeVelocityCommands` regulation site (`:819-880`), test/CMake patterns. The plan's function/param/test approach matches existing patterns precisely; only the must-fix consequence gap and the two placement/ordering clarifications need addressing before implementation.
+- Independent review (plan authored by a Sonnet-model agent; this review by a fresh-context Opus sub-agent).
