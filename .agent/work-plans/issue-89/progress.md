@@ -187,3 +187,24 @@ group/units/range assertions, and updated the CMake and header count comments.
   (Plan Review sug 2).
 - DEBUG log prints `turn_factor` / `curvature_factor` / `combined_factor`.
 - No other deviations.
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-07-01 04:22 +00:00
+**By**: Claude Code Agent (Claude Opus)
+**Verdict**: approved
+
+**Branch**: feature/issue-89 at `9ebcf68`
+**Mode**: pre-push
+**Depth**: Deep (reason: 200+ changed lines; real-time vessel motion-control)
+**Must-fix**: 0 | **Suggestions**: 2
+**Round**: 1 | **Ship**: recommended — no must-fix; math/degenerate-handling verified safe, follows the merged #87 pattern, no-op until a platform opts in.
+
+### Findings
+- [ ] (suggestion) No end-to-end test exercises the curvature wiring (foot/half/full point selection + `min()` composition) through a multi-segment `global_plan_` — `src/crabbing_path_follower.cpp:991-1006`
+- [ ] (suggestion) Shared `turn_speed_min_factor` floor couples both regulators; note it in the param help text — `include/marine_nav_crabbing_path_follower/path_geometry.hpp:243-244`
+
+### Notes
+- Static analysis: cppcheck clean on new code; ament_cpplint findings (copyright, include-order, line-length) are pre-existing repo convention, mirrored from the merged sibling `test_turn_speed_factor.cpp` (#87), not a gating check. Silence-filtered.
+- Dropped one Lens B false positive: the `circumscribedRadius` doc comment (path_geometry.hpp:189 vs 216) is internally consistent (`|cross| = 2·Area`), not contradictory.
+- Two disjoint-lens Claude Adversarial passes (A: logic/correctness; B: systemic/safety) both returned zero must-fix.
