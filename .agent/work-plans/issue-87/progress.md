@@ -45,3 +45,16 @@ issue: 87
 - [ ] Decide and record (plan or ADR note) which regulation signal is used (curvature vs. crab-angle magnitude) and why — the "evaluate both" framing in the issue is exploratory; the plan phase should close on one approach.
 - [ ] Confirm that marine_control integration requires no additional binding changes (or add them to scope if it does).
 - [ ] Ensure unit tests cover degenerate inputs: NaN/Inf/negative regulation factor, zero crab_angle (no-op path), default-params passthrough.
+
+## Plan Authored
+**Status**: complete
+**When**: 2026-07-01 00:00 +00:00
+**By**: Claude Code Agent (Claude Sonnet)
+
+**Plan**: `.agent/work-plans/issue-87/plan.md` at `d27982b`
+**Branch**: feature/issue-87 at `d27982b`
+**Phases**: single
+
+### Open questions
+- [ ] Sim acceptance criterion: no specific gazebo launch / scenario is pinned in the package — validate via topic logging on a zig-zag path or add a dedicated sim scenario before merge.
+- [ ] Signal choice resolved: crab-angle magnitude (over path curvature) — rationale recorded in plan §Context.
