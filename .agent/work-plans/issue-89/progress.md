@@ -86,3 +86,25 @@ unit tests. This is the same shape and size as #87 — a single focused PR in
 
 ### Open questions
 - [ ] No open questions — plan is review-plan-ready.
+
+## Plan Review
+**Status**: complete
+**When**: 2026-07-01 03:53 +00:00
+**By**: Claude Code Agent (Claude Opus)
+
+**Plan**: `.agent/work-plans/issue-89/plan.md` at `256e2f2`
+**PR**: PR-less (--issue mode)
+**Verdict**: approve-with-suggestions
+
+Independent review (fresh-context sub-agent, distinct model from the Sonnet
+plan author). All three `review-issue` findings verified as addressed:
+curvature algorithm settled (3-point circumfit), param renamed to
+`turn_speed_curvature_min_radius`, floor reuses shared `turn_speed_min_factor_`.
+All structural claims cross-checked against source: `kTunables` loop drives both
+`declareCrabbingControlParams`/`bindCrabbingControls` (auto-pickup confirmed),
+integration site matches the `turnSpeedFactor` pattern, count assertions at
+`test_crabbing_control.cpp:119,284` (12u→13u), ADRs 0002/0008/0013 present.
+
+### Findings
+- [ ] (suggestion) Circumfit uses the boat's actual position (`pose_in_plan.pose.position`), which carries cross-track error, as the first fit point while the other two are on-path; consider the along-track projection or document the choice — `plan.md:76-80`
+- [ ] (suggestion) Add a coincident-point test case (near-goal: half_la == full_la == goal → R = ∞ → factor 1.0) — the planned 8 cases omit it — `plan.md:88-96`
