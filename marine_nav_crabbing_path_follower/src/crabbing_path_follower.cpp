@@ -133,16 +133,30 @@ void declareCrabbingControlParams(
     // range inconsistent with anything that can actually be set. Treat such a
     // range as malformed and fall back to the built-in default, same as a
     // misordered or non-finite one.
+    //
+    // Ceiling: most tunables have NO callback-enforced upper bound, so the
+    // advertised ceiling (the FloatingPointRange's to_value, which rclcpp uses
+    // as the settable cap) is itself what a platform tunes — widening above
+    // default_max is legitimate. The one exception is turn_speed_min_factor,
+    // whose on-set callback hard-rejects `v > 1.0` (it is a surge fraction).
+    // Advertising a ceiling above 1.0 there would offer the panel a band the
+    // callback rejects wholesale, the same inconsistency the floor guard blocks,
+    // so require its override ceiling to stay within default_max (== 1.0).
+    const bool has_callback_hard_max =
+      std::string(t.suffix) == "turn_speed_min_factor";
+    const bool ceiling_ok = !has_callback_hard_max || range.size() != 2 ||
+      range[1] <= t.default_max;
     if (range.size() == 2 && std::isfinite(range[0]) && std::isfinite(range[1]) &&
-      range[0] < range[1] && range[0] >= t.default_min)
+      range[0] < range[1] && range[0] >= t.default_min && ceiling_ok)
     {
       rmin = range[0];
       rmax = range[1];
     } else {
       RCLCPP_WARN(
         node->get_logger(),
-        "%s: malformed '%s_range' (need [min, max] with %g <= min < max); using "
+        "%s: malformed '%s_range' (need [min, max] with %g <= min < max%s); using "
         "default [%g, %g].", name.c_str(), t.suffix, t.default_min,
+        t.default_min, has_callback_hard_max ? " and max <= 1.0" : "",
         t.default_min, t.default_max);
     }
 

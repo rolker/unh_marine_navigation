@@ -234,6 +234,30 @@ TEST_F(CrabbingControlTest, NegativeOrderedRangeFallsBackToDefault)
   EXPECT_DOUBLE_EQ(gain->max_value, 10.0);
 }
 
+TEST_F(CrabbingControlTest, TurnSpeedMinFactorRangeCeilingClampedToDefault)
+{
+  // turn_speed_min_factor's on-set callback hard-rejects v > 1.0 (a surge
+  // fraction), so a platform override that widens the advertised ceiling above
+  // 1.0 would offer the panel a band the callback rejects wholesale. The
+  // declare-time guard treats such an override as malformed and falls back to
+  // the built-in default range [0, 1], mirroring the floor defense. (Tunables
+  // with no callback upper bound may still widen their ceiling — see
+  // PlatformRangeOverrideIsHonoured.)
+  auto node = makeNode(
+    {rclcpp::Parameter(
+      "FollowPath.turn_speed_min_factor_range", std::vector<double>{0.0, 5.0})});
+  declareAll(node, kName);
+
+  marine_control::ControlServer server(node.get());
+  marine_nav_crabbing_path_follower::bindCrabbingControls(server, kName);
+
+  const auto * min_factor =
+    findItem(server.build_control_set(), "FollowPath.turn_speed_min_factor");
+  ASSERT_NE(min_factor, nullptr);
+  EXPECT_DOUBLE_EQ(min_factor->min_value, 0.0);
+  EXPECT_DOUBLE_EQ(min_factor->max_value, 1.0);
+}
+
 // A distinct marine_control.namespace yields distinct control topics, so a
 // wrapped follower and its wrapper don't collide. The bound parameter names are
 // unchanged (always <plugin_name_>.*) — only the panel channel is namespaced.
