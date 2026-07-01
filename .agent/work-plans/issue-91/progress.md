@@ -175,3 +175,27 @@ new hairpin), `test_crabbing_control` 10/10, `test_curvature_speed_factor` 15/15
 - [x] Add worst-case (hairpin) test `HairpinReversalStepsByNearlyPi` characterizing the near-π single-cycle `base_heading` step at a ~180° reversal, and documenting that this pure geometry helper deliberately has no hysteresis (smoothing is the downstream `velocity_smoother`'s job) — `test/test_path_geometry.cpp` (`de0182c`). Hysteresis itself is a separate design change with its own state/tuning, out of scope for the #91 bug fix (deferred to a follow-up).
 - [x] Document the mixed-reference bend-regime limitation at the `target_heading = base_heading + crab_angle` superposition: proven-convergent only in the straight (same-segment) regime; the bend transition is a bounded, self-correcting heuristic verified by the owed sim check, not a unit test — `src/crabbing_path_follower.cpp:936` (`fc424d1`)
 - [x] Sim/log monotonic cross-track decay acceptance check — `n/a` (deferred: no simulator in this offline container; a manual review-code/merge deliverable, not a code change — still owed before merge, as the review itself flagged)
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-07-01 14:31 +00:00
+**By**: Claude Code Agent (Claude Opus)
+**Verdict**: approved
+
+**Branch**: feature/issue-91 at `f8bbbb7`
+**Mode**: pre-push
+**Depth**: Deep (reason: safety-relevant motion-control law change on a real vehicle)
+**Must-fix**: 0 | **Suggestions**: 4
+**Round**: 2 | **Ship**: recommended — 0 must-fix; round-1 suggestions all addressed, remaining items are polish + the owed manual sim check (not resolvable offline).
+
+### Findings
+- [ ] (suggestion, follow-up) Physical yaw-rate bound lives entirely in the downstream `velocity_smoother`, which this package neither ships nor declares (no README/launch/yaml). Pre-existing — the default `segment_azimuth` base_heading steps identically and the smoother reliance predates #91 (see `crabbing_path_follower.h:109`), so not a #91 blocker; worth declaring the smoother as a documented hard plugin dependency — `src/crabbing_path_follower.cpp:907`
+- [ ] (suggestion) Comment "base_heading steps by at most one segment's turn" is imprecise: on dense/short segments the look-ahead point can cross multiple vertices per cycle — `src/crabbing_path_follower.cpp:951`
+- [ ] (suggestion, owed merge-gate) Sim/log monotonic cross-track-decay check for the mixed-reference bend regime still owed — no offline simulator; a manual review-code/merge deliverable — `src/crabbing_path_follower.cpp:944`
+- [ ] (suggestion, low) Trailing degenerate/zero-length final segment yields base_heading=0 (due-east) for the terminal cycle; mirrors `lookaheadPoint`'s accepted behavior, benign at goal. Lens B's interior-vertex variant does not actually trigger (traversal returns on the preceding real segment) — `include/marine_nav_crabbing_path_follower/path_geometry.hpp:153`
+
+### Notes
+- Static analysis: ament_cpplint + ament_cppcheck clean on all changed lines; the new function has zero findings. Pre-existing package-wide lint (legal/copyright, line-length, include-order) exists only on untouched lines — not attributable to this PR.
+- Lens A (logic/correctness): no defects. Traced `lookaheadSegmentAzimuth` against `lookaheadPoint` line-by-line (identical guards + traversal → same segment landing, so the returned azimuth is exactly the tangent at the look-ahead point); independently verified all 5 test assertions and the disabled-look-ahead path (bit-for-bit prior behavior).
+- Lens B (systemic/safety): one "must-fix" raised (discrete base_heading step → yaw command, external-smoother reliance) — triaged DOWN to suggestion: the default `segment_azimuth` control law already steps discretely at every vertex with the same magnitude, and the smoother reliance predates #91; the concern was already triaged in round 1 (hairpin test + docs; hysteresis deferred as out-of-scope).
+- Governance: compliant with ADR-0008 and ADR-0013; only workspace governance applies (no project-level governance in repo). Plan drift: clean — all three planned files changed and only those; round-1 suggestions folded in.
