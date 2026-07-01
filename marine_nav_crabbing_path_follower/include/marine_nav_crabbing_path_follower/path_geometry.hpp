@@ -105,6 +105,63 @@ inline geometry_msgs::msg::Point lookaheadPoint(
   return poses[last].pose.position;
 }
 
+/// Azimuth (radians, `atan2(dy, dx)`) of the path segment that CONTAINS the
+/// pure-pursuit look-ahead point — the path tangent `lookahead` metres ahead.
+///
+/// Walks the path with the SAME forward-only traversal as `lookaheadPoint`
+/// (same `start_seg`/`start_offset`/`lookahead` contract) but returns the
+/// azimuth of the segment the look-ahead point lands on rather than the point
+/// itself. Used as the follower's `base_heading` so cross-track correction is
+/// left solely to the crab PID (no pure-pursuit double-counting; #91).
+///
+/// If the look-ahead runs past the end of the path — or the start segment is
+/// already past the last segment — the FINAL segment's azimuth is returned
+/// (mirroring `lookaheadPoint`'s goal-clamp), so overshoot yields the tangent
+/// the boat is converging along, not a degenerate value. Only genuinely
+/// degenerate inputs return `0.0`: an empty path, a single point (no segment),
+/// or an all-coincident / zero-length path (`atan2(0, 0)` is naturally `0.0`).
+inline double lookaheadSegmentAzimuth(
+  const std::vector<geometry_msgs::msg::PoseStamped> & poses,
+  int start_seg, double start_offset, double lookahead)
+{
+  if (poses.empty()) {
+    return 0.0;
+  }
+  const int last = static_cast<int>(poses.size()) - 1;
+  if (last == 0) {
+    return 0.0;
+  }
+  if (start_seg < 0) {
+    start_seg = 0;
+  }
+  if (start_seg > last - 1) {
+    const auto & a = poses[last - 1].pose.position;
+    const auto & b = poses[last].pose.position;
+    return std::atan2(b.y - a.y, b.x - a.x);
+  }
+
+  double remaining = std::max(0.0, lookahead);
+  for (int i = start_seg; i < last; ++i) {
+    const auto & a = poses[i].pose.position;
+    const auto & b = poses[i + 1].pose.position;
+    const double seg_len = std::hypot(b.x - a.x, b.y - a.y);
+    const double offset = (i == start_seg) ? std::clamp(start_offset, 0.0, seg_len) : 0.0;
+    const double avail = seg_len - offset;
+
+    // Last segment, or the look-ahead lands within this segment: this is the
+    // segment containing the look-ahead point.
+    if (remaining <= avail || i == last - 1) {
+      return std::atan2(b.y - a.y, b.x - a.x);
+    }
+    remaining -= avail;
+  }
+  // Unreachable (the loop always returns on i == last - 1); mirrors the
+  // trailing final-segment return of `lookaheadPoint`.
+  const auto & a = poses[last - 1].pose.position;
+  const auto & b = poses[last].pose.position;
+  return std::atan2(b.y - a.y, b.x - a.x);
+}
+
 /// Speed-normalize (gain-schedule) the cross-track PID output `crab_angle_deg`.
 ///
 /// The outer cross-track loop has `ė ≈ v·sin(crab_angle) ≈ v·(p·e)`, so its

@@ -897,9 +897,19 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
   RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: progress: " << progress << " cross_track_error: " << cross_track_error << " crab_angle: " << crab_angle.value() << " heading: " << heading.value() << " segment_azimuth: " << segment_azimuth.value());
 
   // Base heading: the local segment azimuth (default), or — with look-ahead
-  // enabled — the pure-pursuit bearing to a point `lookahead` metres ahead on
-  // the path, which anticipates bends instead of reacting to them. The look-
-  // ahead distance is fixed (lookahead_distance_) or speed-scaled
+  // enabled — the path tangent at the look-ahead point `lookahead` metres ahead
+  // on the path (the azimuth of the segment that point falls on), which
+  // anticipates bends instead of reacting to them. Deliberately NOT the
+  // boat-to-point bearing: that would fold cross-track correction into
+  // base_heading and double-count with the crab PID, which already corrects
+  // cross-track error (#91). This segment-tangent base_heading steps discretely
+  // as the look-ahead point crosses a vertex from one segment to the next. That
+  // step is smoothed downstream by the external velocity_smoother, which
+  // enforces the physical yaw rate/accel limits: the controller-level
+  // max_yaw_rate_ clamp on the yaw command (crabbing_path_follower.h:107-111)
+  // defaults to ±pi rad/s and so is effectively a no-op at default params — a
+  // safety bound, not the real rate limiter. The
+  // look-ahead distance is fixed (lookahead_distance_) or speed-scaled
   // (lookahead_time_ > 0: L = max(lookahead_min_distance_, V*time)).
   // Snapshot the live-tunable atomics once so a mid-cycle `ros2 param set`
   // can't tear the control law.
@@ -927,11 +937,25 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
     // the segment start measures the horizon from the segment start.
     la_point = lookaheadPoint(
       global_plan_.poses, current_segment_, progress, lookahead);
-    base_heading = AngleRadians(atan2(
-      la_point.y - pose_in_plan.pose.position.y,
-      la_point.x - pose_in_plan.pose.position.x));
+    base_heading = AngleRadians(lookaheadSegmentAzimuth(
+      global_plan_.poses, current_segment_, progress, lookahead));
   }
 
+  // Superpose the two references. In the straight regime base_heading and the
+  // crab PID's cross-track reference share the SAME segment, and the closed-loop
+  // cross-track convergence is provable (the crab loop alone; #76/#91). With
+  // look-ahead enabled through a bend the references are MIXED: base_heading is
+  // the tangent of the segment `lookahead` metres AHEAD while crab_angle still
+  // corrects cross-track on the CURRENT segment, so during the vertex transition
+  // the superposition is a heuristic, not a proven-convergent law. It is bounded
+  // (crab_angle is clamped; base_heading steps by the turn at each crossed
+  // vertex — usually one per cycle, but on dense/short-segment plans the
+  // look-ahead point may cross several vertices in a single cycle),
+  // self-corrects once the boat and its look-ahead point are on the same
+  // segment again, and — being the whole point of #91 — anticipates the bend
+  // rather than reacting to it. The bend-regime transition is verified by the
+  // sim/log monotonic cross-track decay check owed at review-code (no offline
+  // simulator here), not by a unit test.
   AngleRadians target_heading = base_heading + crab_angle;
 
   // Inner heading loop: proportional heading-error -> yaw rate, with a tunable
