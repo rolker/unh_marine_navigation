@@ -108,3 +108,82 @@ integration site matches the `turnSpeedFactor` pattern, count assertions at
 ### Findings
 - [ ] (suggestion) Circumfit uses the boat's actual position (`pose_in_plan.pose.position`), which carries cross-track error, as the first fit point while the other two are on-path; consider the along-track projection or document the choice — `plan.md:76-80`
 - [ ] (suggestion) Add a coincident-point test case (near-goal: half_la == full_la == goal → R = ∞ → factor 1.0) — the planned 8 cases omit it — `plan.md:88-96`
+
+## Implementation
+**Status**: complete
+**When**: 2026-07-01 04:10 +00:00
+**By**: Claude Opus
+
+**Plan**: `.agent/work-plans/issue-89/plan.md`
+**Branch**: feature/issue-89
+**Verdict**: implemented per plan; both Plan Review suggestions applied (mandatory)
+
+### What was implemented
+- `path_geometry.hpp`: added `circumscribedRadius(a, b, c)` (3-point
+  circumscribed-circle radius; returns `+inf` for collinear / coincident /
+  non-finite inputs via a single `!isfinite` guard on the result) and
+  `curvatureSpeedFactor(radius, min_radius, min_factor)` (disabled when
+  `min_radius <= 0`; 1.0 for non-finite/gentle radius; else
+  `clamp(radius/min_radius, min_factor, 1.0)`). Added `#include <limits>`.
+- `crabbing_path_follower.h`: added `turn_speed_curvature_min_radius_`
+  `std::atomic<double>{0.0}` with doc comment.
+- `crabbing_path_follower.cpp`: added the `kTunables[]` entry
+  (`turn_speed_curvature_min_radius`, default 0.0, range `[0, 200]`, units `m`,
+  group `speed`) — control count 12→13; added `read_validated` call
+  (`lo=0.0, exclusive_lo=false`); added the on-set-parameters callback branch
+  (`>= 0.0`, no upper bound); applied the factor at the turn-speed regulation
+  site as `combined_factor = min(turn_factor, curvature_factor)` before the
+  `cos_crab` division; reuses `turn_speed_min_factor_` as the shared floor.
+  Updated "eleven"→"twelve" tunable-count comments.
+- New `test/test_curvature_speed_factor.cpp` (9 gtest cases) wired into
+  `CMakeLists.txt` like `test_turn_speed_factor`.
+- `test/test_crabbing_control.cpp`: bumped both size assertions 12u→13u,
+  updated "twelve"→"thirteen" / "nine"→"twelve" doc comments, added
+  group/units/range assertions (`speed`, `m`, `[0, 200]`) for the new control.
+  Also updated the CMake comment and header "eleven"→"twelve".
+
+### Along-track fit-point decision + Plan Review suggestions (both applied)
+- **Sug 1 (along-track fit point):** the first circumfit point is the along-track
+  on-path projection — `lookaheadPoint(poses, current_segment_, progress, 0.0)`
+  (the projected foot on the current segment), NOT `pose_in_plan.pose.position`.
+  The other two points are the half-lookahead and full-lookahead points (the
+  full-lookahead `la_point` was hoisted out of the `if (lookahead > 0.0)` block
+  and reused). All three fit points are path-referenced; a code comment at the
+  site states this, so curvature stays a pure path property and cross-track error
+  does not double-count with the crab-angle regulator.
+- **Sug 2 (coincident-point test):** added
+  `CircumscribedRadius.CoincidentPointsAreInfinite` covering all-three-coincident
+  and near-goal half==full==goal → R = ∞ → factor 1.0.
+
+### Control-count bump (#87 lesson)
+Advertised control set grew 12→13. Updated `test_crabbing_control.cpp` size
+assertions (`:119`, `:284`) and doc comments, added the new control's
+group/units/range assertions, and updated the CMake and header count comments.
+
+### Build & test (ACTUAL)
+- Build: `colcon build --packages-up-to marine_nav_crabbing_path_follower
+  --symlink-install` → **4 packages finished**, `marine_nav_crabbing_path_follower`
+  compiled (only pre-existing `-Wunused-parameter` / `-Wsign-compare` warnings in
+  untouched code).
+- Tests: `colcon test --packages-select marine_nav_crabbing_path_follower`.
+  Functional gtest suites ALL PASS:
+  - `test_curvature_speed_factor`: 9/9
+  - `test_crabbing_control`: 10/10
+  - `test_turn_speed_factor`: 7/7
+  - `test_gain_schedule`: 9/9
+  - `test_path_geometry`: 18/18
+  (53 functional tests, 0 failures, 0 errors.)
+- Pre-existing package-wide lint remains (NOT fixed here, per instructions):
+  cpplint `legal/copyright` + `build/include_order` and uncrustify style diffs.
+  Confirmed pre-existing — `ament_uncrustify src/crabbing_path_follower.cpp`
+  fails on the pristine (pre-change) file, and the copyright/include-order
+  findings hit every sibling test file (`test_turn_speed_factor.cpp`,
+  `test_gain_schedule.cpp`, `test_path_geometry.cpp`).
+
+### Deviations from plan.md
+- First circumfit point is the along-track projection, not
+  `pose_in_plan.pose.position` (Plan Review sug 1, operator-mandated).
+- Curvature test file has 9 cases (planned 8) — the added coincident-point case
+  (Plan Review sug 2).
+- DEBUG log prints `turn_factor` / `curvature_factor` / `combined_factor`.
+- No other deviations.

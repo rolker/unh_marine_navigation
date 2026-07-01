@@ -89,11 +89,18 @@ if(BUILD_TESTING)
     ament_target_dependencies(test_turn_speed_factor geometry_msgs)
   endif()
 
+  ament_add_gtest(test_curvature_speed_factor test/test_curvature_speed_factor.cpp)
+  if(TARGET test_curvature_speed_factor)
+    target_include_directories(test_curvature_speed_factor PRIVATE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
+    ament_target_dependencies(test_curvature_speed_factor geometry_msgs)
+  endif()
+
   # marine_control device-control wiring (unh_marine_autonomy#140 / ADR-0003 —
   # the external marine_control device-control ADR, not this workspace's ADR-0003):
   # exercises the real declareCrabbingDefaultSpeed / declareCrabbingControlParams /
   # bindCrabbingControls helpers against a LifecycleNode + ControlServer (no nav2
-  # bring-up). Verifies the twelve controls are advertised with their ranges/groups, a
+  # bring-up). Verifies the thirteen controls are advertised with their ranges/groups, a
   # platform _range override is honoured, an in-range change applies, and an
   # out-of-range change is rejected by the FloatingPointRange over the channel.
   ament_add_gtest(test_crabbing_control test/test_crabbing_control.cpp)

@@ -7,7 +7,7 @@
 // declareCrabbingDefaultSpeed / declareCrabbingControlParams / bindCrabbingControls
 // helpers — the actual code the plugin runs — against a bare LifecycleNode and a
 // real ControlServer, with no nav2 bring-up. It checks that:
-//   - all twelve controls (default_speed + eleven tunables) are advertised with
+//   - all thirteen controls (default_speed + twelve tunables) are advertised with
 //     their default FloatingPointRange, UI group, and units;
 //   - a platform `<name>.<t>_range` startup override is honoured (and integer
 //     bounds are coerced; a malformed range falls back to the default);
@@ -47,7 +47,7 @@ constexpr char kName[] = "FollowPath";
 constexpr char kStateTopic[] = "~/control/FollowPath/state";
 constexpr char kChangeTopic[] = "~/control/FollowPath/change";
 
-// Declare every control the plugin exposes (default_speed + the nine tunables),
+// Declare every control the plugin exposes (default_speed + the twelve tunables),
 // matching what configure() does, so the bound ControlSet is complete.
 void declareAll(
   const rclcpp_lifecycle::LifecycleNode::SharedPtr & node, const std::string & name)
@@ -116,7 +116,7 @@ TEST_F(CrabbingControlTest, AdvertisesAllControlsWithRangesAndGroups)
   marine_nav_crabbing_path_follower::bindCrabbingControls(server, kName);
 
   const ControlSet set = server.build_control_set();
-  ASSERT_EQ(set.items.size(), 12u);
+  ASSERT_EQ(set.items.size(), 13u);
 
   // default_speed: handled separately from the generic helper, with its own
   // permissive panel range so the configure-time fallback is preserved.
@@ -162,6 +162,16 @@ TEST_F(CrabbingControlTest, AdvertisesAllControlsWithRangesAndGroups)
   EXPECT_EQ(min_factor->units, "");
   EXPECT_DOUBLE_EQ(min_factor->min_value, 0.0);
   EXPECT_DOUBLE_EQ(min_factor->max_value, 1.0);
+
+  // Anticipatory curvature regulation (#89): another "speed" group control,
+  // a radius in metres over [0, 200].
+  const auto * curvature = findItem(set, "FollowPath.turn_speed_curvature_min_radius");
+  ASSERT_NE(curvature, nullptr);
+  EXPECT_EQ(curvature->type, ControlItem::TYPE_FLOAT);
+  EXPECT_EQ(curvature->group, "speed");
+  EXPECT_EQ(curvature->units, "m");
+  EXPECT_DOUBLE_EQ(curvature->min_value, 0.0);
+  EXPECT_DOUBLE_EQ(curvature->max_value, 200.0);
 }
 
 TEST_F(CrabbingControlTest, PlatformRangeOverrideIsHonoured)
@@ -281,7 +291,7 @@ TEST_F(CrabbingControlTest, NamespaceParamDifferentiatesTopicsWhenWrapped)
   // Both bind the same parameter set; only the channel differs.
   marine_control::ControlServer s1(node.get(), standalone);
   marine_nav_crabbing_path_follower::bindCrabbingControls(s1, kName);
-  ASSERT_EQ(s1.build_control_set().items.size(), 12u);
+  ASSERT_EQ(s1.build_control_set().items.size(), 13u);
 }
 
 class CrabbingControlChannelTest : public CrabbingControlTest

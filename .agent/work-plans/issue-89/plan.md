@@ -140,9 +140,27 @@ follows the same pattern as `turnSpeedFactor` (#87):
 | `path_geometry.hpp` (new functions) | `test_curvature_speed_factor.cpp` unit tests; CMakeLists.txt | Yes |
 | Control count doc comments ("twelve controls") | Update to "thirteen" in `test_crabbing_control.cpp` header | Yes |
 
+## Implementation Deviations (from Plan Review, both mandatory)
+
+- **First circumfit point (Plan Review sug 1).** Step 7 originally used
+  `pose_in_plan.pose.position` (the boat's raw actual position). Implemented
+  instead with the **along-track on-path projection** as the first fit point:
+  `lookaheadPoint(poses, current_segment_, progress, 0.0)` — walking 0 m forward
+  yields the projected foot on the current segment (the point the controller
+  tracks from). The half- and full-lookahead points are the other two. All three
+  are path-referenced, so curvature is a pure property of the path and
+  cross-track error (wind/current) cannot inflate it and double-count with the
+  crab-angle regulator. A code comment at the regulation site states this.
+- **Coincident-point test (Plan Review sug 2).** Added
+  `CircumscribedRadius.CoincidentPointsAreInfinite`, covering both all-three
+  coincident and the near-goal half==full==goal (two-coincident) case → R = ∞ →
+  factor 1.0. The curvature test file has 9 cases (was planned as 8).
+- **DEBUG log.** The turn-speed regulation log line now prints `turn_factor`,
+  `curvature_factor`, and `combined_factor` (not just the single factor).
+
 ## Open Questions
 
-- [ ] No open questions — plan is review-plan-ready.
+- [x] No open questions — plan is review-plan-ready.
 
 ## Estimated Scope
 
