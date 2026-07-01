@@ -79,3 +79,18 @@ gated on stable look-ahead). No blocking dependency on open issues.
 
 ### Open questions
 - [ ] No open questions — plan is review-plan-ready.
+
+## Plan Review
+**Status**: complete
+**When**: 2026-07-01 11:53 +00:00
+**By**: Claude Code Agent (Claude Opus)
+
+**Plan**: `.agent/work-plans/issue-91/plan.md` at `3c60486`
+**PR**: PR-less
+**Verdict**: approve-with-suggestions
+
+### Findings
+- [ ] (suggestion) `lookaheadSegmentAzimuth` should return the final segment's azimuth when `start_seg` is past the last segment (mirror `lookaheadPoint`'s goal-clamp, `path_geometry.hpp:82-84`), not fold it into the `0.0`-degenerate bucket — add a parallel out-of-range test. — `plan.md:47`
+- [ ] (suggestion) Note in the updated comment block that the segment-tangent `base_heading` steps discretely at vertex crossings (bounded by the `max_yaw_rate` clamp) — `plan.md:38`
+- [ ] (suggestion) Confirm the sim/log monotonic cross-track decay acceptance check is run manually at review-code (it's not an automated deliverable). — `plan.md:66`
+- [ ] (info) Plan correctly determined the DEBUG log at `crabbing_path_follower.cpp:897` needs no change — it logs `segment_azimuth` (current segment, line 815), not `base_heading`; the review-issue log action item is discharged.
