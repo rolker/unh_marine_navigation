@@ -230,3 +230,29 @@ group/units/range assertions, and updated the CMake and header count comments.
 Lifecycle: Implementation → review-code (re-review the fixes). Hand off to a fresh-context sub-agent:
 
     .agent/scripts/dispatch_subagent.sh --mode in-process --issue 89 --skill review-code
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-07-01 04:41 +00:00
+**By**: Claude Code Agent (Claude Opus)
+**Verdict**: approved
+
+**Branch**: feature/issue-89 at `88edf1d`
+**Mode**: pre-push
+**Depth**: Deep (reason: real-time vessel motion-control law; 200+ changed code+test lines)
+**Must-fix**: 0 | **Suggestions**: 1
+**Round**: 2 | **Ship**: recommended — round-1's 2 suggestions addressed (wiring suite + shared-floor help text); no must-fix this round; both Deep adversarial lenses returned zero.
+
+### Findings
+- [ ] (suggestion) Test comment cites call-site range `crabbing_path_follower.cpp:991-1006`; the `min()` composition it mirrors now lands at `1007-1008` — nudge the range to keep the lockstep pointer exact — `test/test_curvature_speed_factor.cpp:37,209`
+
+### Notes
+- Round-2 delta since round 1 (`9ebcf68`) is exactly the two addressed pre-push suggestions: the `CurvatureWiring` end-to-end suite (6 cases) and the shared-floor help text. Core algorithm unchanged since round-1 approval.
+- Two disjoint-lens Claude Adversarial passes (A: logic/correctness; B: systemic/safety) both returned zero must-fix. Verified: circumradius formula correct ((0,0),(15,0),(20,10)→R=12.5); no non-finite surge path (degenerate → `+inf` → factor 1.0); `combined_factor = min(...) ≤ 1.0` (boat can only slow); atomics `.load()`-snapshotted tear-free.
+- Dropped Lens B false positive (callback already uses `if (!as_number(p, v) || !update(...))`) and a defensive-only isfinite-guard (provably unreachable — target_speed finite, factor in [min,1.0]).
+- Static analysis: cppcheck findings (`cos_error_azimuth`:779, `dt` shadow:952) are on pre-existing untouched lines — silence-filtered. cpplint copyright/include-order on the new test file is repo-wide convention mirrored from the merged #87 sibling tests, non-gating.
+
+### Next step
+Lifecycle: **Local Review (approved)** → push / open PR → **triage-reviews**. Hand off to a fresh-context sub-agent:
+
+    .agent/scripts/dispatch_subagent.sh --mode in-process --issue 89 --skill triage-reviews
