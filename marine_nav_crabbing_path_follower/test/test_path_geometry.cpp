@@ -138,6 +138,28 @@ TEST(LookaheadSegmentAzimuth, HandlesDegeneratePaths)
   EXPECT_EQ(lookaheadSegmentAzimuth(single, 0, 0.0, 5.0), 0.0);
 }
 
+// Worst-case (hairpin) discrete step. base_heading is the tangent of the
+// segment the look-ahead point lands on, so at a near-180° reversal it jumps
+// by nearly pi in the single cycle the point crosses the vertex — the largest
+// step this function can emit. This test characterizes that worst case (the
+// chatter bound flagged in #91 review): the step is real and, on
+// dense/short-segment plans, can toggle cycle-to-cycle. There is deliberately
+// NO hysteresis in this pure geometry helper — smoothing is left to the
+// downstream velocity_smoother; adding hysteresis would be a separate design
+// change with its own state and tuning (out of scope for the #91 bug fix).
+TEST(LookaheadSegmentAzimuth, HairpinReversalStepsByNearlyPi)
+{
+  // A(0,0) -> B(20,0): east (azimuth 0). B(20,0) -> C(0,1): back west with a
+  // slight north offset, azimuth atan2(1, -20) ~= pi - 0.05, a hairpin at B.
+  auto path = makePath({{0, 0}, {20, 0}, {0, 1}});
+  const double az_before = lookaheadSegmentAzimuth(path, 0, 16.0, 1.0);   // on A->B
+  const double az_after = lookaheadSegmentAzimuth(path, 0, 16.0, 10.0);   // past B
+  EXPECT_NEAR(az_before, 0.0, 1e-9);
+  EXPECT_NEAR(az_after, std::atan2(1.0, -20.0), 1e-9);
+  // The single-cycle base_heading step at the vertex approaches pi (worst case).
+  EXPECT_GT(std::abs(az_after - az_before), 3.0);
+}
+
 namespace
 {
 geometry_msgs::msg::Point pt(double x, double y)

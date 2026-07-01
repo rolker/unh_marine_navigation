@@ -145,7 +145,7 @@ None. Approach and all four planned tests implemented as specified, with the 3 P
 
 ### Findings
 - [x] (suggestion) Comment at `:905-907` credits the `max_yaw_rate` clamp as the discrete-step bound, but at default params it is a no-op — the external `velocity_smoother` is the real bound (see `crabbing_path_follower.h:108-109`) — `src/crabbing_path_follower.cpp:905`
-- [ ] (suggestion) Segment-tangent `base_heading` can toggle across a vertex cycle-to-cycle on dense/short-segment plans (chatter); no hysteresis and no worst-case (hairpin) test — `include/marine_nav_crabbing_path_follower/path_geometry.hpp:143`
+- [x] (suggestion) Segment-tangent `base_heading` can toggle across a vertex cycle-to-cycle on dense/short-segment plans (chatter); no hysteresis and no worst-case (hairpin) test — `include/marine_nav_crabbing_path_follower/path_geometry.hpp:143`
 - [ ] (suggestion) Mixed-reference bend regime: `base_heading` (ahead segment) + `crab_angle` (current segment) superposed; convergence provable only in the straight regime; transition untested — `src/crabbing_path_follower.cpp:936`
 - [ ] (suggestion/owed) Sim/log monotonic cross-track decay acceptance check still unverified — could not run in offline container (no simulator); owed before merge — `n/a`
 
