@@ -169,3 +169,33 @@ issue: 87
 - **Static analysis**: new hpp/test have no lines > 99 and no trailing whitespace; the two long `RCLCPP_DEBUG_STREAM` lines (`:930,:935`) match the package's existing convention (12 such lines pre-exist; `:935` is the byte-identical sibling of the prior log). No copyright headers / cpplint include-order remain pre-existing package-wide conditions, not introduced here.
 - **Plan drift**: none — all 6 planned files changed, no scope creep; insertion point, `min_factor` bound-check ordering, and the 7 unit-test cases all match `plan.md` exactly.
 - **Governance**: Human control & transparency (Pass — default-off, live-tunable, descriptors + finiteness guards); Consequences (Pass — tests, param declares, marine_control binding, DEBUG log all in-PR; `bindCrabbingControls` auto-binds via the `kTunables` loop, no marine_control-side change); Safety First / Simulation-First (Pass / Watch — dedicated sim scenario waived for topic-logging validation, recorded in `plan.md`); ADR-0008 ROS conventions (Pass). Copilot Adversarial off (default; `gh`/network unavailable in this worktree regardless).
+
+## Implementation
+**Status**: complete
+**When**: 2026-07-01 02:36 +00:00
+**By**: Claude Opus
+
+**Branch**: feature/issue-87 at `11b2ded`
+**Addressed**: `## Local Review (Pre-Push)` (approved, `feature/issue-87` at `e551513`, 2026-07-01 02:20 +00:00) — its 3 open suggestions
+**Commits**: `990a0c9`, `304b3e1`, `11b2ded`
+
+### Actions
+- [x] (suggestion) marine_control channel test for `turn_speed_min_factor`'s `v > 1.0` rejection — added `CrabbingControlChannelTest.TurnSpeedMinFactorAboveOneIsRejected` (mirrors the existing `OutOfRangeChangeIsRejected` sentinel pattern: sends 2.0, then an in-range sentinel; asserts the cap held ≤ 1.0). — `test/test_crabbing_control.cpp` (`304b3e1`)
+- [x] (suggestion) Platform `_range` override ceiling cap for `turn_speed_min_factor` — the declare-time range guard now rejects an override whose ceiling exceeds `default_max` **only for `turn_speed_min_factor`** (the sole tunable with a callback-enforced hard max, `v > 1.0`). A blanket ceiling cap was deliberately **not** applied: the FloatingPointRange `to_value` is itself rclcpp's settable cap, so widening it is the legitimate purpose of `_range` for tunables with no callback upper bound (gains, distances) — proven by `OutOfRangeChangeIsRejected` relying on the descriptor, not a callback branch, to reject `heading_rate_gain` > 10. Added `CrabbingControlTest.TurnSpeedMinFactorRangeCeilingClampedToDefault` ([0,5] → falls back to [0,1]). — `src/crabbing_path_follower.cpp:126-160`, `test/test_crabbing_control.cpp` (`11b2ded`)
+- [x] (suggestion) Code comment at the regulation site noting `crab_angle` is the post-gain-schedule (speed-scaled) value — added a `NOTE:` paragraph before the `turnSpeedFactor` call cross-referencing `gainScheduleScale` at `:856-858` and why the scaled input is intentional/consistent with the `cos_crab` division. — `src/crabbing_path_follower.cpp:916-936` (`990a0c9`)
+
+### Build / test result — PASS
+- Build: `colcon build --packages-up-to marine_nav_crabbing_path_follower --symlink-install` — 4 packages, 0 errors (only pre-existing `-Wsign-compare` warnings in unrelated `publish_visualization`).
+- Test: `colcon test --packages-select marine_nav_crabbing_path_follower` — all gtest suites pass:
+  - `test_crabbing_control` — **10/10** (was 8; +2 new cases)
+  - `test_turn_speed_factor` — 7/7
+  - `test_gain_schedule` — 9/9
+  - `test_path_geometry` — 18/18
+- Remaining ctest failures (`copyright`, `cpplint`, `uncrustify`) are the **pre-existing package-wide conditions** documented in the prior `## Implementation` entry: no copyright headers anywhere in the package; uncrustify reports **"No code style divergence"** on the edited `test/test_crabbing_control.cpp` (its divergences are in pre-existing `src` code — `std::atomic < double >` spacing, DEBUG_STREAM wrapping). No added line exceeds the package's 99-char convention (verified via `git diff d485229..HEAD`). No new lint condition introduced.
+
+### Deferred / not-actionable
+- None — all three suggestions were actioned with a real code/test change.
+
+### Next step
+Lifecycle: **Implementation** → **review-code** (re-review the fixes). Hand off to a fresh-context sub-agent:
+`.agent/scripts/dispatch_subagent.sh --mode in-process --issue 87 --skill review-code`
