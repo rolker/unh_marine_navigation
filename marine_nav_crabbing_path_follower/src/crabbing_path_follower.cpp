@@ -941,6 +941,19 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
       global_plan_.poses, current_segment_, progress, lookahead));
   }
 
+  // Superpose the two references. In the straight regime base_heading and the
+  // crab PID's cross-track reference share the SAME segment, and the closed-loop
+  // cross-track convergence is provable (the crab loop alone; #76/#91). With
+  // look-ahead enabled through a bend the references are MIXED: base_heading is
+  // the tangent of the segment `lookahead` metres AHEAD while crab_angle still
+  // corrects cross-track on the CURRENT segment, so during the vertex transition
+  // the superposition is a heuristic, not a proven-convergent law. It is bounded
+  // (crab_angle is clamped and base_heading steps by at most one segment's
+  // turn), self-corrects once the boat and its look-ahead point are on the same
+  // segment again, and — being the whole point of #91 — anticipates the bend
+  // rather than reacting to it. The bend-regime transition is verified by the
+  // sim/log monotonic cross-track decay check owed at review-code (no offline
+  // simulator here), not by a unit test.
   AngleRadians target_heading = base_heading + crab_angle;
 
   // Inner heading loop: proportional heading-error -> yaw rate, with a tunable
