@@ -63,7 +63,9 @@ constexpr CrabbingTunable kTunables[] = {
   {"turn_speed_max_crab_deg", 0.0, 0.0, 90.0, "deg", "speed",
     "Crab angle at which turn-speed regulation reaches its floor (deg; 0 = disabled)."},
   {"turn_speed_min_factor", 0.3, 0.0, 1.0, "", "speed",
-    "Minimum surge fraction when crabbing hardest (dimensionless; floors the regulation)."},
+    "Minimum surge fraction when crabbing hardest (dimensionless; the shared floor for "
+    "BOTH turn-speed regulators — the reactive crab-angle one (turn_speed_max_crab_deg) "
+    "and the anticipatory curvature one (turn_speed_curvature_min_radius))."},
   {"turn_speed_curvature_min_radius", 0.0, 0.0, 200.0, "m", "speed",
     "Path radius of curvature below which the boat slows anticipating a turn (m; 0 = disabled)."},
 };

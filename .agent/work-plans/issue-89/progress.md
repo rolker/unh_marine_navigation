@@ -202,7 +202,7 @@ group/units/range assertions, and updated the CMake and header count comments.
 
 ### Findings
 - [x] (suggestion) No end-to-end test exercises the curvature wiring (foot/half/full point selection + `min()` composition) through a multi-segment `global_plan_` — `src/crabbing_path_follower.cpp:991-1006`
-- [ ] (suggestion) Shared `turn_speed_min_factor` floor couples both regulators; note it in the param help text — `include/marine_nav_crabbing_path_follower/path_geometry.hpp:243-244`
+- [x] (suggestion) Shared `turn_speed_min_factor` floor couples both regulators; note it in the param help text — `include/marine_nav_crabbing_path_follower/path_geometry.hpp:243-244`
 
 ### Notes
 - Static analysis: cppcheck clean on new code; ament_cpplint findings (copyright, include-order, line-length) are pre-existing repo convention, mirrored from the merged sibling `test_turn_speed_factor.cpp` (#87), not a gating check. Silence-filtered.
