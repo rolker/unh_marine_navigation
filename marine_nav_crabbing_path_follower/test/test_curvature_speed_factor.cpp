@@ -34,7 +34,7 @@ PoseStamped makePose(double x, double y)
 }
 
 // Mirrors the anticipatory-curvature composition at
-// crabbing_path_follower.cpp:991-1006 as a pure function so the *wiring* (the
+// crabbing_path_follower.cpp:991-1008 as a pure function so the *wiring* (the
 // along-track foot / half-lookahead / full-lookahead point selection and the
 // min() with the reactive turn factor) can be exercised end-to-end over a real
 // multi-segment global_plan_ without ROS lifecycle scaffolding. Any change to
@@ -206,7 +206,7 @@ TEST(CurvatureSpeedFactor, MinFactorFloorRespected)
 
 // --- End-to-end wiring over a multi-segment plan -------------------------
 // These exercise the full anticipatory-curvature path the calculate() site
-// walks (crabbing_path_follower.cpp:991-1006): the along-track foot, the
+// walks (crabbing_path_follower.cpp:991-1008): the along-track foot, the
 // half-lookahead, and the full-lookahead points are selected off a real
 // multi-segment global_plan_ via lookaheadPoint(), fed to circumscribedRadius /
 // curvatureSpeedFactor, and composed with the reactive turnSpeedFactor via min().
