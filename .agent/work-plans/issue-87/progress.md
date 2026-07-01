@@ -145,3 +145,27 @@ issue: 87
 - Also updated the "nine"/"ten" wording in `crabbing_path_follower.{h,cpp}` and
   `CMakeLists.txt` (beyond the must-fix's test-file scope) so all count comments
   stay consistent at eleven tunables / twelve controls.
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-07-01 02:20 +00:00
+**By**: Claude Code Agent (Claude Opus)
+**Verdict**: approved
+
+**Branch**: feature/issue-87 at `e551513`
+**Mode**: pre-push
+**Depth**: Deep (reason: 242 changed code lines ≥200; safety-relevant vessel surge control + concurrency)
+**Must-fix**: 0 | **Suggestions**: 3
+**Round**: 1 | **Ship**: recommended — no must-fix findings; the change is default-off, backward-compatible, and fully unit-tested; the 3 suggestions are non-blocking and may be applied or tracked.
+
+### Findings
+- [ ] (suggestion) No marine_control channel test for the two new params — `test_crabbing_control.cpp`'s `InRange`/`OutOfRangeChangeIsRejected` cover `heading_rate_gain` only; `turn_speed_min_factor`'s `v > 1.0` rejection is the only callback branch with an explicit upper-bound check and is untested at the ROS layer (pure `turnSpeedFactor` is well covered). — `test/test_crabbing_control.cpp:318,332`
+- [ ] (suggestion) Platform `_range` override for `turn_speed_min_factor` has no upper cap: `turn_speed_min_factor_range: [0, 5]` would advertise a FloatingPointRange up to 5.0 while the callback still rejects `> 1.0`, a panel/callback mismatch (mirrors the existing negative-`_range` defense at `crabbing_path_follower.cpp:136-137`, which caps the floor but not the ceiling). Minor — only reachable via a misconfigured platform override. — `src/crabbing_path_follower.cpp:136-137`
+- [ ] (suggestion) `turnSpeedFactor` consumes the *post-gain-schedule* `crab_angle` (scaled by `gainScheduleScale` at `:856-858`), so when `gain_ref_speed > 0` the regulation input is speed-scaled. Internally consistent (`cos_crab` uses the same angle) and documented in `plan.md §Context`, but not noted in the code comment at the regulation site. — `src/crabbing_path_follower.cpp:916-928`
+
+### Notes
+- **Verified false positives** (fresh-context adversarial Lens B): (a) claimed configure-time bypass of `turn_speed_min_factor`'s upper bound — the FloatingPointRange descriptor declared by `declareCrabbingControlParams` (`:162-163`) is attached *before* `read_validated` runs, so an out-of-range YAML override fails loudly at declare, exactly as the `:516-519` comment states and as every existing tunable relies on. (b) claimed multi-atomic inconsistency window between `turn_speed_max_crab_deg_` and `turn_speed_min_factor_` — no invariant binds them; `turnSpeedFactor` yields a valid factor in `[min_factor, 1.0]` for any combination, and the single-cycle snapshot is the same accepted idiom as the gain-schedule (`:857`) and lookahead (`:871-873`) pairs.
+- **Confirmed correct** (both lenses): regulation factor is always `≤ 1.0` so the change can only slow the boat, never command a higher surge (safe for a vessel); NaN/Inf crab clamps to `min_factor` rather than propagating a non-finite `linear.x`; regulation is applied after the trajectory-speed rederivation and immediately before the `cos_crab` division, landing on both the commanded-speed and trajectory-speed paths.
+- **Static analysis**: new hpp/test have no lines > 99 and no trailing whitespace; the two long `RCLCPP_DEBUG_STREAM` lines (`:930,:935`) match the package's existing convention (12 such lines pre-exist; `:935` is the byte-identical sibling of the prior log). No copyright headers / cpplint include-order remain pre-existing package-wide conditions, not introduced here.
+- **Plan drift**: none — all 6 planned files changed, no scope creep; insertion point, `min_factor` bound-check ordering, and the 7 unit-test cases all match `plan.md` exactly.
+- **Governance**: Human control & transparency (Pass — default-off, live-tunable, descriptors + finiteness guards); Consequences (Pass — tests, param declares, marine_control binding, DEBUG log all in-PR; `bindCrabbingControls` auto-binds via the `kTunables` loop, no marine_control-side change); Safety First / Simulation-First (Pass / Watch — dedicated sim scenario waived for topic-logging validation, recorded in `plan.md`); ADR-0008 ROS conventions (Pass). Copilot Adversarial off (default; `gh`/network unavailable in this worktree regardless).
