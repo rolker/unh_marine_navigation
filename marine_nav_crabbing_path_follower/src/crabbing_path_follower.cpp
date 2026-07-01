@@ -156,7 +156,7 @@ void declareCrabbingControlParams(
         node->get_logger(),
         "%s: malformed '%s_range' (need [min, max] with %g <= min < max%s); using "
         "default [%g, %g].", name.c_str(), t.suffix, t.default_min,
-        t.default_min, has_callback_hard_max ? " and max <= 1.0" : "",
+        has_callback_hard_max ? " and max <= 1.0" : "",
         t.default_min, t.default_max);
     }
 
