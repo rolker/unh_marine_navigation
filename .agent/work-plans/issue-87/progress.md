@@ -199,3 +199,29 @@ issue: 87
 ### Next step
 Lifecycle: **Implementation** → **review-code** (re-review the fixes). Hand off to a fresh-context sub-agent:
 `.agent/scripts/dispatch_subagent.sh --mode in-process --issue 87 --skill review-code`
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-07-01 02:48 +00:00
+**By**: Claude Code Agent (Claude Opus)
+**Verdict**: changes-requested
+
+**Branch**: feature/issue-87 at `a5616d8`
+**Mode**: pre-push
+**Depth**: Deep (reason: safety-relevant vessel surge control + concurrency; ~311 changed code lines ≥200)
+**Must-fix**: 1 | **Suggestions**: 1
+**Round**: 2 | **Ship**: continue — one introduced must-fix (RCLCPP_WARN format/arg mismatch, a regression from the round-1 ceiling-clamp fix); rising 0→1 with a genuine UB defect, so another round. The fix is a single mechanical edit; one more address-findings→review-code should converge.
+
+### Findings
+- [ ] (must-fix) `RCLCPP_WARN` format/argument mismatch: `%s` (`max%s`) gets a `double`, the next `%g` gets a `char*`, plus one extra unconsumed arg — UB, corrupts the malformed-`_range` diagnostic (`max(null)` + garbage), latent crash. Introduced in `11b2ded`; the `TurnSpeedMinFactorRangeCeilingClampedToDefault` test exercises this path. Fix: remove the stray `t.default_min` before the ternary. — `src/crabbing_path_follower.cpp:155`
+- [ ] (suggestion) Reused DEBUG line now prints `regulated_target_speed` under the label "target_speed (after potential trajectory derivation)" — now the post-regulation value; relabel or drop (the `:950` regulation log already shows both). — `src/crabbing_path_follower.cpp:955`
+
+### Notes
+- **Verified false positive** (adversarial Lens A proposed as must-fix): claimed startup upper-bound gap for `turn_speed_min_factor` (read_validated checks only `>= 0`). Refuted: `declareCrabbingControlParams` (`:483`) attaches the `[0, ≤1]` FloatingPointRange descriptor BEFORE `read_validated` (`:535`), and the `ceiling_ok` guard (`:145-148`) guarantees the descriptor ceiling can never exceed 1.0 — a YAML override >1 fails loudly at declare. Matches round-1's already-verified finding (a).
+- **Confirmed safe** (both lenses): `turnSpeedFactor` returns in `[min_factor, 1.0]`, so regulation can only slow the vessel, never inflate surge; NaN/Inf crab clamps to `min_factor`, no non-finite `linear.x`; the two atomics are snapshot once per cycle with no coupling invariant (same idiom as lookahead_*/gain-schedule).
+- **Static analysis**: no new lint conditions; long `RCLCPP_DEBUG_STREAM` lines (`:950,:955`, 185/195 chars) match pre-existing package convention (the `:955` sibling is already 185 chars on `origin/jazzy`). Copyright/cpplint/uncrustify remain pre-existing package-wide conditions.
+- **Plan drift**: none — all planned files changed, no scope creep; the must-fix is a regression inside the round-1 ceiling-clamp fix, not a plan deviation.
+- **Governance**: Human control/transparency, Consequences, Safety First, ADR-0008 all Pass; Simulation-First Watch (sim scenario waived for topic-logging, unchanged from round 1).
+
+### Next step
+Verdict is **changes-requested** → host (`/run-issue`) dispatches **address-findings** to work the open must-fix + suggestion from this entry, then re-dispatches **review-code**. The diff is not pushed until a pre-push review comes back approved.
