@@ -1,14 +1,19 @@
 #include <cmath>
 #include <limits>
+#include <vector>
 
 #include <gtest/gtest.h>
 
 #include "geometry_msgs/msg/point.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
 #include "marine_nav_crabbing_path_follower/path_geometry.hpp"
 
 using geometry_msgs::msg::Point;
+using geometry_msgs::msg::PoseStamped;
 using marine_nav_crabbing_path_follower::circumscribedRadius;
 using marine_nav_crabbing_path_follower::curvatureSpeedFactor;
+using marine_nav_crabbing_path_follower::lookaheadPoint;
+using marine_nav_crabbing_path_follower::turnSpeedFactor;
 
 namespace
 {
@@ -19,6 +24,59 @@ Point makePoint(double x, double y)
   p.y = y;
   p.z = 0.0;
   return p;
+}
+
+PoseStamped makePose(double x, double y)
+{
+  PoseStamped ps;
+  ps.pose.position = makePoint(x, y);
+  return ps;
+}
+
+// Mirrors the anticipatory-curvature composition at
+// crabbing_path_follower.cpp:991-1006 as a pure function so the *wiring* (the
+// along-track foot / half-lookahead / full-lookahead point selection and the
+// min() with the reactive turn factor) can be exercised end-to-end over a real
+// multi-segment global_plan_ without ROS lifecycle scaffolding. Any change to
+// the fit-point selection or the min() direction at the call site must be kept
+// in lockstep with this helper.
+struct SpeedRegulation
+{
+  double turn_factor;
+  double curvature_factor;
+  double combined;
+};
+
+SpeedRegulation regulate(
+  const std::vector<PoseStamped> & poses, int current_segment, double progress,
+  double lookahead, double crab_angle_deg, double max_crab_deg, double min_factor,
+  double curvature_min_radius)
+{
+  // The three PATH-REFERENCED fit points, exactly as the call site derives them.
+  const Point foot = lookaheadPoint(poses, current_segment, progress, 0.0);
+  const Point half = lookaheadPoint(poses, current_segment, progress, lookahead / 2.0);
+  const Point full = lookaheadPoint(poses, current_segment, progress, lookahead);
+
+  double curvature_factor = 1.0;
+  if (lookahead > 0.0 && curvature_min_radius > 0.0) {
+    const double radius = circumscribedRadius(foot, half, full);
+    curvature_factor = curvatureSpeedFactor(radius, curvature_min_radius, min_factor);
+  }
+  const double turn_factor = turnSpeedFactor(crab_angle_deg, max_crab_deg, min_factor);
+  return {turn_factor, curvature_factor, std::min(turn_factor, curvature_factor)};
+}
+
+// An L-shaped plan: a 20 m run east, a right-angle corner, then a run north.
+// current_segment_ = 0, progress = 0 puts the boat at the very start.
+std::vector<PoseStamped> lShapedPlan()
+{
+  return {makePose(0.0, 0.0), makePose(20.0, 0.0), makePose(20.0, 20.0), makePose(40.0, 20.0)};
+}
+
+// A straight three-vertex plan: no curvature anywhere along it.
+std::vector<PoseStamped> straightPlan()
+{
+  return {makePose(0.0, 0.0), makePose(20.0, 0.0), makePose(40.0, 0.0)};
 }
 }  // namespace
 
@@ -144,6 +202,107 @@ TEST(CurvatureSpeedFactor, MinFactorFloorRespected)
     EXPECT_LE(f, 1.0);
     EXPECT_TRUE(std::isfinite(f));
   }
+}
+
+// --- End-to-end wiring over a multi-segment plan -------------------------
+// These exercise the full anticipatory-curvature path the calculate() site
+// walks (crabbing_path_follower.cpp:991-1006): the along-track foot, the
+// half-lookahead, and the full-lookahead points are selected off a real
+// multi-segment global_plan_ via lookaheadPoint(), fed to circumscribedRadius /
+// curvatureSpeedFactor, and composed with the reactive turnSpeedFactor via min().
+
+// A straight multi-segment plan curves nowhere: the three fit points are
+// collinear, so the curvature factor is a clean 1.0 (no slowdown) and the
+// combined factor is governed entirely by the reactive turn factor.
+TEST(CurvatureWiring, StraightPlanNeverSlowsForCurvature)
+{
+  const auto plan = straightPlan();
+  const auto r = regulate(
+    plan, /*current_segment=*/0, /*progress=*/0.0, /*lookahead=*/30.0,
+    /*crab_angle_deg=*/0.0, /*max_crab_deg=*/30.0, /*min_factor=*/0.3,
+    /*curvature_min_radius=*/25.0);
+  EXPECT_DOUBLE_EQ(r.curvature_factor, 1.0);
+  EXPECT_DOUBLE_EQ(r.combined, r.turn_factor);  // reactive governs
+}
+
+// The L-shaped plan with lookahead 30 m selects foot (0,0), half (15,0), and
+// full (20,10) — the full-lookahead point runs 10 m past the corner into the
+// second segment. Those three points circumscribe a circle of radius exactly
+// 12.5 m; with a 25 m engagement radius the curvature factor is 12.5/25 = 0.5.
+// This pins the foot/half/full selection *and* the geometry in one shot.
+TEST(CurvatureWiring, CorneredPlanSlowsAnticipatingTheTurn)
+{
+  const auto plan = lShapedPlan();
+  const auto r = regulate(
+    plan, /*current_segment=*/0, /*progress=*/0.0, /*lookahead=*/30.0,
+    /*crab_angle_deg=*/0.0, /*max_crab_deg=*/0.0, /*min_factor=*/0.3,
+    /*curvature_min_radius=*/25.0);
+  EXPECT_DOUBLE_EQ(r.curvature_factor, 0.5);
+  // Reactive regulator disabled (max_crab_deg = 0 -> turn_factor 1.0), so the
+  // anticipatory curvature factor is what reaches the surge.
+  EXPECT_DOUBLE_EQ(r.turn_factor, 1.0);
+  EXPECT_DOUBLE_EQ(r.combined, 0.5);
+}
+
+// The along-track foot is picked at `progress` metres into the current segment,
+// not the segment start: starting 5 m along segment 0 shifts all three fit
+// points forward, but the plan still curves, so the boat still slows. Exercises
+// the start_offset path through lookaheadPoint that the call site relies on.
+TEST(CurvatureWiring, AlongTrackFootHonoursProgress)
+{
+  const auto plan = lShapedPlan();
+  const auto r = regulate(
+    plan, /*current_segment=*/0, /*progress=*/5.0, /*lookahead=*/30.0,
+    /*crab_angle_deg=*/0.0, /*max_crab_deg=*/0.0, /*min_factor=*/0.3,
+    /*curvature_min_radius=*/1000.0);
+  EXPECT_LT(r.curvature_factor, 1.0);
+  EXPECT_GE(r.curvature_factor, 0.3);
+}
+
+// min() composition: whichever regulator demands the greater slowdown wins.
+// Reactive harder — a hard crab on a straight plan: turn_factor floors while the
+// curvature factor stays 1.0, so the reactive factor governs the combined result.
+TEST(CurvatureWiring, MinCompositionReactiveGoverns)
+{
+  const auto plan = straightPlan();
+  const auto r = regulate(
+    plan, /*current_segment=*/0, /*progress=*/0.0, /*lookahead=*/30.0,
+    /*crab_angle_deg=*/30.0, /*max_crab_deg=*/30.0, /*min_factor=*/0.3,
+    /*curvature_min_radius=*/25.0);
+  EXPECT_DOUBLE_EQ(r.turn_factor, 0.3);       // |crab| == max_crab -> floor
+  EXPECT_DOUBLE_EQ(r.curvature_factor, 1.0);  // straight -> no curvature slowdown
+  EXPECT_DOUBLE_EQ(r.combined, 0.3);          // reactive governs
+}
+
+// Anticipatory harder — a gentle crab into the L-shaped corner: the curvature
+// factor (0.5) is below the reactive factor, so the curvature factor governs.
+TEST(CurvatureWiring, MinCompositionCurvatureGoverns)
+{
+  const auto plan = lShapedPlan();
+  // max_crab 60, |crab| 30 -> turn_factor clamp(1 - 30/60, .3, 1) = 0.5... make
+  // the reactive factor clearly milder than the 0.5 curvature factor: |crab| 12
+  // of 60 -> 0.8.
+  const auto r = regulate(
+    plan, /*current_segment=*/0, /*progress=*/0.0, /*lookahead=*/30.0,
+    /*crab_angle_deg=*/12.0, /*max_crab_deg=*/60.0, /*min_factor=*/0.3,
+    /*curvature_min_radius=*/25.0);
+  EXPECT_DOUBLE_EQ(r.turn_factor, 0.8);
+  EXPECT_DOUBLE_EQ(r.curvature_factor, 0.5);
+  EXPECT_DOUBLE_EQ(r.combined, 0.5);  // anticipatory governs
+}
+
+// The whole anticipatory path is gated off when the feature is disabled
+// (curvature_min_radius <= 0, the shipped default) even on a sharply curved
+// plan: the curvature factor is 1.0 and only the reactive factor can slow the boat.
+TEST(CurvatureWiring, DisabledCurvatureRadiusIsNoOpOnCurvedPlan)
+{
+  const auto plan = lShapedPlan();
+  const auto r = regulate(
+    plan, /*current_segment=*/0, /*progress=*/0.0, /*lookahead=*/30.0,
+    /*crab_angle_deg=*/0.0, /*max_crab_deg=*/0.0, /*min_factor=*/0.3,
+    /*curvature_min_radius=*/0.0);
+  EXPECT_DOUBLE_EQ(r.curvature_factor, 1.0);
+  EXPECT_DOUBLE_EQ(r.combined, 1.0);
 }
 
 int main(int argc, char ** argv)

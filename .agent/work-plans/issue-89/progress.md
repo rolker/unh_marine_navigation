@@ -201,7 +201,7 @@ group/units/range assertions, and updated the CMake and header count comments.
 **Round**: 1 | **Ship**: recommended — no must-fix; math/degenerate-handling verified safe, follows the merged #87 pattern, no-op until a platform opts in.
 
 ### Findings
-- [ ] (suggestion) No end-to-end test exercises the curvature wiring (foot/half/full point selection + `min()` composition) through a multi-segment `global_plan_` — `src/crabbing_path_follower.cpp:991-1006`
+- [x] (suggestion) No end-to-end test exercises the curvature wiring (foot/half/full point selection + `min()` composition) through a multi-segment `global_plan_` — `src/crabbing_path_follower.cpp:991-1006`
 - [ ] (suggestion) Shared `turn_speed_min_factor` floor couples both regulators; note it in the param help text — `include/marine_nav_crabbing_path_follower/path_geometry.hpp:243-244`
 
 ### Notes
