@@ -20,7 +20,7 @@ namespace marine_nav_crabbing_path_follower
 
 namespace
 {
-// Single source of truth for the nine live operator-tunable parameters exposed
+// Single source of truth for the eleven live operator-tunable parameters exposed
 // through marine_control (default_speed is handled separately — see
 // declareCrabbingDefaultSpeed). For each: the value default, the built-in
 // fallback range [min, max], panel units, UI group, and help text. Both
@@ -60,6 +60,10 @@ constexpr CrabbingTunable kTunables[] = {
     "Reference speed for the cross-track gain schedule (m/s; 0 = disabled)."},
   {"pid.gain_v_min", 0.5, 0.0, 20.0, "m/s", "pid",
     "Divisor floor for the gain schedule (m/s; the callback enforces > 0)."},
+  {"turn_speed_max_crab_deg", 0.0, 0.0, 90.0, "deg", "speed",
+    "Crab angle at which turn-speed regulation reaches its floor (deg; 0 = disabled)."},
+  {"turn_speed_min_factor", 0.3, 0.0, 1.0, "", "speed",
+    "Minimum surge fraction when crabbing hardest (dimensionless; floors the regulation)."},
 };
 
 // default_speed's panel range. Permissive enough that every physically
@@ -129,16 +133,30 @@ void declareCrabbingControlParams(
     // range inconsistent with anything that can actually be set. Treat such a
     // range as malformed and fall back to the built-in default, same as a
     // misordered or non-finite one.
+    //
+    // Ceiling: most tunables have NO callback-enforced upper bound, so the
+    // advertised ceiling (the FloatingPointRange's to_value, which rclcpp uses
+    // as the settable cap) is itself what a platform tunes — widening above
+    // default_max is legitimate. The one exception is turn_speed_min_factor,
+    // whose on-set callback hard-rejects `v > 1.0` (it is a surge fraction).
+    // Advertising a ceiling above 1.0 there would offer the panel a band the
+    // callback rejects wholesale, the same inconsistency the floor guard blocks,
+    // so require its override ceiling to stay within default_max (== 1.0).
+    const bool has_callback_hard_max =
+      std::string(t.suffix) == "turn_speed_min_factor";
+    const bool ceiling_ok = !has_callback_hard_max || range.size() != 2 ||
+      range[1] <= t.default_max;
     if (range.size() == 2 && std::isfinite(range[0]) && std::isfinite(range[1]) &&
-      range[0] < range[1] && range[0] >= t.default_min)
+      range[0] < range[1] && range[0] >= t.default_min && ceiling_ok)
     {
       rmin = range[0];
       rmax = range[1];
     } else {
       RCLCPP_WARN(
         node->get_logger(),
-        "%s: malformed '%s_range' (need [min, max] with %g <= min < max); using "
+        "%s: malformed '%s_range' (need [min, max] with %g <= min < max%s); using "
         "default [%g, %g].", name.c_str(), t.suffix, t.default_min,
+        has_callback_hard_max ? " and max <= 1.0" : "",
         t.default_min, t.default_max);
     }
 
@@ -412,6 +430,33 @@ void CrabbingPathFollower::configure(
           {
             return result;
           }
+        } else if (name == base + ".turn_speed_max_crab_deg") {
+          // >= 0: 0.0 disables turn-speed regulation (the default), so it is valid.
+          double v;
+          if (!as_number(p, v) ||
+            !update(turn_speed_max_crab_deg_, v, 0.0, false, "turn_speed_max_crab_deg"))
+          {
+            return result;
+          }
+        } else if (name == base + ".turn_speed_min_factor") {
+          // In [0, 1]: it is a surge fraction. The generic update() enforces only
+          // the >= 0 lower bound, so reject v > 1.0 explicitly here — BEFORE
+          // update() runs — so an out-of-range value is never committed to the
+          // atomic before the rejection returns.
+          double v;
+          if (!as_number(p, v)) {
+            return result;
+          }
+          if (v > 1.0) {
+            result.successful = false;
+            result.reason =
+              "turn_speed_min_factor must be <= 1.0 (a surge fraction); got " +
+              std::to_string(v);
+            return result;
+          }
+          if (!update(turn_speed_min_factor_, v, 0.0, false, "turn_speed_min_factor")) {
+            return result;
+          }
         }
       }
       return result;
@@ -428,7 +473,7 @@ void CrabbingPathFollower::configure(
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".transform_tolerance", rclcpp::ParameterValue(transform_tolerance_));
   node->get_parameter(plugin_name_ + ".transform_tolerance", transform_tolerance_);
 
-  // Declare the nine live operator-tunables with FloatingPointRange descriptors
+  // Declare the eleven live operator-tunables with FloatingPointRange descriptors
   // (and their `<name>.<tunable>_range` startup overrides) BEFORE the
   // read_validated block below, so the descriptor attaches at first declaration;
   // read_validated's declare_parameter_if_not_declared then no-ops the
@@ -482,6 +527,12 @@ void CrabbingPathFollower::configure(
   // Sub-namespaced under .pid. to sit alongside .pid.reset_threshold_seconds.
   read_validated(".pid.gain_ref_speed", pid_gain_ref_speed_, 0.0, false);
   read_validated(".pid.gain_v_min", pid_gain_v_min_, 0.0, true);
+  // Turn-speed regulation (#87). max_crab_deg >= 0 (0 = disabled, the default);
+  // min_factor >= 0 — its [0, 1] upper bound is enforced by the FloatingPointRange
+  // descriptor declared in declareCrabbingControlParams (a YAML override > 1 fails
+  // loudly at declare) and by the on-set-parameters callback for live updates.
+  read_validated(".turn_speed_max_crab_deg", turn_speed_max_crab_deg_, 0.0, false);
+  read_validated(".turn_speed_min_factor", turn_speed_min_factor_, 0.0, false);
 
   // marine_control panel namespace for the control topics created in activate().
   // Defaults to plugin_name_, so a standalone controller's topics are
@@ -876,10 +927,32 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
     target_speed = segment_distance/dt.seconds();
   }
 
-  double cos_crab = std::max(cos(crab_angle), 0.5);
-  cmd_vel.twist.linear.x = target_speed/cos_crab;
+  // Turn-speed regulation (#87). Slow the commanded surge in proportion to how
+  // hard the boat is crabbing, BEFORE the cos_crab division below inflates it.
+  // Applied here — after the trajectory-speed rederivation block above (which
+  // overwrites target_speed on timestamped trajectories) and immediately before
+  // the division — so the regulation lands on whatever speed actually feeds
+  // linear.x, on both commanded-speed and trajectory-speed paths. Snapshot both
+  // atomics once (tear-free, matching the lookahead_* / gain-schedule idiom).
+  // Default turn_speed_max_crab_deg = 0 leaves target_speed unchanged (disabled).
+  //
+  // NOTE: crab_angle here is the POST-gain-schedule value — it was scaled by
+  // gainScheduleScale above (`:856-858`), so when gain_ref_speed > 0 the
+  // regulation input is speed-scaled. That is intentional and internally
+  // consistent: the cos_crab division below consumes the same scaled angle, so
+  // regulation tracks the crab the boat is actually commanded to hold.
+  const double turn_max_crab = turn_speed_max_crab_deg_.load();
+  const double turn_min_factor = turn_speed_min_factor_.load();
+  const double turn_factor =
+    turnSpeedFactor(crab_angle.value(), turn_max_crab, turn_min_factor);
+  const double regulated_target_speed = target_speed * turn_factor;
 
-  RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: target_speed (after potential trajectory derivation): " << target_speed << " adjusted for crab angle: " << cmd_vel.twist.linear.x);
+  RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: turn_speed regulation factor: " << turn_factor << " target_speed " << target_speed << " -> regulated: " << regulated_target_speed);
+
+  double cos_crab = std::max(cos(crab_angle), 0.5);
+  cmd_vel.twist.linear.x = regulated_target_speed/cos_crab;
+
+  RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: regulated target_speed: " << regulated_target_speed << " adjusted for crab angle: " << cmd_vel.twist.linear.x);
 
   if(visualize_)
   {

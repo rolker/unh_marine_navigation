@@ -141,6 +141,45 @@ inline double gainScheduleScale(
   return crab_angle_deg * gain_ref_speed / v;
 }
 
+/// Regulate the commanded surge on a turn by the magnitude of the crab angle (#87).
+///
+/// CrabbingPathFollower commands `linear.x = target_speed / cos(crab_angle)`:
+/// when the cross-track PID drives a large crab angle on a turn, that division
+/// *inflates* the surge exactly when the boat is turning hardest (+18% commanded
+/// surge, +60% modelled current draw in turns vs. straights; field data
+/// 2026-06-30, quad coulomb model). This factor pre-multiplies `target_speed` to
+/// counter that inflation, slowing the boat in proportion to how hard it is
+/// crabbing.
+///
+/// Contract:
+///   - `max_crab_deg <= 0`: disabled (the default) — returns 1.0 always, so
+///     there is no behavior change until a platform opts in (mirrors the
+///     `gain_ref_speed = 0` default-off idiom in `gainScheduleScale`).
+///   - otherwise: returns `clamp(1 - |crab_angle_deg| / max_crab_deg, min_factor, 1.0)`.
+///     Zero crab -> 1.0 (no slowdown on straights); `|crab| >= max_crab_deg` ->
+///     `min_factor` (maximum regulation). `min_factor` floors the slowdown so the
+///     boat never stalls mid-turn; the caller passes it in `[0, 1]` (the
+///     parameter validator enforces that band).
+///   - A non-finite crab angle (NaN/Inf from a wild PID output) is treated as the
+///     max-crab magnitude -> `min_factor`, so a wild input slows the boat rather
+///     than propagating a non-finite factor into the commanded surge.
+///
+/// Pure (not a method) so it can be unit-tested across crab angles with no ROS
+/// scaffolding — the same reason `gainScheduleScale` / `slewLimitError` /
+/// `lookaheadPoint` live here.
+inline double turnSpeedFactor(
+  double crab_angle_deg, double max_crab_deg, double min_factor)
+{
+  if (!(max_crab_deg > 0.0)) {
+    return 1.0;
+  }
+  if (!std::isfinite(crab_angle_deg)) {
+    return min_factor;
+  }
+  const double frac = std::abs(crab_angle_deg) / max_crab_deg;
+  return std::clamp(1.0 - frac, min_factor, 1.0);
+}
+
 /// Signed along-track distance of point `p` projected onto the segment a->b,
 /// measured from `a`. Negative means `p` is behind the segment start. A
 /// degenerate (zero-length) segment returns 0.
