@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "geometry_msgs/msg/point.hpp"
@@ -178,6 +179,83 @@ inline double turnSpeedFactor(
   }
   const double frac = std::abs(crab_angle_deg) / max_crab_deg;
   return std::clamp(1.0 - frac, min_factor, 1.0);
+}
+
+/// Radius of the circle circumscribing the triangle a-b-c — the local radius of
+/// curvature of the path passing through those three points (#89).
+///
+/// Formula: R = |AB|·|BC|·|CA| / (4·Area), where Area is the (unsigned) area of
+/// triangle abc and |AB| etc. are the side lengths. The twice-signed-area is the
+/// 2D cross product of AB and BC, so 4·Area = 2·|AB × BC|.
+///
+/// Returns `+infinity` for every degenerate input — collinear points (zero
+/// area → a straight line, curvature 0), coincident points (fewer than three
+/// distinct points, so no circle is defined), or any non-finite coordinate. A
+/// single `!isfinite` guard on the result covers all three: collinear/coincident
+/// drive the divisor to 0 (→ inf or 0/0 → NaN), and a NaN coordinate propagates
+/// to a NaN result; both map to infinity. Infinity is the "straight, no
+/// curvature" sentinel that `curvatureSpeedFactor` turns into no slowdown — the
+/// safe default for geometry we can't interpret.
+///
+/// Pure (not a method) so it can be unit-tested with no ROS scaffolding — the
+/// same reason `turnSpeedFactor` / `lookaheadPoint` live here.
+inline double circumscribedRadius(
+  const geometry_msgs::msg::Point & a,
+  const geometry_msgs::msg::Point & b,
+  const geometry_msgs::msg::Point & c)
+{
+  const double abx = b.x - a.x;
+  const double aby = b.y - a.y;
+  const double bcx = c.x - b.x;
+  const double bcy = c.y - b.y;
+  const double cax = a.x - c.x;
+  const double cay = a.y - c.y;
+  const double ab = std::hypot(abx, aby);
+  const double bc = std::hypot(bcx, bcy);
+  const double ca = std::hypot(cax, cay);
+  // Twice the signed triangle area (the 2D cross product of AB and BC); its
+  // magnitude is 2·Area, so 4·Area == 2·|cross|.
+  const double cross = abx * bcy - aby * bcx;
+  const double radius = (ab * bc * ca) / (2.0 * std::abs(cross));
+  if (!std::isfinite(radius)) {
+    return std::numeric_limits<double>::infinity();
+  }
+  return radius;
+}
+
+/// Anticipatory turn-speed factor from the local path radius of curvature (#89).
+///
+/// The reactive `turnSpeedFactor` slows the boat in proportion to the crab angle
+/// it is *already* holding — a beat late into a turn. This factor is the
+/// anticipatory half: given the circumscribed radius of the path geometry ahead
+/// (see `circumscribedRadius`), it slows the boat *before* the apex of a tight
+/// bend. The caller composes the two via `min()`.
+///
+/// Contract:
+///   - `min_radius <= 0`: disabled (the default) — returns 1.0 always, so there
+///     is no behavior change until a platform opts in (mirrors the
+///     `turn_speed_max_crab_deg = 0` default-off idiom in `turnSpeedFactor`).
+///   - `radius` non-finite (a straight/degenerate fit) or `radius >= min_radius`
+///     (a gentle bend): returns 1.0 (no slowdown).
+///   - otherwise (a tight turn, `radius < min_radius`): returns
+///     `clamp(radius / min_radius, min_factor, 1.0)` — the tighter the turn the
+///     lower the factor, floored at `min_factor` so the boat never stalls
+///     mid-turn. `min_factor` is the SAME floor `turnSpeedFactor` uses (the two
+///     regulators share one "slowest I'll go in a turn" knob).
+///
+/// Pure (not a method) so it can be unit-tested across radii with no ROS
+/// scaffolding — the same reason `circumscribedRadius` / `turnSpeedFactor` live
+/// here.
+inline double curvatureSpeedFactor(
+  double radius, double min_radius, double min_factor)
+{
+  if (!(min_radius > 0.0)) {
+    return 1.0;
+  }
+  if (!std::isfinite(radius) || radius >= min_radius) {
+    return 1.0;
+  }
+  return std::clamp(radius / min_radius, min_factor, 1.0);
 }
 
 /// Signed along-track distance of point `p` projected onto the segment a->b,

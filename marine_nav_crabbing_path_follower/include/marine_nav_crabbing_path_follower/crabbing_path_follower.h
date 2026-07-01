@@ -48,7 +48,7 @@ void declareCrabbingControlParams(
 
 // Bind the live crabbing tunables (declared by declareCrabbingDefaultSpeed +
 // declareCrabbingControlParams) to `server` as marine_control controls, with
-// their units and UI groups. Binds default_speed plus the eleven tunables.
+// their units and UI groups. Binds default_speed plus the twelve tunables.
 void bindCrabbingControls(marine_control::ControlServer & server, const std::string & name);
 
 class CrabbingPathFollower : public nav2_core::Controller
@@ -185,6 +185,23 @@ protected:
   // writes while computeVelocityCommands reads on the controller thread).
   std::atomic<double> turn_speed_max_crab_deg_{0.0};
   std::atomic<double> turn_speed_min_factor_{0.3};
+
+  // Anticipatory curvature regulation (#89). The crab-angle factor above is
+  // reactive — it slows the boat only once the PID is already holding a large
+  // crab into a turn. This factor is the anticipatory half: it fits the
+  // circumscribed-circle radius through three PATH-REFERENCED points ahead of the
+  // boat (the along-track projection onto the current segment, a half-lookahead
+  // point, and the full-lookahead point — all from lookaheadPoint()), then slows
+  // the boat *before* the apex of a tight bend. The two regulators compose via
+  // min(), so both regimes apply simultaneously. Using on-path points (not the
+  // boat's raw position) keeps curvature a pure property of the path, so
+  // cross-track error can't inflate it and double-count with the crab regulator.
+  // turn_speed_curvature_min_radius_ is the radius (m) below which regulation
+  // engages; 0.0 DISABLES it (the default; no behavior change until a platform
+  // opts in, mirroring turn_speed_max_crab_deg_ = 0). It reuses
+  // turn_speed_min_factor_ as its floor (one shared "slowest I'll go in a turn"
+  // knob). Live-tunable via the parameter callback, hence atomic.
+  std::atomic<double> turn_speed_curvature_min_radius_{0.0};
 
   bool visualize_ = false;
   rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>::SharedPtr visualization_publisher_;

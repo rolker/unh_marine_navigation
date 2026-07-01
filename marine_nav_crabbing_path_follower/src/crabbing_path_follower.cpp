@@ -20,7 +20,7 @@ namespace marine_nav_crabbing_path_follower
 
 namespace
 {
-// Single source of truth for the eleven live operator-tunable parameters exposed
+// Single source of truth for the twelve live operator-tunable parameters exposed
 // through marine_control (default_speed is handled separately — see
 // declareCrabbingDefaultSpeed). For each: the value default, the built-in
 // fallback range [min, max], panel units, UI group, and help text. Both
@@ -63,7 +63,11 @@ constexpr CrabbingTunable kTunables[] = {
   {"turn_speed_max_crab_deg", 0.0, 0.0, 90.0, "deg", "speed",
     "Crab angle at which turn-speed regulation reaches its floor (deg; 0 = disabled)."},
   {"turn_speed_min_factor", 0.3, 0.0, 1.0, "", "speed",
-    "Minimum surge fraction when crabbing hardest (dimensionless; floors the regulation)."},
+    "Minimum surge fraction when crabbing hardest (dimensionless; the shared floor for "
+    "BOTH turn-speed regulators — the reactive crab-angle one (turn_speed_max_crab_deg) "
+    "and the anticipatory curvature one (turn_speed_curvature_min_radius))."},
+  {"turn_speed_curvature_min_radius", 0.0, 0.0, 200.0, "m", "speed",
+    "Path radius of curvature below which the boat slows anticipating a turn (m; 0 = disabled)."},
 };
 
 // default_speed's panel range. Permissive enough that every physically
@@ -457,6 +461,18 @@ void CrabbingPathFollower::configure(
           if (!update(turn_speed_min_factor_, v, 0.0, false, "turn_speed_min_factor")) {
             return result;
           }
+        } else if (name == base + ".turn_speed_curvature_min_radius") {
+          // >= 0: 0.0 disables anticipatory curvature regulation (the default),
+          // so it is valid. No upper bound in the callback — a platform tunes the
+          // engagement radius freely (the panel range caps it at 200 m).
+          double v;
+          if (!as_number(p, v) ||
+            !update(
+              turn_speed_curvature_min_radius_, v, 0.0, false,
+              "turn_speed_curvature_min_radius"))
+          {
+            return result;
+          }
         }
       }
       return result;
@@ -473,7 +489,7 @@ void CrabbingPathFollower::configure(
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".transform_tolerance", rclcpp::ParameterValue(transform_tolerance_));
   node->get_parameter(plugin_name_ + ".transform_tolerance", transform_tolerance_);
 
-  // Declare the eleven live operator-tunables with FloatingPointRange descriptors
+  // Declare the twelve live operator-tunables with FloatingPointRange descriptors
   // (and their `<name>.<tunable>_range` startup overrides) BEFORE the
   // read_validated block below, so the descriptor attaches at first declaration;
   // read_validated's declare_parameter_if_not_declared then no-ops the
@@ -533,6 +549,11 @@ void CrabbingPathFollower::configure(
   // loudly at declare) and by the on-set-parameters callback for live updates.
   read_validated(".turn_speed_max_crab_deg", turn_speed_max_crab_deg_, 0.0, false);
   read_validated(".turn_speed_min_factor", turn_speed_min_factor_, 0.0, false);
+  // Anticipatory curvature regulation (#89). min_radius >= 0 (0 = disabled, the
+  // default). No upper bound here — a platform tunes the engagement radius
+  // freely; the FloatingPointRange descriptor advertises a [0, 200] m panel band.
+  read_validated(
+    ".turn_speed_curvature_min_radius", turn_speed_curvature_min_radius_, 0.0, false);
 
   // marine_control panel namespace for the control topics created in activate().
   // Defaults to plugin_name_, so a standalone controller's topics are
@@ -895,15 +916,20 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
     // speed, not the trajectory-derived one.
     lookahead = std::max(lookahead_min_distance, target_speed * lookahead_time);
   }
+  // Hoisted out of the `if` so the full-lookahead point is in scope at the
+  // curvature-regulation site below (which reuses it as the third circumfit
+  // point). Zero-initialised; only read there when lookahead > 0.0, the same
+  // guard that fills it here.
+  geometry_msgs::msg::Point la_point;
   if (lookahead > 0.0) {
     // progress is the boat's signed projection along the current segment; it is
     // clamped to [0, seg_len] inside lookaheadPoint, so a boat sitting behind
     // the segment start measures the horizon from the segment start.
-    const auto la = lookaheadPoint(
+    la_point = lookaheadPoint(
       global_plan_.poses, current_segment_, progress, lookahead);
     base_heading = AngleRadians(atan2(
-      la.y - pose_in_plan.pose.position.y,
-      la.x - pose_in_plan.pose.position.x));
+      la_point.y - pose_in_plan.pose.position.y,
+      la_point.x - pose_in_plan.pose.position.x));
   }
 
   AngleRadians target_heading = base_heading + crab_angle;
@@ -945,9 +971,43 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
   const double turn_min_factor = turn_speed_min_factor_.load();
   const double turn_factor =
     turnSpeedFactor(crab_angle.value(), turn_max_crab, turn_min_factor);
-  const double regulated_target_speed = target_speed * turn_factor;
 
-  RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: turn_speed regulation factor: " << turn_factor << " target_speed " << target_speed << " -> regulated: " << regulated_target_speed);
+  // Anticipatory curvature regulation (#89). The turn_factor above is reactive
+  // (it responds to the crab angle already commanded); this composes in the
+  // anticipatory half by slowing the boat for the path curvature *ahead*, before
+  // the turn apex. The circumscribed-circle radius is fit through three
+  // PATH-REFERENCED points, all from lookaheadPoint():
+  //   1. the along-track projection of the boat onto the current segment (walk 0 m
+  //      forward -> the foot the controller tracks from),
+  //   2. the half-lookahead point, and
+  //   3. the full-lookahead point (la_point, reused from the base-heading calc).
+  // Using the on-path projection as the first point — NOT pose_in_plan.pose.position
+  // (the boat's raw actual position) — keeps curvature a pure property of the path:
+  // cross-track error (wind/current pushing the boat off the line) would otherwise
+  // inflate the apparent curvature and double-count with the crab-angle regulator.
+  // Snapshot the atomic once (tear-free, matching the turn_speed_* idiom). Disabled
+  // (factor 1.0) when the min-radius is 0 (the default) or look-ahead is off; the
+  // shared turn_min_factor floors the slowdown (one knob for both regulators).
+  const double curvature_min_radius = turn_speed_curvature_min_radius_.load();
+  double curvature_factor = 1.0;
+  if (lookahead > 0.0 && curvature_min_radius > 0.0) {
+    const auto foot_point =
+      lookaheadPoint(global_plan_.poses, current_segment_, progress, 0.0);
+    const auto half_point =
+      lookaheadPoint(global_plan_.poses, current_segment_, progress, lookahead / 2.0);
+    const double curvature_radius =
+      circumscribedRadius(foot_point, half_point, la_point);
+    curvature_factor =
+      curvatureSpeedFactor(curvature_radius, curvature_min_radius, turn_min_factor);
+  }
+
+  // Compose the reactive and anticipatory factors via min(): whichever regime
+  // demands the greater slowdown wins, and each is <= 1.0 so the boat can only
+  // slow, never speed up.
+  const double combined_factor = std::min(turn_factor, curvature_factor);
+  const double regulated_target_speed = target_speed * combined_factor;
+
+  RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: turn_speed regulation turn_factor: " << turn_factor << " curvature_factor: " << curvature_factor << " combined_factor: " << combined_factor << " target_speed " << target_speed << " -> regulated: " << regulated_target_speed);
 
   double cos_crab = std::max(cos(crab_angle), 0.5);
   cmd_vel.twist.linear.x = regulated_target_speed/cos_crab;
