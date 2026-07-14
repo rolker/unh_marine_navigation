@@ -1,0 +1,89 @@
+# CI for unh_marine_navigation.
+# Based on the workspace template (ros2_agent_workspace .agent/templates/ci_workflow.yml).
+
+name: CI
+
+on:
+  push:
+    branches: [jazzy]
+  pull_request:
+    branches: [jazzy]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    container:
+      image: ros:jazzy-ros-core
+
+    steps:
+      - name: Update apt
+        run: apt-get update
+
+      - name: Install ros dev tools
+        run: DEBIAN_FRONTEND=noninteractive apt-get -y install ros-dev-tools
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Init rosdep
+        run: |
+          if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
+            rosdep init
+          fi
+
+      - name: Update rosdep
+        run: rosdep update
+
+      - name: Create workspace
+        run: mkdir -p ../ws/src && ln -s "$GITHUB_WORKSPACE" ../ws/src/unh_marine_navigation
+
+      - name: Clone marine_control (source-sibling dependency, not in rosdep)
+        run: >
+          git clone --depth 1 -b jazzy
+          https://github.com/rolker/marine_control.git
+          ../ws/src/marine_control
+
+      - name: Install ROS dependencies
+        working-directory: ../ws
+        run: >
+          DEBIAN_FRONTEND=noninteractive
+          rosdep install --from-paths src --ignore-src -r -y
+
+      - name: Build
+        working-directory: ../ws
+        run: >
+          bash -c 'source /opt/ros/jazzy/setup.bash &&
+          colcon build --packages-up-to
+          marine_nav_interfaces marine_nav_utilities marine_nav_tasks
+          marine_nav_behaviors marine_nav_behavior_tree
+          marine_nav_bt_task_navigator marine_nav_ca_safety
+          marine_nav_crabbing_path_follower marine_nav_avoidance_controller
+          --cmake-args -DBUILD_TESTING=ON'
+
+      - name: Test
+        working-directory: ../ws
+        # Linter tests (label "linter") are excluded until the pre-existing
+        # code is brought up to standard: copyright headers are tracked in
+        # rolker/unh_marine_navigation#98; cpplint/uncrustify reformat rides
+        # with it. Re-enable by dropping the --ctest-args exclusion.
+        run: >
+          bash -c 'source /opt/ros/jazzy/setup.bash &&
+          source install/setup.bash &&
+          colcon test --packages-select
+          marine_nav_interfaces marine_nav_utilities marine_nav_tasks
+          marine_nav_behaviors marine_nav_behavior_tree
+          marine_nav_bt_task_navigator marine_nav_ca_safety
+          marine_nav_crabbing_path_follower marine_nav_avoidance_controller
+          --event-handlers console_direct+
+          --return-code-on-test-failure
+          --ctest-args -LE linter
+          --pytest-args -m "not linter"'
+
+      - name: Test results
+        working-directory: ../ws
+        run: >
+          bash -c 'source /opt/ros/jazzy/setup.bash &&
+          colcon test-result --verbose'
+        if: always()
