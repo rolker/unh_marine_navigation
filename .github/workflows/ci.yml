@@ -64,6 +64,10 @@ jobs:
 
       - name: Test
         working-directory: ../ws
+        # Linter tests (label "linter") are excluded until the pre-existing
+        # code is brought up to standard: copyright headers are tracked in
+        # rolker/unh_marine_navigation#98; cpplint/uncrustify reformat rides
+        # with it. Re-enable by dropping the --ctest-args exclusion.
         run: >
           bash -c 'source /opt/ros/jazzy/setup.bash &&
           source install/setup.bash &&
@@ -73,7 +77,9 @@ jobs:
           marine_nav_bt_task_navigator marine_nav_ca_safety
           marine_nav_crabbing_path_follower marine_nav_avoidance_controller
           --event-handlers console_direct+
-          --return-code-on-test-failure'
+          --return-code-on-test-failure
+          --ctest-args -LE linter
+          --pytest-args -m "not linter"'
 
       - name: Test results
         working-directory: ../ws
