@@ -46,7 +46,10 @@ that property while making the preserved quantity geometric, not an index.
 4. **Unit tests** in a new `test/test_plan_cursor.cpp` (pure helper, no ROS node needed):
    - 07-21 regression: 8-waypoint zigzag; cursor on leg 1 of the dense (2 m-resampled) variant
      maps back to leg 1 of the sparse variant — never leg 7 — and round-trips sparse→dense.
-   - Laterally offset (≤ 6 m corridor-style) same-goal variant maps to the same leg.
+   - Laterally offset (≤ 6 m corridor-style) same-goal variant: mid-leg cursors map to the
+     same leg exactly; vertex-anchored cursors (sparse old path — anchor on the leg boundary)
+     may land one station into the previous leg's tail (forward scan re-advances within the
+     cycle) but must stay geometrically at the anchor and never capture a distant leg.
    - Truncated same-goal re-issue (drop the first k poses): cursor maps to the geometrically
      same location, not index-shifted.
    - Shortened path with old cursor past the new end: clamps to last traversable segment,
