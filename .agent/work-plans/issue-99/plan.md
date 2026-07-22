@@ -21,16 +21,26 @@ that property while making the preserved quantity geometric, not an index.
 1. **Extract a pure cursor-mapping helper** into `path_geometry.hpp` (matches the existing
    inline-helper + gtest pattern):
    `mapCursorToNewPath(old_poses, old_segment_index, new_poses) -> new_segment_index`.
-   Anchor = the old current segment's **start point**. Map it to the new path by nearest-point
-   projection over all new segments; tie-break candidates within ~2× the projection distance by
-   smallest |arc-length fraction difference| vs the old cursor's fraction. Geometric anchoring
-   (not raw arc length) survives both density flips **and** truncated re-issues (BT-pruned
-   transit paths whose start advances).
+   Anchor = the old current segment's **start point**. Hybrid mapping (per plan review):
+   restrict candidates to a **bounded arc-length window** around the old cursor's arc-length
+   position (window = max(25 m, 10% of new path length)), pick the nearest-point segment within
+   the window; fall back to global nearest with arc-fraction tie-break only if the window yields
+   no sane candidate (log when that happens). The window is what prevents capture by an
+   **adjacent parallel leg** on boustrophedon patterns when a lateral offset approaches half the
+   leg spacing — adjacent legs are far away in arc length even when close in space. Geometric
+   anchoring (not raw arc length alone) survives density flips **and** truncated re-issues
+   (BT-pruned transit paths whose start advances). Fast path: identical pose count + endpoints
+   → keep the cursor unchanged. Guard degenerate inputs (empty / single-pose new path → 0),
+   matching the defensive style of the other `path_geometry.hpp` helpers.
 2. **Use it in `setPlan`**: keep the `new_line` goal-moved reset exactly as-is; in the same-goal
    branch replace index carry-over + cap with the mapping helper. Clamp the result to
    `[0, segment_count−1]` — never the `segment_count` done-sentinel, so a shortened re-issue
    near the goal finishes via the normal forward scan + goal checker instead of stalling.
-   Rewrite the 06-04 comment block to document the geometric invariant.
+   Rewrite the 06-04 comment block to document the geometric invariant, including the
+   interaction with the compute-side forward scan: the scan only advances, so the mapper may
+   legitimately land the cursor at a segment whose start is slightly behind the boat's
+   projection — the scan re-advances within the same cycle; the mapper must never place the
+   cursor far backward (that is the #250 snap-back the window bound prevents).
 3. **Delete the `min(index, segment_count−1)` cap branch** (subsumed by the helper's clamp);
    keep a debug log when the mapped index differs from the old index by > 1 segment.
 4. **Unit tests** in a new `test/test_plan_cursor.cpp` (pure helper, no ROS node needed):
@@ -41,9 +51,13 @@ that property while making the preserved quantity geometric, not an index.
      same location, not index-shifted.
    - Shortened path with old cursor past the new end: clamps to last traversable segment,
      never `segment_count`.
-   - Reference-step bound: across a dense↔sparse flip mid-leg, the cross-track error to the
-     mapped segment changes by < the #66 slew absorption for one 5 Hz cycle (0.6 m at the
-     configured 3 m/s) for an on-path pose.
+   - Adversarial parallel-leg case: boustrophedon legs 8 m apart, current leg reshaped 6 m
+     toward the neighbor (anchor strictly nearer the wrong leg) — window mapping must stay on
+     the current leg where global-nearest would capture the neighbor.
+   - Reference-step bound (purely geometric — must NOT rely on the #66 slew limiter, which
+     defaults to 0.0/off): across a dense↔sparse flip mid-leg with an on-path pose, the
+     cross-track error to the mapped segment changes by < 0.5 m.
+   - Degenerate inputs: empty and single-pose new paths → cursor 0, no UB.
    - Anti-snap-back (#250 property): mapping is pose-independent and monotone under forward
      progress — repeated same-shape re-issues never move the cursor backward.
 5. **Build + test** via `./core_ws/build.sh marine_nav_crabbing_path_follower` and
@@ -85,8 +99,8 @@ that property while making the preserved quantity geometric, not an index.
 
 ## Open Questions
 
-- Tie-break window for ambiguous nearest-point candidates (self-crossing paths): proposing
-  arc-fraction tie-break; acceptable, or prefer a bounded forward-only search window?
+- ~~Tie-break strategy~~ — resolved per plan review: bounded arc-length window primary,
+  global nearest + arc-fraction tie-break as logged fallback.
 - Land the AvoidanceController always-resample companion as a separate issue now, or wait until
   this fix soaks in sim?
 
