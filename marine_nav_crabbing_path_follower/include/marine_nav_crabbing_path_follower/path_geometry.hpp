@@ -199,6 +199,46 @@ inline double gainScheduleScale(
   return crab_angle_deg * gain_ref_speed / v;
 }
 
+/// ±(90° − ε) limit on the post-schedule crab angle, ε = 5° (#100).
+///
+/// The PID clamps its own output to ±90°, but `gainScheduleScale` multiplies
+/// *after* that clamp: at a railed PID and schedule factor > 1 the scheduled
+/// crab exceeds perpendicular (108° at Bizzy's 1.2 factor, up to 162° at the
+/// low-speed 3.6 factor). Past 90° the along-track component of
+/// `target_heading = base_heading + crab_angle` goes negative and the heading
+/// loop converges to a stable wrong-course equilibrium — the 2026-07-21
+/// Massabesic sail-away (bag `2026-07-21T17-26-41`,
+/// unh_echoboats_project11#381). Clamping the *scheduled* angle to ±85° keeps
+/// the along-track component strictly positive while preserving the full
+/// cross-track authority of a near-perpendicular approach.
+///
+/// Deliberately a constant, NOT a ROS parameter: |crab| < 90° is a correctness
+/// invariant of the control law, and a configurable limit could be set past
+/// perpendicular under field pressure, re-introducing the sail-away. The PID's
+/// internal ±90° clamp is intentionally left unchanged — integral windup is
+/// bounded inside the PID (conditional integration + i_min/i_max), so trimming
+/// the scheduled output here has no windup effect.
+constexpr double kPostScheduleCrabClampDeg = 85.0;
+
+/// Clamp the gain-scheduled crab angle to ±`kPostScheduleCrabClampDeg`.
+///
+/// A non-finite input (NaN/Inf from a wild upstream value) returns 0.0 — no
+/// crab correction, follow the base course — rather than letting a non-finite
+/// angle propagate into `target_heading` (the same fail-safe idiom as
+/// `turnSpeedFactor`'s non-finite branch). In production the input is finite:
+/// the PID clamps at ±90° and `gainScheduleScale` preserves finiteness.
+///
+/// Pure (not a method) so it can be unit-tested across schedule factors with no
+/// ROS scaffolding — the same reason `gainScheduleScale` / `slewLimitError` /
+/// `lookaheadPoint` live here.
+inline double clampPostScheduleCrab(double crab_angle_deg)
+{
+  if (!std::isfinite(crab_angle_deg)) {
+    return 0.0;
+  }
+  return std::clamp(crab_angle_deg, -kPostScheduleCrabClampDeg, kPostScheduleCrabClampDeg);
+}
+
 /// Regulate the commanded surge on a turn by the magnitude of the crab angle (#87).
 ///
 /// CrabbingPathFollower commands `linear.x = target_speed / cos(crab_angle)`:
