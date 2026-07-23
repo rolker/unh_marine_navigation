@@ -190,7 +190,7 @@ TEST(MapCursorToNewPath, LateralOffsetReshapeMapsSameLeg)
     EXPECT_TRUE(mapped_leg == leg || mapped_leg == leg - 1)
       << "leg " << leg << " mapped to " << mapped_leg;
     const auto & anchor = sparse[leg].pose.position;
-    EXPECT_LT(std::hypot(p.x - anchor.x, p.y - anchor.y), 4.0 * M_SQRT2 + 2.0 + 0.5)
+    EXPECT_LT(std::hypot(p.x - anchor.x, p.y - anchor.y), 4.0 * std::sqrt(2.0) + 2.0 + 0.5)
       << "leg " << leg;
   }
 }

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <limits>
 #include <string>
 #include <vector>
@@ -909,6 +910,16 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
     crab_angle.value(), pid_gain_ref_speed_.load(), pid_gain_v_min_.load(),
     target_speed));
 
+  // The schedule multiplies AFTER the PID's own ±90° clamp, so a railed PID ×
+  // factor > 1 pushes the scheduled crab past perpendicular — past 90° the
+  // along-track component of target_heading goes negative and the heading loop
+  // locks onto a stable wrong course (2026-07-21 Massabesic sail-away, #100 /
+  // unh_echoboats_project11#381). Clamp the SCHEDULED angle to ±85°; see
+  // clampPostScheduleCrab for why the limit is a constant (correctness
+  // invariant, not a knob) and why the PID's internal clamp stays at ±90°
+  // (windup already bounded inside the PID).
+  crab_angle = AngleDegrees(clampPostScheduleCrab(crab_angle.value()));
+
   AngleRadians heading(tf2::getYaw(pose_in_plan.pose.orientation));
 
   RCLCPP_DEBUG_STREAM(logger_, "CrabbingPathFollower: progress: " << progress << " cross_track_error: " << cross_track_error << " crab_angle: " << crab_angle.value() << " heading: " << heading.value() << " segment_azimuth: " << segment_azimuth.value());
@@ -1003,10 +1014,11 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
   // atomics once (tear-free, matching the lookahead_* / gain-schedule idiom).
   // Default turn_speed_max_crab_deg = 0 leaves target_speed unchanged (disabled).
   //
-  // NOTE: crab_angle here is the POST-gain-schedule value — it was scaled by
-  // gainScheduleScale above (`:856-858`), so when gain_ref_speed > 0 the
-  // regulation input is speed-scaled. That is intentional and internally
-  // consistent: the cos_crab division below consumes the same scaled angle, so
+  // NOTE: crab_angle here is the POST-gain-schedule, POST-clamp value — scaled
+  // by gainScheduleScale and then clamped to ±85° by clampPostScheduleCrab
+  // above (#100), so when gain_ref_speed > 0 the regulation input is
+  // speed-scaled and bounded inside ±90°. That is intentional and internally
+  // consistent: the cos_crab division below consumes the same angle, so
   // regulation tracks the crab the boat is actually commanded to hold.
   const double turn_max_crab = turn_speed_max_crab_deg_.load();
   const double turn_min_factor = turn_speed_min_factor_.load();
