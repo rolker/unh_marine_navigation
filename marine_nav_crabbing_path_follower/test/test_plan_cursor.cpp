@@ -8,7 +8,9 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <utility>
 #include <vector>
 
