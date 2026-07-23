@@ -685,17 +685,30 @@ void CrabbingPathFollower::setPlan(const nav_msgs::msg::Path & path)
 {
   global_pub_->publish(path);
 
-  // Progress-preserving localization. The avoidance decorator
+  // Progress-preserving localization (#99; supersedes the index-preserving
+  // 2026-06-04 version). The avoidance decorator
   // (marine_nav_avoidance_controller, #59) re-issues setPlan every control
-  // cycle with a freshly reshaped — but same-goal — path; a same-goal replan
-  // (IsPathValid failure) does likewise. Resetting current_segment_ to 0 each
-  // time made the forward scan in computeVelocityCommands re-localise from the
-  // path start, which during a weave/loop snaps the cursor *backward* and steps
-  // the cross-track reference 5-9 m (kicking the PID — root-caused 2026-06-04).
-  // Keep the cursor across same-goal re-issues; reset only when the goal (final
-  // pose) moves more than new_plan_goal_tolerance_ — a genuinely new line — so
-  // each new line still starts from its beginning. The PID is likewise not
-  // reset here (only by the staleness guard in computeVelocityCommands).
+  // cycle with a same-goal path whose REPRESENTATION varies: the sparse
+  // per-waypoint nominal, a dense 2 m station-resampled corridor reshape, or a
+  // front-truncated re-issue. A raw index is meaningless across those — a
+  // dense-path index capped onto the sparse nominal landed the cursor on the
+  // FINAL leg of an 8-waypoint trackline and the boat sailed away steering
+  // against it (2026-07-21 Massabesic, unh_echoboats_project11#381). The
+  // cursor is therefore re-anchored GEOMETRICALLY on every same-goal re-issue
+  // (mapCursorToNewPath, path_geometry.hpp): the old current segment's start
+  // point is located on the new path within a bounded arc-length window. The
+  // window keeps the 2026-06-04 anti-snap-back property (#250: resetting to 0
+  // re-localised from the path start, and a weave/loop then snapped the cursor
+  // backward, stepping the cross-track reference 5-9 m and kicking the PID)
+  // and rejects capture by an adjacent parallel survey leg. The mapper may
+  // land the cursor a touch behind the boat's along-track projection — the
+  // forward scan in computeVelocityCommands only advances and re-advances
+  // within the same cycle; it never returns a done-sentinel index, so a
+  // shortened re-issue near the goal finishes via the scan + goal checker
+  // instead of stalling on a zero command. Reset to segment 0 only when the
+  // goal (final pose) moves more than new_plan_goal_tolerance_ — a genuinely
+  // new line. The PID is likewise not reset here (only by the staleness guard
+  // in computeVelocityCommands).
   const auto & poses = path.poses;
   bool new_line = true;
   if (!poses.empty() && have_last_goal_) {
@@ -705,14 +718,18 @@ void CrabbingPathFollower::setPlan(const nav_msgs::msg::Path & path)
   }
   if (new_line || current_segment_ < 0) {
     current_segment_ = 0;
-  }
-  const int segment_count = std::max<int>(0, static_cast<int>(poses.size()) - 1);
-  if (current_segment_ > segment_count) {
-    // A sparser/shorter same-goal re-plan left the cursor past the new path.
-    // Re-localize onto the last *traversable* segment, not segment_count —
-    // current_segment_ == segment_count is the "done" sentinel in
-    // computeVelocityCommands, which would stall the boat (zero cmd_vel).
-    current_segment_ = std::max(0, segment_count - 1);
+  } else {
+    bool used_global_fallback = false;
+    const int mapped = mapCursorToNewPath(
+      global_plan_.poses, current_segment_, poses, &used_global_fallback);
+    if (used_global_fallback || std::abs(mapped - current_segment_) > 1) {
+      RCLCPP_DEBUG_STREAM(
+        logger_, "CrabbingPathFollower: setPlan cursor re-anchored " <<
+          current_segment_ << " -> " << mapped << " (" << global_plan_.poses.size() <<
+          " -> " << poses.size() << " poses" <<
+          (used_global_fallback ? ", global fallback" : "") << ")");
+    }
+    current_segment_ = mapped;
   }
   if (!poses.empty()) {
     last_goal_ = poses.back().pose.position;

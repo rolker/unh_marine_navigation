@@ -332,6 +332,149 @@ inline double alongTrackProjection(
   return ((p.x - a.x) * sx + (p.y - a.y) * sy) / seg_len;
 }
 
+/// Arc-length window for mapCursorToNewPath candidate selection: absolute
+/// floor (m) and fraction of the new path's total length. The window must be
+/// large enough to absorb representation differences (density flips, corridor
+/// reshapes, modest front-truncation) yet smaller than a survey leg, so a
+/// laterally reshaped leg can never be captured by an adjacent parallel leg
+/// that is close in space but far away in arc length.
+constexpr double kCursorWindowMinMeters = 25.0;
+constexpr double kCursorWindowFraction = 0.1;
+
+/// Map the follower's segment cursor from one representation of a path onto
+/// another representation of the SAME goal — a different pose density (sparse
+/// per-waypoint nominal vs dense station-resampled reshape), a lateral
+/// corridor reshape, or a front-truncated re-issue (#99; the 2026-07-21
+/// Massabesic sail-away, unh_echoboats_project11#381). A raw index is
+/// meaningless across representations, so the cursor is re-anchored
+/// geometrically:
+///
+///   - anchor = the old current segment's START point, at arc-length position
+///     `s_old` along the old path;
+///   - candidates = new-path segments whose arc-length interval lies within a
+///     bounded window of `s_old` (`kCursorWindowMinMeters` /
+///     `kCursorWindowFraction`); the nearest candidate to the anchor wins;
+///   - the window result is kept unless it is grossly worse than the global
+///     nearest (3x + 1 m) — then the global nearest wins, tie-broken among
+///     near-equal candidates (2x + 1 m) toward the old arc position, and
+///     `*used_global_fallback` (when provided) is set so the caller can log.
+///
+/// The bounded window is what preserves the 2026-06-04 anti-snap-back
+/// property (#250: never re-localize far backward mid-weave) and what rejects
+/// adjacent-parallel-leg capture on boustrophedon patterns. Identical
+/// representations (same pose count and endpoints) short-circuit to the old
+/// index. Degenerate inputs (fewer than two poses on either path) return 0. A
+/// done-sentinel or out-of-range old index is clamped to the old path's last
+/// traversable segment before anchoring. The return value is always a
+/// traversable segment index in [0, new_poses.size() - 2] — never the
+/// done-sentinel — so a re-issue near the goal finishes via the compute-side
+/// forward scan and the goal checker instead of stalling on a zero command.
+inline int mapCursorToNewPath(
+  const std::vector<geometry_msgs::msg::PoseStamped> & old_poses,
+  int old_segment,
+  const std::vector<geometry_msgs::msg::PoseStamped> & new_poses,
+  bool * used_global_fallback = nullptr)
+{
+  if (used_global_fallback) {
+    *used_global_fallback = false;
+  }
+  const int new_last = static_cast<int>(new_poses.size()) - 1;
+  if (new_last < 1 || old_poses.size() < 2) {
+    return 0;
+  }
+  const int old_last = static_cast<int>(old_poses.size()) - 1;
+  const int old_seg = std::clamp(old_segment, 0, old_last - 1);
+
+  // Fast path: same representation — same pose count and same endpoints —
+  // keep the cursor (clamped into the new traversable range).
+  {
+    const auto & of = old_poses.front().pose.position;
+    const auto & nf = new_poses.front().pose.position;
+    const auto & ob = old_poses.back().pose.position;
+    const auto & nb = new_poses.back().pose.position;
+    if (old_poses.size() == new_poses.size() &&
+      std::hypot(nf.x - of.x, nf.y - of.y) < 1e-6 &&
+      std::hypot(nb.x - ob.x, nb.y - ob.y) < 1e-6)
+    {
+      return std::clamp(old_segment, 0, new_last - 1);
+    }
+  }
+
+  const auto & anchor = old_poses[old_seg].pose.position;
+  double s_old = 0.0;
+  for (int i = 0; i < old_seg; ++i) {
+    const auto & a = old_poses[i].pose.position;
+    const auto & b = old_poses[i + 1].pose.position;
+    s_old += std::hypot(b.x - a.x, b.y - a.y);
+  }
+
+  std::vector<double> cum(new_poses.size(), 0.0);
+  for (int i = 0; i < new_last; ++i) {
+    const auto & a = new_poses[i].pose.position;
+    const auto & b = new_poses[i + 1].pose.position;
+    cum[i + 1] = cum[i] + std::hypot(b.x - a.x, b.y - a.y);
+  }
+  const double total_new = cum[new_last];
+  const double window =
+    std::max(kCursorWindowMinMeters, kCursorWindowFraction * total_new);
+
+  // Point-to-segment distance from the anchor to new segment i.
+  std::vector<double> dist(new_last, 0.0);
+  for (int i = 0; i < new_last; ++i) {
+    const auto & a = new_poses[i].pose.position;
+    const auto & b = new_poses[i + 1].pose.position;
+    const double sx = b.x - a.x;
+    const double sy = b.y - a.y;
+    const double len2 = sx * sx + sy * sy;
+    double t = 0.0;
+    if (len2 > 1e-18) {
+      t = std::clamp(
+        ((anchor.x - a.x) * sx + (anchor.y - a.y) * sy) / len2, 0.0, 1.0);
+    }
+    dist[i] = std::hypot(anchor.x - (a.x + t * sx), anchor.y - (a.y + t * sy));
+  }
+
+  int best_window = -1;
+  double best_window_d = std::numeric_limits<double>::infinity();
+  int best_global = 0;
+  double best_global_d = std::numeric_limits<double>::infinity();
+  for (int i = 0; i < new_last; ++i) {
+    if (dist[i] < best_global_d) {
+      best_global_d = dist[i];
+      best_global = i;
+    }
+    const bool in_window =
+      cum[i + 1] >= s_old - window && cum[i] <= s_old + window;
+    if (in_window && dist[i] < best_window_d) {
+      best_window_d = dist[i];
+      best_window = i;
+    }
+  }
+
+  if (best_window >= 0 && best_window_d <= 3.0 * best_global_d + 1.0) {
+    return best_window;
+  }
+
+  // Window empty (e.g. heavy truncation pushed s_old past the new path) or
+  // grossly worse than the global optimum: fall back to the global nearest,
+  // tie-broken among near-equal candidates toward the old arc position.
+  if (used_global_fallback) {
+    *used_global_fallback = true;
+  }
+  int pick = best_global;
+  double best_gap = std::numeric_limits<double>::infinity();
+  for (int i = 0; i < new_last; ++i) {
+    if (dist[i] <= 2.0 * best_global_d + 1.0) {
+      const double gap = std::abs(0.5 * (cum[i] + cum[i + 1]) - s_old);
+      if (gap < best_gap) {
+        best_gap = gap;
+        pick = i;
+      }
+    }
+  }
+  return pick;
+}
+
 }  // namespace marine_nav_crabbing_path_follower
 
 #endif  // MARINE_NAV_CRABBING_PATH_FOLLOWER__PATH_GEOMETRY_HPP_
