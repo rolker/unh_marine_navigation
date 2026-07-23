@@ -11,7 +11,7 @@ In `CrabbingPathFollower::computeVelocityCommands`, the PID is internally clampe
 but `gainScheduleScale` multiplies the output **after** that clamp
 (`crabbing_path_follower.cpp:909–911`). At Bizzy's tune (`gain_ref_speed=1.8`,
 `target_speed=1.5 m/s`) the factor is 1.2 → |crab| reaches 108°. At the low-speed
-floor (`v=gain_v_min=0.5`) the factor reaches 3.6 → |crab| up to 162°.
+floor (`v=gain_v_min=0.5`) the factor reaches 3.6 → |crab| up to 324° pre-wrap.
 
 The harmful consequence when |crab| > 90° is **sail-away**:
 `target_heading = base_heading + crab_angle` (`cpp:977`) — the along-track
@@ -68,7 +68,7 @@ floor.
    a `gain_ref_speed`, not a factor — at `v = gain_v_min = 0.5` the factor is 3.6):
    - Railed PID (±90°) × factor 1.0 → |post-clamp crab| ≤ 85° (pass-through: 90 → 85)
    - Railed PID (±90°) × factor 1.2 (Bizzy tune, v=1.5 → 108°) → clamped to ±85°
-   - Railed PID (±90°) × factor 3.6 (low-speed edge v=gain_v_min=0.5 → 162°) → clamped to ±85°
+   - Railed PID (±90°) × factor 3.6 (low-speed edge v=gain_v_min=0.5 → 324° pre-wrap) → clamped to ±85°
    - Along-track component positive at the rail: `cos(clampPostScheduleCrab(x) * pi/180) > 0` for railed inputs
    - Surge bound (must-fix 2 reframe): with the clamped angle, `cos_crab = max(cos(crab), 0.5)`
      still floors at 0.5 → assert the effective surge multiplier `1/max(cos(85°·π/180), 0.5) == 2.0`,
@@ -103,7 +103,7 @@ floor.
 | A change includes its consequences | `turnSpeedFactor` and `cos_crab` both consume the post-schedule angle — both now receive |crab| ≤ 85°. Surge stays bounded at 2× by the pre-existing 0.5 floor (unchanged); the along-track sign is what the fix repairs. Tests verify both. |
 | Only what's needed | Two-file change. Acquisition mode deferred (separate issue). No new configurable parameters. |
 | Improve incrementally | Single PR, clear before/after invariant. |
-| Test what breaks | Test matrix directly exercises the failure modes from the field bag: railed PID + schedule factors that produced 108°/162° crab. |
+| Test what breaks | Test matrix directly exercises the failure modes from the field bag: railed PID + schedule factors that produced 108°/324° crab. |
 | Workspace vs. project separation | All changes in `unh_marine_navigation` project repo. |
 
 ## ADR Compliance

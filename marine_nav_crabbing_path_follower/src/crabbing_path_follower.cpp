@@ -1014,10 +1014,11 @@ geometry_msgs::msg::TwistStamped CrabbingPathFollower::computeVelocityCommands(
   // atomics once (tear-free, matching the lookahead_* / gain-schedule idiom).
   // Default turn_speed_max_crab_deg = 0 leaves target_speed unchanged (disabled).
   //
-  // NOTE: crab_angle here is the POST-gain-schedule value — it was scaled by
-  // gainScheduleScale above (`:856-858`), so when gain_ref_speed > 0 the
-  // regulation input is speed-scaled. That is intentional and internally
-  // consistent: the cos_crab division below consumes the same scaled angle, so
+  // NOTE: crab_angle here is the POST-gain-schedule, POST-clamp value — scaled
+  // by gainScheduleScale and then clamped to ±85° by clampPostScheduleCrab
+  // above (#100), so when gain_ref_speed > 0 the regulation input is
+  // speed-scaled and bounded inside ±90°. That is intentional and internally
+  // consistent: the cos_crab division below consumes the same angle, so
   // regulation tracks the crab the boat is actually commanded to hold.
   const double turn_max_crab = turn_speed_max_crab_deg_.load();
   const double turn_min_factor = turn_speed_min_factor_.load();

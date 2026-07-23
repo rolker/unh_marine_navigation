@@ -203,8 +203,8 @@ inline double gainScheduleScale(
 ///
 /// The PID clamps its own output to ±90°, but `gainScheduleScale` multiplies
 /// *after* that clamp: at a railed PID and schedule factor > 1 the scheduled
-/// crab exceeds perpendicular (108° at Bizzy's 1.2 factor, up to 162° at the
-/// low-speed 3.6 factor). Past 90° the along-track component of
+/// crab exceeds perpendicular (108° at Bizzy's 1.2 factor, 324° pre-wrap at
+/// the low-speed 3.6 factor). Past 90° the along-track component of
 /// `target_heading = base_heading + crab_angle` goes negative and the heading
 /// loop converges to a stable wrong-course equilibrium — the 2026-07-21
 /// Massabesic sail-away (bag `2026-07-21T17-26-41`,

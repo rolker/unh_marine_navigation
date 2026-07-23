@@ -134,6 +134,6 @@ introduction) and field bag from #381 (2026-07-21 Massabesic RCA). Issue #99
 <!-- Static analysis (ament_cpplint + cppcheck): no findings on changed lines; all hits are pre-existing untouched code (cpp:1123-1159, 797, 1004) or package-wide test-file nits (missing copyright, include-order) present in origin/jazzy. Claude Adversarial: 2 disjoint-lens passes (A logic, B systemic/safety), both clean on must-fix — independently confirmed magnitude-clamp-vs-wrap correctness, isfinite-before-clamp ordering, include sufficiency, and the anti-windup claim. Copilot: off (default). `<cstdlib>` include + test_plan_cursor.cpp change are from feec553 (PR #101 portability), not #100 — out of scope, already reviewed. -->
 
 ### Findings
-- [ ] (suggestion) Turn-speed NOTE comment has a stale line-ref (`:856-858`; gainScheduleScale is at :909) and no longer mentions the value is post-clamp — `crabbing_path_follower.cpp:1017`
-- [ ] (suggestion) Doc says railed low-speed 3.6 factor gives 162°, but railed PID × 3.6 = 324° (as `RailedPidAtLowSpeedFactorClampsToLimit` asserts) — reconcile the figure — `path_geometry.hpp:206`
+- [x] (suggestion) Turn-speed NOTE comment has a stale line-ref (`:856-858`; gainScheduleScale is at :909) and no longer mentions the value is post-clamp — `crabbing_path_follower.cpp:1017`
+- [x] (suggestion) Doc says railed low-speed 3.6 factor gives 162°, but railed PID × 3.6 = 324° (as `RailedPidAtLowSpeedFactorClampsToLimit` asserts) — reconcile the figure — `path_geometry.hpp:206`
 - [ ] (pre-merge gate, ADR-0018) Run `colcon build && colcon test` (or `ci_local.sh`) for `marine_nav_crabbing_path_follower`; confirm the 9 new clamp tests pass before push/merge
