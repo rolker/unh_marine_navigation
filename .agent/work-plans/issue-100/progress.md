@@ -84,7 +84,9 @@ introduction) and field bag from #381 (2026-07-21 Massabesic RCA). Issue #99
   default `gain_v_min=0.5` — the fix must cover this case too (as the issue notes).
 
 ### Actions
-- [ ] Decide: hardcode ε (e.g. 5°) or add `pid.max_crab_deg` configurable parameter — capture the choice in plan.md with rationale.
-- [ ] Verify anti-windup interaction: if internal PID clamp stays at ±90° and post-schedule clamp is tighter, the PID may rail more often against its internal limit. Document whether this is acceptable or the PID internal clamp should also be adjusted.
+- [x] Decide: hardcode ε (e.g. 5°) or add `pid.max_crab_deg` configurable parameter — capture the choice in plan.md with rationale.
+  - **Operator decision (2026-07-23 checkpoint)**: hardcode ε = 5° (post-schedule clamp ±85°). |crab| < 90° is a correctness invariant, not a tuning knob — a configurable limit could be set past perpendicular under field pressure and reintroduce the sail-away. Matches the existing hardcoded ±90° PID init. Capture rationale in plan.md.
+- [x] Verify anti-windup interaction: if internal PID clamp stays at ±90° and post-schedule clamp is tighter, the PID may rail more often against its internal limit. Document whether this is acceptable or the PID internal clamp should also be adjusted.
+  - **Operator decision (2026-07-23 checkpoint)**: keep the PID internal clamp at ±90° unchanged; the post-schedule clamp only trims the scheduled output. Windup stays bounded by the existing internal clamp. Plan must document the interaction and add a test asserting no windup growth while railed.
 - [ ] Add unit tests: railed PID × schedule factors {1.0, 1.2, 1.8} and low-speed edge (v = gain_v_min) → assert |post-schedule crab| < 90°, along-track component ≥ 0, `linear.x ≤ target_speed / cos(clamp_limit)`.
 - [ ] Check `test_crabbing_control.cpp` for an end-to-end scenario that validates the sail-away elimination.
