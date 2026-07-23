@@ -90,3 +90,15 @@ introduction) and field bag from #381 (2026-07-21 Massabesic RCA). Issue #99
   - **Operator decision (2026-07-23 checkpoint)**: keep the PID internal clamp at ±90° unchanged; the post-schedule clamp only trims the scheduled output. Windup stays bounded by the existing internal clamp. Plan must document the interaction and add a test asserting no windup growth while railed.
 - [ ] Add unit tests: railed PID × schedule factors {1.0, 1.2, 1.8} and low-speed edge (v = gain_v_min) → assert |post-schedule crab| < 90°, along-track component ≥ 0, `linear.x ≤ target_speed / cos(clamp_limit)`.
 - [ ] Check `test_crabbing_control.cpp` for an end-to-end scenario that validates the sail-away elimination.
+
+## Plan Authored
+**Status**: complete
+**When**: 2026-07-23 14:30 -04:00
+**By**: Claude Code Agent (Claude Sonnet)
+
+**Plan**: `.agent/work-plans/issue-100/plan.md` at `2213b57`
+**Branch**: feature/issue-100 at `2213b57`
+**Phases**: single
+
+### Open questions
+- [ ] No open questions — plan is review-plan-ready.
