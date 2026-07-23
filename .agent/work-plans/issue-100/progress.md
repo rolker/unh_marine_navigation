@@ -118,3 +118,22 @@ introduction) and field bag from #381 (2026-07-21 Massabesic RCA). Issue #99
 - [x] (must-fix) Surge-bound math wrong: `cos_crab = max(cos(crab), 0.5)` (`crabbing_path_follower.cpp:1054`) floors the divisor at 0.5, so `linear.x ≤ 2× target_speed` for any crab angle (before and after the fix). The "≈11.5×" consequence and the `linear.x ≤ target_speed/cos(85°)` assertion are both wrong/trivially-true; assert `linear.x ≤ 2*target_speed` and reframe the clamp as sail-away fix, not surge reduction. — `plan.md:52`, `plan.md:89`
 - [x] (suggestion) Review-issue action to check `test_crabbing_control.cpp` for an end-to-end sail-away scenario is unaddressed; no such harness exists there today — resolve explicitly (cover-at-helper-level note or add a test). — `progress.md:92`
 - [x] (suggestion) Relabel test factors `{1.0, 1.2, 1.8}` → `{1.0, 1.2, 3.6}` (1.8 is a `gain_ref_speed`, not a factor; at v=0.5 the factor is 3.6) and sync ~1-line-drifted source citations. — `plan.md:50`, `plan.md:60`
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-07-23 12:59 +00:00
+**By**: Claude Code Agent (Claude Opus)
+
+**Branch**: feature/issue-100 at `7a05c63`
+**Mode**: pre-push
+**Depth**: Deep (reason: 398 changed lines ≥ 200; project-repo plan.md trigger + safety-critical control-law fix)
+**Must-fix**: 0 | **Suggestions**: 2
+**Round**: 1 | **Ship**: recommended — no must-fix; two cosmetic doc nits only, diff is shippable
+**Verdict**: approved
+
+<!-- Static analysis (ament_cpplint + cppcheck): no findings on changed lines; all hits are pre-existing untouched code (cpp:1123-1159, 797, 1004) or package-wide test-file nits (missing copyright, include-order) present in origin/jazzy. Claude Adversarial: 2 disjoint-lens passes (A logic, B systemic/safety), both clean on must-fix — independently confirmed magnitude-clamp-vs-wrap correctness, isfinite-before-clamp ordering, include sufficiency, and the anti-windup claim. Copilot: off (default). `<cstdlib>` include + test_plan_cursor.cpp change are from feec553 (PR #101 portability), not #100 — out of scope, already reviewed. -->
+
+### Findings
+- [ ] (suggestion) Turn-speed NOTE comment has a stale line-ref (`:856-858`; gainScheduleScale is at :909) and no longer mentions the value is post-clamp — `crabbing_path_follower.cpp:1017`
+- [ ] (suggestion) Doc says railed low-speed 3.6 factor gives 162°, but railed PID × 3.6 = 324° (as `RailedPidAtLowSpeedFactorClampsToLimit` asserts) — reconcile the figure — `path_geometry.hpp:206`
+- [ ] (pre-merge gate, ADR-0018) Run `colcon build && colcon test` (or `ci_local.sh`) for `marine_nav_crabbing_path_follower`; confirm the 9 new clamp tests pass before push/merge
