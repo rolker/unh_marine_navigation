@@ -529,10 +529,39 @@
            also degrades to the lead-in on missing TF or an empty path. For #52.
            threshold is metres of cross-track tolerance — comfortably above survey
            cross-track error / goto-park positioning error and below the line
-           spacing; tune here if a survey runs lines closer than this. -->
+           spacing; tune here if a survey runs lines closer than this.
+
+           FIELD CHANGE 2026-08-05 (Lewes, BizzyBoat): 5.0 -> 2.0. This is the
+           "tune here" case above, hit for real. Under manda coverage the line
+           spacing follows the recorded swath width, so in shallow water it
+           collapsed to ~5.4 m — leaving 0.4 m of margin over the 5.0 threshold.
+           Measured survey cross-track error the same session was p95 3.88 m and
+           max 5.09 m, so on finishing a line the boat was routinely already
+           within 5.0 m of the NEXT line. RobotOnPath then returned true, this
+           Fallback skipped the lead-in transit entirely, the boat joined the next
+           line in progress, and manda's SurveyPath::odomCallback — which waits to
+           come within waypoint_distance_threshold (4 m) of path[0], the lead-in,
+           ~20 m beyond the previous line's end — could never fire. State latched
+           in transit, no further survey goal was issued, and run_tasks aborted
+           after ~56 s of silence. Symptom: coverage "gives up" after two lines.
+
+           2.0 biases toward the SAFE failure: a false negative merely re-runs the
+           lead-in transit (a little wasted track), whereas a false positive
+           deadlocks the mission. Still above expected goto-park positioning error
+           on RTK-fixed GNSS.
+
+           THIS IS A STOPGAP, NOT THE FIX. Any absolute threshold is wrong here
+           because the spacing varies WITHIN a line as depth (and so swath width)
+           changes, so this will invert again wherever the swath narrows below
+           ~2 m. The robust fix is to stop inferring history from geometry: record
+           per-line whether the line was previously started (the #52 resume case
+           this guard exists for) and branch on that state. A scale-free geometric
+           alternative is to skip the transit only when the boat is closer to the
+           NEW line than to the line it just finished — no absolute distance at
+           all. See the 2026-08-05 gabby deployment log. -->
       <Fallback name="LeadInUnlessOnLine">
         <RobotOnPath path="{survey_path}"
-                     threshold="5.0"
+                     threshold="2.0"
                      tf_buffer="{tf_buffer}"
                      robot_frame="{robot_frame}"/>
         <Sequence name="LeadInToLineStart">
