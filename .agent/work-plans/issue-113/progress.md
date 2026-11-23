@@ -160,3 +160,30 @@ Read: `plan.md` at `eb2031b` and the Plan Review of it (ready; four findings; th
 - F2: CI cannot show that the cause 11 declarations are needed or complete, because the `ros-core` images already contain those packages. The strict rosdep step checks only that each declared key resolves, and commit 8 (the strict first phase in the Jazzy job) gives a Jazzy build of the three with their own declared closure before the broad install. Cause 11 here rests on reading the sources. Commit 8 is kept, with its purpose stated as that; host decision, listed for the owner's veto.
 - F3: `marine_nav_tasks/marine_nav_tasks/task_list.py:47` (`if task_id is self.tasks:`) is read correctly and makes `TaskList.task()` always return `None`; its only caller, `mission_manager.py:232` in rolker/unh_marine_autonomy, is unreachable today. It stays out of the port and goes to the follow-up, naming the caller.
 - F4: the `ament_xmllint` step in the Rolling job needs `source /opt/ros/rolling/setup.bash`; it schema-checks only the format 3 manifest (`marine_nav_interfaces`); the follow-up text about gz4d headers excepts `vector.hpp` and `matrix.hpp`, which compile in context but not alone.
+
+## Implementation
+**Status**: complete
+**When**: 2026-11-23 12:41 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+**Branch**: feature/issue-113 at `ed01bff`
+
+Commits, in backport order (all for the hand backport to `jazzy`; 1 and 2 travel together, since 1 alone does not build on Rolling):
+
+1. `3ab7bbb` cause 1: delete both `ament_target_dependencies` calls. Not a behaviour change: every target the calls linked is already in `target_link_libraries`.
+2. `51a9f1e` cause 2: `tf2/utils.h` -> `tf2/utils.hpp` in `utilities.h`, `utilities.cpp`, `costmap_window.cpp`. Not a behaviour change: the same declarations under the non-deprecated name (Jazzy's `.h` is a shim including the `.hpp`).
+3. `359f699` cause 9: `test_depend`s before `member_of_group` in `marine_nav_interfaces/package.xml`. Element order only.
+4. `77642ef` cause 11: `builtin_interfaces`, `std_msgs` declared in `marine_nav_interfaces`. Manifest only; generated code, libraries and CMake exports unchanged.
+5. `e7c0893` cause 11: `geometry_msgs`, `rclpy` (exec), `python3-yaml` (exec) declared in `marine_nav_tasks`. Manifest only.
+6. `77de024` CI: triggers `[rolling, jazzy]`, job renamed `jazzy`, new `rolling` job for the three (strict rosdep, no install sourcing, linters excluded, `ament_xmllint` step).
+7. `ed01bff` CI: strict first phase for the three in the Jazzy job (key resolution on noble and a Jazzy build and test with their own closure; cannot show cause 11 is needed or complete, F2).
+
+No gz4d change. The build's `.d` files show `gz4d/vector.hpp` (from `src/utilities.cpp`) is the only gz4d header compiled.
+
+Evidence (Rolling only; Jazzy not installed here):
+- `./build.sh --packages-up-to` the three, from clean: 3 finished, no compiler warning. `./test.sh --packages-select` the three with linters excluded: `35 tests, 0 errors, 0 failures, 0 skipped`.
+- Lint, all tests: `1036 tests, 962 failures, 25 skipped`, the per-linter results identical to the pre-change stand-in; `ament_cpplint` totals (618, 58) identical to the base commit. `ament_xmllint` on the three manifests: base fails on `marine_nav_interfaces` (cause 9), head passes.
+- Export comparison against a hand-written stand-in of Jazzy's `ament_target_dependencies` (link and PRIVATE include part): correction to the plan's claim (b). Each `export_<pkg>Export.cmake` differs in `INTERFACE_LINK_LIBRARIES` only: the call had appended a duplicate copy of the same targets, which is now gone (same targets, same order of first appearance). Every other export file is identical. `marine_nav_utilities` link line identical; `marine_nav_tasks` same libraries, different order and rpath order. Include directories same set, different order. `marine_nav_interfaces`: CMake exports, generated sources and libraries identical; only `package.xml` and the manifest-derived index files gain the two keys.
+- CI Rolling job rehearsed under `env -i` (rosdep `--simulate`, xmllint, build, test without sourcing install): all exit 0, `35 tests, 0 errors, 0 failures, 0 skipped`.
+- Repeats: `test_corridor_solver` 100/100, `test_costmap_window` 100/100, `test_costmap_window_node` 300/300 on `ROS_DOMAIN_ID` 187; no intermittent failure.
+
+Not done: no simulation was run. No Jazzy build: the pull request's CI is the only Jazzy check. `marine_nav_interfaces` and `marine_nav_tasks` have no tests beyond building (the Python only imports on 3.14). F3 (`task_list.py:47`) left as it is.
