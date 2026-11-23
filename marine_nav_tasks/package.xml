@@ -10,12 +10,16 @@
 
   <buildtool_depend>ament_cmake_ros</buildtool_depend>
   <buildtool_depend>ament_cmake_python</buildtool_depend>
+  <depend>geometry_msgs</depend>
   <depend>marine_nav_interfaces</depend>
   <depend>marine_nav_utilities</depend>
   <depend>rclcpp</depend>
   <depend>rclcpp_lifecycle</depend>
   <depend>visualization_msgs</depend>
   <depend>yaml_cpp_vendor</depend>
+
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>rclpy</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
