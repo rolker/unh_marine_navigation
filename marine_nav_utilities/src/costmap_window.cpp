@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-#include "tf2/utils.h"
+#include "tf2/utils.hpp"
 
 namespace marine_nav_utilities
 {

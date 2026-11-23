@@ -1,16 +1,41 @@
 # CI for unh_marine_navigation.
 # Based on the workspace template (ros2_agent_workspace .agent/templates/ci_workflow.yml).
+#
+# The same file is carried on the rolling and jazzy branches; pushes and pull
+# requests to either run it.
+#
+# Job "jazzy" builds and tests all nine packages on Jazzy. Job "rolling"
+# builds and tests only marine_nav_interfaces, marine_nav_utilities and
+# marine_nav_tasks: the six Nav2 packages (marine_nav_behavior_tree,
+# marine_nav_behaviors, marine_nav_bt_task_navigator,
+# marine_nav_avoidance_controller, marine_nav_crabbing_path_follower,
+# marine_nav_ca_safety) do not build on Rolling yet and are ported in a later
+# issue. Build this repository on Rolling with a package selector.
+#
+# In the rolling job, rosdep is given only the paths of the build step's
+# --packages-up-to closure, taken from colcon list, with no -r: a key that
+# does not resolve fails the job. The test step does not source
+# install/setup.bash: colcon test gives each package the environment of its
+# declared workspace dependencies only. The jazzy job runs the same strict
+# install, build and test of the three as a first phase, before its broad
+# install (rosdep -r over all of src) and its build of all nine.
+#
+# Job "rolling" is skipped for pull requests to and pushes on jazzy
+# (github.base_ref is the target branch of a pull request; github.ref_name is
+# the pushed branch), so on the jazzy branch this file runs the jazzy job
+# only.
 
 name: CI
 
 on:
   push:
-    branches: [jazzy]
+    branches: [rolling, jazzy]
   pull_request:
-    branches: [jazzy]
+    branches: [rolling, jazzy]
 
 jobs:
-  build-and-test:
+  jazzy:
+    name: build-and-test (jazzy)
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -38,6 +63,48 @@ jobs:
 
       - name: Create workspace
         run: mkdir -p ../ws/src && ln -s "$GITHUB_WORKSPACE" ../ws/src/unh_marine_navigation
+
+      # Strict first phase: marine_nav_interfaces, marine_nav_utilities and
+      # marine_nav_tasks, with rosdep (no -r) over their own --packages-up-to
+      # closure only, built and tested before the broad install below pulls
+      # in the dependencies of all nine packages. It checks that every key
+      # the three declare resolves on noble and that they build and pass
+      # their tests on Jazzy with that closure. It cannot show that a
+      # declaration is needed or that none is missing: ros:jazzy-ros-core
+      # already contains most of what they use (std_msgs, geometry_msgs,
+      # builtin_interfaces, rclpy, python3-yaml).
+      - name: Install ROS dependencies (first three packages, strict)
+        working-directory: ../ws
+        shell: bash
+        run: |
+          set -euo pipefail
+          paths="$(colcon list --base-paths src --paths-only --packages-up-to marine_nav_interfaces marine_nav_utilities marine_nav_tasks)"
+          if [ -z "$paths" ]; then
+            echo "colcon list returned no package paths" >&2
+            exit 1
+          fi
+          echo "$paths"
+          # shellcheck disable=SC2086
+          DEBIAN_FRONTEND=noninteractive rosdep install --ignore-src -y --from-paths $paths
+
+      - name: Build (first three packages)
+        working-directory: ../ws
+        run: >
+          bash -c 'source /opt/ros/jazzy/setup.bash &&
+          colcon build --packages-up-to
+          marine_nav_interfaces marine_nav_utilities marine_nav_tasks
+          --cmake-args -DBUILD_TESTING=ON'
+
+      - name: Test (first three packages)
+        working-directory: ../ws
+        # Linter tests are excluded as in the Test step below (#98).
+        run: >
+          bash -c 'source /opt/ros/jazzy/setup.bash &&
+          colcon test --packages-select
+          marine_nav_interfaces marine_nav_utilities marine_nav_tasks
+          --event-handlers console_direct+
+          --return-code-on-test-failure
+          --ctest-args -LE linter'
 
       - name: Clone marine_control (source-sibling dependency, not in rosdep)
         run: >
@@ -85,5 +152,90 @@ jobs:
         working-directory: ../ws
         run: >
           bash -c 'source /opt/ros/jazzy/setup.bash &&
+          colcon test-result --verbose'
+        if: always()
+
+  rolling:
+    name: build-and-test (rolling)
+    if: (github.base_ref || github.ref_name) != 'jazzy'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    container:
+      image: ros:rolling-ros-core
+
+    steps:
+      - name: Update apt
+        run: apt-get update
+
+      - name: Install ros dev tools
+        run: DEBIAN_FRONTEND=noninteractive apt-get -y install ros-dev-tools git
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Init rosdep
+        run: |
+          if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
+            rosdep init
+          fi
+
+      - name: Update rosdep
+        run: rosdep update
+
+      - name: Create workspace
+        run: mkdir -p ../ws/src && ln -s "$GITHUB_WORKSPACE" ../ws/src/unh_marine_navigation
+
+      - name: Install ROS dependencies
+        working-directory: ../ws
+        shell: bash
+        run: |
+          set -euo pipefail
+          paths="$(colcon list --base-paths src --paths-only --packages-up-to marine_nav_interfaces marine_nav_utilities marine_nav_tasks)"
+          if [ -z "$paths" ]; then
+            echo "colcon list returned no package paths" >&2
+            exit 1
+          fi
+          echo "$paths"
+          # shellcheck disable=SC2086
+          DEBIAN_FRONTEND=noninteractive rosdep install --ignore-src -y --from-paths $paths
+
+      # The one linter run: the linter class is excluded below, and
+      # marine_nav_interfaces does not call ament_lint_auto, so nothing else
+      # checks its manifest. Only marine_nav_interfaces/package.xml (format 3,
+      # with the xml-model schema line) is checked against the schema; the two
+      # format 2 manifests have no schema reference and are checked for
+      # well-formedness only.
+      - name: Check package manifests (ament_xmllint)
+        run: >
+          bash -c 'source /opt/ros/rolling/setup.bash &&
+          ament_xmllint
+          marine_nav_interfaces/package.xml
+          marine_nav_utilities/package.xml
+          marine_nav_tasks/package.xml'
+
+      - name: Build
+        working-directory: ../ws
+        run: >
+          bash -c 'source /opt/ros/rolling/setup.bash &&
+          colcon build --packages-up-to
+          marine_nav_interfaces marine_nav_utilities marine_nav_tasks
+          --cmake-args -DBUILD_TESTING=ON'
+
+      - name: Test
+        working-directory: ../ws
+        # Linter tests are excluded as in the jazzy job (#98).
+        run: >
+          bash -c 'source /opt/ros/rolling/setup.bash &&
+          colcon test --packages-select
+          marine_nav_interfaces marine_nav_utilities marine_nav_tasks
+          --event-handlers console_direct+
+          --return-code-on-test-failure
+          --ctest-args -LE linter'
+
+      - name: Test results
+        working-directory: ../ws
+        run: >
+          bash -c 'source /opt/ros/rolling/setup.bash &&
           colcon test-result --verbose'
         if: always()

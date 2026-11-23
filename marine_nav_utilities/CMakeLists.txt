@@ -67,14 +67,6 @@ install(
   RUNTIME DESTINATION bin)
 
 
-ament_target_dependencies(${PROJECT_NAME}
-  geometry_msgs
-  nav_msgs
-  rclcpp
-  tf2
-  tf2_geometry_msgs
-)
-
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
 
 ament_export_dependencies(
