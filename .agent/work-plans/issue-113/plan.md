@@ -36,9 +36,17 @@ review them as a sequence. B = for the hand backport to `jazzy`, in this order.
    `${pkg}_TARGETS` when it has them, and a check inside the call on the scratch copy found every such target
    (geometry_msgs, nav_msgs, `rclcpp::rclcpp`, `tf2::tf2`, `tf2_geometry_msgs::tf2_geometry_msgs`;
    `marine_nav_interfaces` and `rclcpp` for tasks) already in the target's `LINK_LIBRARIES`;
-   (b) `link.txt` and `flags.make` of both libraries, and every installed CMake export file, are
-   byte-identical between that run and the deleted form; (c) the installed
-   `export_marine_nav_utilitiesExport.cmake` still lists `rclcpp::rclcpp;tf2::tf2;tf2_geometry_msgs::...`.
+   (b) the link set and the exported targets are unchanged between that run and the deleted form; (c) the
+   installed `export_marine_nav_utilitiesExport.cmake` still lists `rclcpp::rclcpp;tf2::tf2;tf2_geometry_msgs::...`.
+   *Corrected after implementation (2026-11-23); the plan first said `link.txt`, `flags.make` and every
+   installed export file were byte-identical.* What holds: each library's exported `INTERFACE_LINK_LIBRARIES`
+   loses the duplicate copy of the same targets that `ament_target_dependencies` appended on Jazzy (44 entries
+   become 23 for `marine_nav_utilities`, 34 become 24 for `marine_nav_tasks`; same targets, same order of first
+   appearance); every other installed export file is identical; the link line is identical for `utilities`
+   and reordered among shared libraries for `tasks`; on Jazzy the call's PRIVATE `-I` copies of the
+   dependencies' include directories go away, remaining as the linked targets' usage requirements. Jazzy
+   evidence: CI run 45231922301 on pull request 114, whose Jazzy job's existing phase built 11 packages and ran
+   262 tests with 0 failures, so the six Nav2 packages compile and link against the changed libraries.
    Honest limit: the Jazzy side is by reading, not by running; (b) compares against a stand-in that adds only
    what (a) says Jazzy adds, so it shows "adds nothing", not an independent Jazzy build. The unchanged
    `ament_export_dependencies` blocks stay as they are.
@@ -145,9 +153,12 @@ Cost of leaving it: the Jazzy job over the whole `src` with `-r` cannot show a k
 need but forgot, nor an unresolvable key, because the broad install pulls in everything first.
 **Commit 8 (droppable, my recommendation: keep)** adds a first phase to the Jazzy job: strict `rosdep install`
 (no `-r`) over the same `colcon list --packages-up-to <three>` paths, then `colcon build`/`test` of the three
-with `-LE linter`, *before* the existing broad `-r` install and nine-package build. That is the only place
-the cause 11 declarations are checked on noble. Cost about +1 minute (second `colcon build` of the nine
-re-uses the three).
+with `-LE linter`, *before* the existing broad `-r` install and nine-package build. It checks that each
+declared key resolves on noble, and that the three build on Jazzy from their own declared closure before the
+broad `-r` install. *Corrected after implementation (2026-11-23); the plan first called this "the only place
+the cause 11 declarations are checked on noble".* Both `ros-core` images already contain the newly declared
+packages, so CI cannot show the declarations were needed or are complete; cause 11 rests on reading the
+sources. Cost about +1 minute (second `colcon build` of the nine re-uses the three).
 
 Durations (measured: Jazzy `build-and-test` 302 s on the last `jazzy` push, 195 s of it in the build of nine;
 `mru_transform`'s two jobs 2 min 18 s and 2 min 24 s on 2026-11-23): Jazzy job about 5 min as today, about 6
@@ -190,8 +201,9 @@ Rolling fails by design until their own issue. Always build with a package selec
 None of those interfaces changes: no message, action, header (apart from the `tf2/utils.hpp` include inside
 `utilities.h`, which is exactly what its consumers already need on Rolling), class or signature is edited.
 The exported targets (`marine_nav_utilities::marine_nav_utilities`, `marine_nav_tasks::marine_nav_tasks`,
-`${marine_nav_interfaces_TARGETS}`) and exported dependencies are the same after commit 1 (installed export
-files identical, see commit 1). `rosidl` consumers (`mission_manager_interfaces`) additionally see
+`${marine_nav_interfaces_TARGETS}`) and exported dependencies are the same after commit 1 (same link set and
+exported targets; `INTERFACE_LINK_LIBRARIES` drops only duplicate entries, every other export file identical,
+see commit 1; *corrected after implementation, 2026-11-23: first said "installed export files identical"*). `rosidl` consumers (`mission_manager_interfaces`) additionally see
 `builtin_interfaces` and `std_msgs` declared, which only matches what the generated interface already needed.
 
 ## What this code is for, and validation owed
@@ -256,7 +268,7 @@ No change to the design picture (no design document; no interface changes).
 
 | If we change... | Also update... | Included? |
 |---|---|---|
-| cause 1 | consumers' exported targets | Yes: identical, checked |
+| cause 1 | consumers' exported targets | Yes: same targets, duplicates dropped, checked; Jazzy CI run 45231922301 (*corrected 2026-11-23: first said "identical, checked"*) |
 | cause 2 | `gz4d/transforms.hpp` include | No: not compiled, follow-up |
 | `ci.yml` triggers | job names (no required check exists) | Yes |
 
