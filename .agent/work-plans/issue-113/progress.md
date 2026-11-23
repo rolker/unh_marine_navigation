@@ -305,3 +305,13 @@ No open findings; ready for the merge decision.
 
 ### False positives
 None.
+
+## Checkpoint
+**Status**: complete
+**When**: 2026-11-23 13:05 -05:00
+**By**: Claude Code Agent (claude-fable-5-2)
+**Decided-by**: owner
+**After**: merge
+**Decision**: merge
+
+The owner's answers, 2026-11-23: "Merge when CI is green (Recommended)" for pull request 114; "Backport right after (Recommended)" for the hand backport to `jazzy`; "Open it (Recommended)" for the follow-up issue in this repository. The host merges only after the CI run on the pushed records passes.
