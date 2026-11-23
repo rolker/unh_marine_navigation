@@ -247,3 +247,20 @@ CI, first run on a pull request into `rolling` and first run of the changed work
 **Decision**: address
 
 Read: the Integrated Review of pull request 114 at `97f93b9`: two valid suggestions, no false positives, CI all-pass (run 45231922301: Rolling 3 packages, 35 tests, 0 failures, the manifest check passing; Jazzy strict phase 3 packages, then 11 packages built and 262 tests with 0 failures, so the six Nav2 packages compile and link against the changed libraries). Addressed: (1) `plan.md` is corrected where it still claims byte-identical compile flags and export files and overstates the strict Jazzy phase; records only, no code. (2) the missing `rclcpp_lifecycle` in `marine_nav_tasks`' `ament_export_dependencies` predates this change and is not this pull request's to fix: it is recorded for the follow-up issue the host drafts for the owner, and its box is ticked as deferred there.
+
+## Implementation
+**Status**: complete
+**When**: 2026-11-23 12:57 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+
+**PR**: #114 at `ed01bff`
+**Addressed**: Integrated Review at `97f93b9` (2026-11-23 12:54 -05:00)
+**Commits**: `60a8838`, `9e1b4c3`
+
+Records-only pass: no code, test or CI file changed. `ed01bff` is the last non-record commit on the branch and is unchanged by this pass; `git diff --stat ed01bff..HEAD -- . ':!.agent'` prints nothing.
+
+### Actions
+- [x] Plan wording corrected, each passage marked "corrected after implementation (2026-11-23)" with what it first said: commit 1 (b) and the consumers paragraph now say link set and exported targets unchanged, `INTERFACE_LINK_LIBRARIES` loses only the duplicate copy (44 -> 23 utilities, 34 -> 24 tasks; same targets, same first-appearance order), other export files identical, link line identical (utilities) / reordered among shared libraries (tasks), Jazzy PRIVATE `-I` copies go away; Jazzy evidence CI run 45231922301 (11 packages, 262 tests, 0 failures). Commit 8 now described as checking key resolution on noble and a Jazzy build of the three from their own declared closure; CI cannot show cause 11 declarations needed or complete (both `ros-core` images already contain them), cause 11 rests on reading sources. Consequences row updated — `.agent/work-plans/issue-113/plan.md` (`60a8838`)
+- [x] `rclcpp_lifecycle` missing from `ament_export_dependencies` — `marine_nav_tasks/CMakeLists.txt:63` (deferred: not this pull request's: pre-existing; recorded for the follow-up issue the host drafts for the owner) (`9e1b4c3`)
+
+Quick checks: none run beyond commit hooks; no script, skill or code changed.
