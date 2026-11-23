@@ -96,3 +96,52 @@ Read: the Issue Review of 113 (well-scoped, right repository, no design change; 
 **Plan**: `.agent/work-plans/issue-113/plan.md` at `eb2031b`
 
 Four fix commits (causes 1, 2, 9, 11 in two parts), none for gz4d (only vector.hpp is compiled and GCC 15 accepts it), then a Rolling CI job for the three packages and an optional strict manifest check in the Jazzy job. Built and tested on a scratch copy: 35 tests pass, gtests repeated 100 to 300 times with no failure.
+
+## Plan Review
+**Status**: complete
+**When**: 2026-11-23 12:30 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+**Verdict**: ready
+
+**Issue**: #113 — Build on ROS 2 Rolling, first slice: marine_nav_interfaces, marine_nav_utilities, marine_nav_tasks
+**Plan**: `.agent/work-plans/issue-113/plan.md` at `eb2031b`
+**Branch**: `feature/issue-113`
+
+### Evaluation
+
+| Dimension | Verdict | Notes |
+|---|---|---|
+| Scope | Good | Three packages, five one-fix code commits, two CI commits; matches the owner's slice and the checkpoint's gz4d decision. |
+| Issue alignment | Good | Causes 1, 2, 9, 11 and the CI shape answer the issue and the Issue Review's actions; cause 10 follows the host checkpoint (only gz4d headers a Rolling build compiles). Checked: no source or test of the three includes a gz4d header but `gz4d/vector.hpp` (`src/utilities.cpp:2`; the other hits are header-to-header includes), and no consumer clone under `/home/roland/project11/rolling` includes any `marine_nav_utilities/gz4d/` header. Serves: "None (this repository has no written goals or design document); serves the Rolling port, rolker/unh_marine_autonomy#415, and unblocks #419 (`mission_manager`), `camp`, `manda_coverage`." |
+| File targeting | Good | All files right. `utilities.cpp` includes `utilities.h` (which pulls `rclcpp`, hence `<utility>`/`<cmath>`) before `vector.hpp`; `vector.hpp` alone fails with GCC 15 (checked), as the plan says. |
+| Consequences | Needs work | Exports unchanged by commit 1 (confirmed by reading Jazzy's function: it adds nothing to `INTERFACE_*`). But commit 1's compile-flag claim and the CI's ability to check cause 11 are overstated (findings 1, 2); the one caller of the defective `TaskList.task()` is not named (finding 3). |
+| Principle alignment | Good | Only what's needed held; validation statement mostly honest (finding 4). |
+| ADR compliance | Good | 0013, 0005, 0014 addressed. |
+| ROS conventions | Good | Dependency kinds right: `<depend>` for `builtin_interfaces`/`std_msgs` in a rosidl package and for `geometry_msgs` (named in installed `task.h`); `<exec_depend>` for `rclpy`, `python3-yaml` (runtime-only Python imports). Keeping `std_msgs` in `DEPENDENCIES` and declaring it is sound: dropping it would change the generated package's exported dependencies. |
+
+### Findings
+
+1. **[Consequences]** (low) Commit 1's evidence misdescribes Jazzy's `ament_target_dependencies`. Read at `ament/ament_cmake` branch `jazzy`: besides `target_link_libraries(${target} ${interfaces})` (plain signature, here identical to what is already linked, so link line and exports are unchanged), it also adds every linked target's `INTERFACE_INCLUDE_DIRECTORIES` as `target_include_directories(${target} PRIVATE ...)`, ordered by `ament_include_directories_order`. On Jazzy, deleting the call therefore does change `flags.make`: those directories stop appearing as `-I` and remain only as the targets' `-isystem` usage requirements. Plan section (a)/(b) compares against a stand-in that "adds only what (a) says Jazzy adds", i.e. links only, so "compile flags byte-identical" is not shown for Jazzy. Effect is benign (same headers found, the package's own `include/` stays first; warnings from ROS headers are now suppressed as system headers; exports unchanged because the addition is PRIVATE). Resolution: correct the claim in the plan and the pull request text ("link line and installed exports identical; on Jazzy the call's PRIVATE `-I` copies of dependency include directories go away, which the CI Jazzy job builds"), not a code change.
+2. **[Consequences]** (medium) CI cannot check that the cause 11 declarations are needed or complete. REP 2001 `ros_core` (both `ros:jazzy-ros-core` and `ros:rolling-ros-core`) already contains `common_interfaces` (`std_msgs`, `geometry_msgs`, `nav_msgs`, `visualization_msgs`), `builtin_interfaces`, `rclpy`, `rclcpp_lifecycle`, `ament_lint_common`; `python3-yaml` comes with `ros2cli`. A strict rosdep without `-r` in either job proves only that each declared key resolves on noble/resolute; a forgotten one among these would still build and pass. Only `tf2`, `tf2_geometry_msgs` and `yaml_cpp_vendor` (outside `ros_core`) are really exercised by the strict install. So "That is the only place the cause 11 declarations are checked on noble" (commit 8) overstates it: commit 8 checks key resolution on noble and a Jazzy build of the three with their own declared closure before the broad `-r` install — real but small value. Resolution: restate commit 8's purpose as that, and say in the validation statement that cause 11 is checked by reading the sources plus key resolution, not by CI failing without it. Keep or drop commit 8 is the owner's open question; either is fine.
+3. **[Consequences]** (low) The `task_list.py:47` defect (`if task_id is self.tasks:`) is read correctly: `is` compares a `str` with the dict, always False, so `TaskList.task()` always returns `None`. Its only caller anywhere (this repository, `camp` (C++, no use), `manda_coverage`, `unh_marine_autonomy` `rolling`) is `mission_manager/mission_manager/mission_manager.py:232`, in `navigator_feedback_callback`, inside `if task_feedback.current_navigation_task in self.behavior_library.keys():`. `behavior_library` is never filled (its only writer, `:148`, is commented out), so the branch is unreachable today and the defect is latent, not live. A one-character fix would only matter when that code is re-enabled, and the loop it guards has its own bug (`:236-237` assigns a fresh message's field to itself) and indexes `behavior_info_publishers`, also never filled. Resolution: keep it out of the port, but make the follow-up line name the caller and that the two must be fixed together when `mission_manager`'s behaviour-information feature is revived (better as its own line or issue against `unh_marine_autonomy`'s `mission_manager` than as a gz4d-style note). No need to raise it to the owner as more than that, since it cannot fire today.
+4. **[Principle alignment]** (low) Validation statement: add findings 1 and 2, and note that `ament_xmllint` in the Rolling job needs `source /opt/ros/rolling/setup.bash` (it is in `/opt/ros/rolling/bin`, already present in `ros-core` via `ament_lint_common`, so the "if the container lacks it" fallback is moot), and that only `marine_nav_interfaces` (format 3, with the `xml-model` schema line) is schema-checked by it; the two format-2 manifests have no schema reference, so xmllint checks only well-formedness there. Also the follow-up text "these headers have not compiled since the namespace change" should except `vector.hpp` (and `matrix.hpp`), which compile in context but are not self-contained.
+
+### Checks of the host's six points
+
+1. Cause 1 deletion: link line and installed exports unchanged on both distros (confirmed by reading Jazzy's function; Rolling has no such function); compile flags change on Jazzy (finding 1). Each commit builds alone on Jazzy: commit 1 (deletion; `tf2/utils.h` is a shim on Jazzy that includes `tf2/utils.hpp`, read at `ros2/geometry2` `jazzy`), commit 2 (`tf2/utils.hpp` exists on Jazzy), 3-5 manifest only. On Rolling commit 1 alone fails at cause 2, either order; order is fine for cherry-pick.
+2. gz4d reading confirmed (grep of the three packages and tests, consumers' clones; `vector.hpp` alone: 7 errors with GCC 15; `utilities.cpp` includes `utilities.h` first). Nothing in this slice changes what precedes `gz4d/angles.hpp` in `crabbing_path_follower.cpp` (the `tf2/utils.h` -> `.hpp` change is include-identical on Jazzy). Leaving `vector.hpp` non-self-contained is within "fix only what the build needs" and is listed in the plan's gz4d table.
+3. Cause 11 kinds and keys confirmed; CI can only check resolution (finding 2).
+4. CI: shape matches `mru_transform` `rolling` `ci.yml`; Jazzy job on `rolling` still passes after this slice (the six link `marine_nav_utilities::marine_nav_utilities`, whose exports are unchanged); on `jazzy` after backport the Rolling job is skipped by its `if`; rulesets: `jazzy` requires a pull request and no named check, `rolling` has no rules, so renaming the job is safe. Commit 8 sound but overstated (finding 2); `ament_xmllint` sourcing (finding 4).
+5. `task_list.py:47` reading confirmed; caller and reachability in finding 3.
+6. Validation statement honest on what was not run; incomplete on findings 1, 2 and 4.
+
+### Summary
+
+The plan is sound and ready: the fixes are the minimal ones, every key resolves, and the gz4d reading of the build is right. The findings correct the evidence wording (commit 1 on Jazzy, what CI can prove about cause 11) and sharpen the `TaskList.task()` follow-up; none changes a commit.
+
+### Recommended Actions
+
+- [ ] Reword commit 1's evidence in the plan and pull request: link line and exports identical; on Jazzy the PRIVATE `-I` include directories the call added go away (finding 1).
+- [ ] Restate what commit 8 and the Rolling job's strict rosdep prove (key resolution and a narrow-closure build), and say cause 11 completeness rests on reading the sources, since `ros_core` already carries most of those packages (finding 2).
+- [ ] In the follow-up, name `mission_manager.py:232` as the only caller of `TaskList.task()`, note it is unreachable today because `behavior_library` is never filled, and that both must be fixed together (finding 3).
+- [ ] Run `ament_xmllint` under `source /opt/ros/rolling/setup.bash`; drop the "if the container lacks it" fallback; note that only the format-3 manifest is schema-checked; except `vector.hpp`/`matrix.hpp` from "have not compiled" in the gz4d follow-up (finding 4).
