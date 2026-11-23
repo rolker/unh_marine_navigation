@@ -145,3 +145,18 @@ The plan is sound and ready: the fixes are the minimal ones, every key resolves,
 - [ ] Restate what commit 8 and the Rolling job's strict rosdep prove (key resolution and a narrow-closure build), and say cause 11 completeness rests on reading the sources, since `ros_core` already carries most of those packages (finding 2).
 - [ ] In the follow-up, name `mission_manager.py:232` as the only caller of `TaskList.task()`, note it is unreachable today because `behavior_library` is never filled, and that both must be fixed together (finding 3).
 - [ ] Run `ament_xmllint` under `source /opt/ros/rolling/setup.bash`; drop the "if the container lacks it" fallback; note that only the format-3 manifest is schema-checked; except `vector.hpp`/`matrix.hpp` from "have not compiled" in the gz4d follow-up (finding 4).
+
+## Checkpoint
+**Status**: complete
+**When**: 2026-11-23 12:31 -05:00
+**By**: Claude Code Agent (claude-fable-5-2)
+**Decided-by**: host (the Plan Review's verdict is ready; its four findings correct what the plan claims and none changes the code to be written)
+**After**: plan
+**Decision**: proceed
+
+Read: `plan.md` at `eb2031b` and the Plan Review of it (ready; four findings; the six points the host asked about confirmed, two with corrections). The findings go to the implementer as corrections to what is claimed, in commit messages, the entry and the pull request text:
+
+- F1: deleting the `ament_target_dependencies` calls leaves the link line and the installed exports identical; on Jazzy it also removes that function's PRIVATE `-I` copies of the dependencies' include directories, which remain as the targets' usage requirements. "Compile flags byte-identical" was not shown for Jazzy and is not to be claimed; the Jazzy CI job is the check.
+- F2: CI cannot show that the cause 11 declarations are needed or complete, because the `ros-core` images already contain those packages. The strict rosdep step checks only that each declared key resolves, and commit 8 (the strict first phase in the Jazzy job) gives a Jazzy build of the three with their own declared closure before the broad install. Cause 11 here rests on reading the sources. Commit 8 is kept, with its purpose stated as that; host decision, listed for the owner's veto.
+- F3: `marine_nav_tasks/marine_nav_tasks/task_list.py:47` (`if task_id is self.tasks:`) is read correctly and makes `TaskList.task()` always return `None`; its only caller, `mission_manager.py:232` in rolker/unh_marine_autonomy, is unreachable today. It stays out of the port and goes to the follow-up, naming the caller.
+- F4: the `ament_xmllint` step in the Rolling job needs `source /opt/ros/rolling/setup.bash`; it schema-checks only the format 3 manifest (`marine_nav_interfaces`); the follow-up text about gz4d headers excepts `vector.hpp` and `matrix.hpp`, which compile in context but not alone.
