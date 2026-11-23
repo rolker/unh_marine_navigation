@@ -237,3 +237,13 @@ CI, first run on a pull request into `rolling` and first run of the changed work
 - [ ] (suggestion, Local Review (Pre-Push) @ `7d1a4bd`) Valid, pre-existing, not a change here: `marine_nav_tasks` links `rclcpp_lifecycle::rclcpp_lifecycle` (`CMakeLists.txt:42`) and its public headers `task.h:5`, `task_list.h:6` include `rclcpp_lifecycle/lifecycle_node.hpp`, but `ament_export_dependencies` (`:63-69`) omits `rclcpp_lifecycle`, so `find_package(marine_nav_tasks)` consumers must find it themselves. Fix: add it to the follow-up issue the host drafts (with `task_list.py:47` and the other left-alone items) — `marine_nav_tasks/CMakeLists.txt`
 
 ### False positives
+
+## Checkpoint
+**Status**: complete
+**When**: 2026-11-23 12:55 -05:00
+**By**: Claude Code Agent (claude-fable-5-2)
+**Decided-by**: host (two valid suggestions are open; one is a records correction and the other a note for the follow-up issue; merging past open findings is the owner's answer only)
+**After**: findings
+**Decision**: address
+
+Read: the Integrated Review of pull request 114 at `97f93b9`: two valid suggestions, no false positives, CI all-pass (run 45231922301: Rolling 3 packages, 35 tests, 0 failures, the manifest check passing; Jazzy strict phase 3 packages, then 11 packages built and 262 tests with 0 failures, so the six Nav2 packages compile and link against the changed libraries). Addressed: (1) `plan.md` is corrected where it still claims byte-identical compile flags and export files and overstates the strict Jazzy phase; records only, no code. (2) the missing `rclcpp_lifecycle` in `marine_nav_tasks`' `ament_export_dependencies` predates this change and is not this pull request's to fix: it is recorded for the follow-up issue the host drafts for the owner, and its box is ticked as deferred there.
