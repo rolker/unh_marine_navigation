@@ -205,3 +205,13 @@ Checked: Jazzy `ament_target_dependencies` (ament/ament_cmake `jazzy`) adds only
 ### Findings
 - [ ] (suggestion) plan.md still claims what the implementation entry corrected: compile flags and every export file byte-identical (`:38-41`, `:192-194`, `:259`) and commit 8 as "the only place the cause 11 declarations are checked" (`:146-149`); bring it in line before the PR text is drawn from it — `.agent/work-plans/issue-113/plan.md:38`
 - [ ] (suggestion) add to the follow-up issue: `marine_nav_tasks` exports `rclcpp_lifecycle::rclcpp_lifecycle` (and its public `task.h` includes `lifecycle_node.hpp`) but `ament_export_dependencies` omits `rclcpp_lifecycle`, so `find_package(marine_nav_tasks)` consumers (camp) rely on finding it themselves; pre-existing, not from this diff — `marine_nav_tasks/CMakeLists.txt:63`
+
+## Checkpoint
+**Status**: complete
+**When**: 2026-11-23 12:49 -05:00
+**By**: Claude Code Agent (claude-fable-5-2)
+**Decided-by**: host (the pre-push review approved round 1 with no must-fix; Jazzy cannot be built on the development machine and a pull request into `rolling` has had no CI here, so the pushed branch's first run is the first Jazzy evidence and the first test of the workflow change)
+**After**: publish
+**Decision**: publish
+
+Read: the Local Review (Pre-Push) at `7d1a4bd`, verdict approved, ship recommended, two suggestions open: `plan.md` still claims byte-identical compile flags and export files and overstates what the strict Jazzy phase checks (`.agent/work-plans/issue-113/plan.md:38`); the follow-up issue should gain that `marine_nav_tasks` exports `rclcpp_lifecycle::rclcpp_lifecycle` without `rclcpp_lifecycle` in `ament_export_dependencies` (`marine_nav_tasks/CMakeLists.txt:63`, pre-existing). They stay open and go through triage after publish, so the first CI run starts now. The pull request text is written from the implementation entry's corrected claims, not from the plan's. This is a project issue, so the host runs no full pre-commit pass. The pull request says `Part of #113`.
