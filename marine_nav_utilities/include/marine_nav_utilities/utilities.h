@@ -5,7 +5,7 @@
 #include "geometry_msgs/msg/twist.hpp"
 #include "geometry_msgs/msg/accel.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
-#include "tf2/utils.h"
+#include "tf2/utils.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 namespace marine_nav_utilities

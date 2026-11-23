@@ -1,6 +1,6 @@
 #include "marine_nav_utilities/utilities.h"
 #include "marine_nav_utilities/gz4d/vector.hpp"
-#include "tf2/utils.h"
+#include "tf2/utils.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 namespace marine_nav_utilities
