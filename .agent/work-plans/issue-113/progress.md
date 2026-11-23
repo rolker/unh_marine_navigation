@@ -187,3 +187,21 @@ Evidence (Rolling only; Jazzy not installed here):
 - Repeats: `test_corridor_solver` 100/100, `test_costmap_window` 100/100, `test_costmap_window_node` 300/300 on `ROS_DOMAIN_ID` 187; no intermittent failure.
 
 Not done: no simulation was run. No Jazzy build: the pull request's CI is the only Jazzy check. `marine_nav_interfaces` and `marine_nav_tasks` have no tests beyond building (the Python only imports on 3.14). F3 (`task_list.py:47`) left as it is.
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-11-23 12:49 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+**Verdict**: approved
+
+**Branch**: feature/issue-113 at `7d1a4bd`
+**Base**: origin/rolling
+**Depth**: Standard (reason: CI workflow change plus build-system and manifest changes in three packages on the mission path; 10 files, +630 -21 of which ~460 are records)
+**Must-fix**: 0 | **Suggestions**: 2
+**Round**: 1 | **Ship**: recommended — no must-fix findings; remaining suggestions can be applied or tracked
+
+Checked: Jazzy `ament_target_dependencies` (ament/ament_cmake `jazzy`) adds only a plain `target_link_libraries` of targets already linked with the plain signature, plus PRIVATE `-I` copies of their include directories, so exported targets and link set are unchanged (duplicates and order only; both libraries SHARED, consumers in this repository, camp and manda_coverage link through the exported targets). `tf2/utils.hpp` exists on geometry2 `jazzy` (`utils.h` is a shim including it). Workflow read step by step against mru_transform's `rolling` ci.yml: same shape, `shell: bash` where bash is used, job `if` correct for push and pull_request. Dependency kinds right (`<depend>` for builtin_interfaces/std_msgs/geometry_msgs, `<exec_depend>` for rclpy/python3-yaml). Re-run here: build of the three from a clean CMake cache, 0 warnings; 32 gtest cases pass, each gtest binary 30/30 (`ROS_DOMAIN_ID` 187); `ament_xmllint` on the three manifests passes; Python modules import. Outside reviewers: Gemini and Codex completed; their colcon-guard finding is a false positive (colcon-package-selection 0.2.10 exits 1 on an unknown or ignored `--packages-up-to` name, checked), the rest dropped as pre-existing, settled or verified.
+
+### Findings
+- [ ] (suggestion) plan.md still claims what the implementation entry corrected: compile flags and every export file byte-identical (`:38-41`, `:192-194`, `:259`) and commit 8 as "the only place the cause 11 declarations are checked" (`:146-149`); bring it in line before the PR text is drawn from it — `.agent/work-plans/issue-113/plan.md:38`
+- [ ] (suggestion) add to the follow-up issue: `marine_nav_tasks` exports `rclcpp_lifecycle::rclcpp_lifecycle` (and its public `task.h` includes `lifecycle_node.hpp`) but `ament_export_dependencies` omits `rclcpp_lifecycle`, so `find_package(marine_nav_tasks)` consumers (camp) rely on finding it themselves; pre-existing, not from this diff — `marine_nav_tasks/CMakeLists.txt:63`
