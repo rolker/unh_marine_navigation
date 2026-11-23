@@ -58,11 +58,6 @@ install(
   RUNTIME DESTINATION bin)
 
 
-ament_target_dependencies(${PROJECT_NAME}
-  marine_nav_interfaces
-  rclcpp
-)
-
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
 
 ament_export_dependencies(
