@@ -72,3 +72,19 @@ issue: 113
 - [ ] Plan the CI as one file carried on both branches, like the model workflows: triggers `[jazzy, rolling]`, a Rolling job for the three packages with `rosdep install` (no `-r`) over `colcon list --paths-only --packages-up-to` the three, no `marine_control` clone in that job, skipped when the base is `jazzy`. Decide in the plan whether the existing Jazzy job keeps its nine-package list and `-r` unchanged (least change; it passes today) and say that the `-LE linter` exclusion stays, so cause 9 is checked by hand locally with `colcon test` on the interfaces package. This is for the plan, not a scope change.
 - [ ] State in the PR that the six Nav2 packages' `ament_target_dependencies` calls (counts in #415) are left for their own issue, and that on `rolling` the Jazzy-style whole-repository build fails by design.
 - [ ] Keep `Task`/`TaskList`, `utilities.h` and the message and action names unchanged; they are what `camp`, `manda_coverage` and `mission_manager` use. Not a scope change.
+
+## Checkpoint
+**Status**: complete
+**When**: 2026-11-23 12:17 -05:00
+**By**: Claude Code Agent (claude-fable-5-2)
+**Decided-by**: host (the Issue Review found the issue well-scoped and the three-package cut sound on the source; its actions correct the cause list and none changes scope)
+**After**: issue-actions
+**Decision**: proceed
+
+Read: the Issue Review of 113 (well-scoped, right repository, no design change; none of the three packages needs Nav2 or any of the six packages left out). Its actions go to the planner as inputs:
+
+- Cause 1: both `ament_target_dependencies` calls can simply be deleted, since every dependency they name is already in `target_link_libraries`; confirm by building.
+- Cause 11: `marine_nav_interfaces` uses `builtin_interfaces` and lists `std_msgs` in CMake without declaring them; `marine_nav_tasks` imports `rclpy` and `yaml` and names `geometry_msgs` types without declaring them. Each confirmed before it is declared.
+- CI: one workflow file on both branches, triggers `[jazzy, rolling]`, a Rolling job for the three packages with `rosdep install` without `-r` over their build closure and no `marine_control` clone, skipped when the base is `jazzy`. The plan says whether the existing Jazzy job keeps its nine-package list and `-r`; the `-LE linter` exclusion means cause 9 is checked by hand.
+- Consumers' interfaces (`Task`/`TaskList`, `utilities.h`, the message and action names) stay unchanged; `gz4d/angles.hpp` must stay, as one of the six later packages includes it.
+- Host decision on cause 10, listed for the owner's veto: the review found that nothing in the three packages compiles `gz4d/geo.hpp` (only `gz4d/vector.hpp` is compiled, through `utilities.cpp`), that no outside consumer includes this package's gz4d headers, and that the copy has more defects than the two fixed in rolker/unh_marine_autonomy#418. The issue text says to apply those two fixes; that line came from a text search. By the owner's rule that a port changes only what it needs, the plan fixes what a Rolling build of these three packages needs and establishes by building which gz4d headers that is; headers nothing compiles are left as they are and listed, with their defects, for a follow-up beside rolker/unh_marine_autonomy#420. Undoing it: two small edits to `geo.hpp` that no build would exercise.
