@@ -215,3 +215,25 @@ Checked: Jazzy `ament_target_dependencies` (ament/ament_cmake `jazzy`) adds only
 **Decision**: publish
 
 Read: the Local Review (Pre-Push) at `7d1a4bd`, verdict approved, ship recommended, two suggestions open: `plan.md` still claims byte-identical compile flags and export files and overstates what the strict Jazzy phase checks (`.agent/work-plans/issue-113/plan.md:38`); the follow-up issue should gain that `marine_nav_tasks` exports `rclcpp_lifecycle::rclcpp_lifecycle` without `rclcpp_lifecycle` in `ament_export_dependencies` (`marine_nav_tasks/CMakeLists.txt:63`, pre-existing). They stay open and go through triage after publish, so the first CI run starts now. The pull request text is written from the implementation entry's corrected claims, not from the plan's. This is a project issue, so the host runs no full pre-commit pass. The pull request says `Part of #113`.
+
+## Integrated Review
+**Status**: complete
+**When**: 2026-11-23 12:54 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+
+**PR**: #114 at `97f93b9`
+**Sources**: 3 (Local Review (Pre-Push) @ `7d1a4bd` (covers `97f93b9` via bookkeeping), GitHub reviews (none), CI rollup run 45231922301)
+**Cross-source confirmations**: 0
+**CI**: all-pass
+
+GitHub: no reviews, no inline or conversation comments, no requested reviewers; no Copilot review and no Copilot check-run (the only check-runs are the two `build-and-test` jobs). Gemini and Codex ran in the pre-push round; their findings were weighed there (colcon-guard claim a false positive, the rest pre-existing, settled or verified) and are not re-listed.
+
+CI, first run on a pull request into `rolling` and first run of the changed workflow:
+- `build-and-test (rolling)` pass, 1m23s: strict `rosdep install` "All required rosdeps installed successfully"; `ament_xmllint` "File '...package.xml' is valid" for all three, "No problems found"; build "Summary: 3 packages finished [22.1s]"; test-result "Summary: 35 tests, 0 errors, 0 failures, 0 skipped". No compiler warnings.
+- `build-and-test (jazzy)` pass, 3m49s. Strict first phase: rosdep without `-r` succeeded, build "Summary: 3 packages finished [21.6s]", test "Summary: 3 packages finished [0.48s]" (`--return-code-on-test-failure`, no separate test-result step). Existing phase: build "Summary: 11 packages finished [2min 0s]" (the nine plus `marine_control_interfaces`, `marine_control`), so the six Nav2 packages compile and link against the changed `marine_nav_utilities` and `marine_nav_tasks` (no `ament_target_dependencies`, `tf2/utils.hpp`); test "Summary: 9 packages finished", test-result "Summary: 262 tests, 0 errors, 0 failures, 0 skipped". No warning or deprecation from the three packages; the compiler warnings shown (unused parameters, sign compare in `crabbing_path_follower.cpp`, `bt_types.cpp`, `set_polygon_from_task.cpp`, `task_navigator.cpp`) are in unchanged files and pre-existing.
+
+### Findings
+- [ ] (suggestion, Local Review (Pre-Push) @ `7d1a4bd`) Valid, records only: `plan.md` still claims what the implementation entry corrected. `:38-40` says `flags.make` and every installed export file are byte-identical; the implementation entry (progress.md "Export comparison") found `INTERFACE_LINK_LIBRARIES` loses a duplicate copy of the same targets and, on Jazzy, the PRIVATE `-I` copies go away. `:192-194` repeats "installed export files identical"; `:259` "identical, checked". `:146-148` calls commit 8 "the only place the cause 11 declarations are checked on noble", which plan review finding 2 showed overstated (`ros-core` already carries most of those keys; the strict install checks key resolution and a narrow-closure build). Fix: reword those lines to "link set and exported targets unchanged (duplicates dropped); on Jazzy the call's PRIVATE `-I` copies go away; CI Jazzy job built the nine against it" and "commit 8 checks key resolution and a Jazzy build of the three with their own declared closure"; CI run 45231922301 can now be cited as the Jazzy evidence — `.agent/work-plans/issue-113/plan.md`
+- [ ] (suggestion, Local Review (Pre-Push) @ `7d1a4bd`) Valid, pre-existing, not a change here: `marine_nav_tasks` links `rclcpp_lifecycle::rclcpp_lifecycle` (`CMakeLists.txt:42`) and its public headers `task.h:5`, `task_list.h:6` include `rclcpp_lifecycle/lifecycle_node.hpp`, but `ament_export_dependencies` (`:63-69`) omits `rclcpp_lifecycle`, so `find_package(marine_nav_tasks)` consumers must find it themselves. Fix: add it to the follow-up issue the host drafts (with `task_list.py:47` and the other left-alone items) — `marine_nav_tasks/CMakeLists.txt`
+
+### False positives
