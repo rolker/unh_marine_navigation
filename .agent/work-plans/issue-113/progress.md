@@ -88,3 +88,11 @@ Read: the Issue Review of 113 (well-scoped, right repository, no design change; 
 - CI: one workflow file on both branches, triggers `[jazzy, rolling]`, a Rolling job for the three packages with `rosdep install` without `-r` over their build closure and no `marine_control` clone, skipped when the base is `jazzy`. The plan says whether the existing Jazzy job keeps its nine-package list and `-r`; the `-LE linter` exclusion means cause 9 is checked by hand.
 - Consumers' interfaces (`Task`/`TaskList`, `utilities.h`, the message and action names) stay unchanged; `gz4d/angles.hpp` must stay, as one of the six later packages includes it.
 - Host decision on cause 10, listed for the owner's veto: the review found that nothing in the three packages compiles `gz4d/geo.hpp` (only `gz4d/vector.hpp` is compiled, through `utilities.cpp`), that no outside consumer includes this package's gz4d headers, and that the copy has more defects than the two fixed in rolker/unh_marine_autonomy#418. The issue text says to apply those two fixes; that line came from a text search. By the owner's rule that a port changes only what it needs, the plan fixes what a Rolling build of these three packages needs and establishes by building which gz4d headers that is; headers nothing compiles are left as they are and listed, with their defects, for a follow-up beside rolker/unh_marine_autonomy#420. Undoing it: two small edits to `geo.hpp` that no build would exercise.
+
+## Plan Authored
+**Status**: complete
+**When**: 2026-11-23 12:27 -05:00
+**By**: Claude Code Agent (claude-sonnet-5-5)
+**Plan**: `.agent/work-plans/issue-113/plan.md` at `eb2031b`
+
+Four fix commits (causes 1, 2, 9, 11 in two parts), none for gz4d (only vector.hpp is compiled and GCC 15 accepts it), then a Rolling CI job for the three packages and an optional strict manifest check in the Jazzy job. Built and tested on a scratch copy: 35 tests pass, gtests repeated 100 to 300 times with no failure.
