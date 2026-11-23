@@ -280,3 +280,28 @@ Checked: `git diff --stat ed01bff..HEAD -- . ':!.agent'` prints nothing, so no c
 
 ### Findings
 - [ ] No issues found. LGTM.
+
+## Integrated Review
+**Status**: complete
+**When**: 2026-11-23 13:01 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+**Dispatch**: resumed (agent a2935cfad9ddc373a, resume 1 of 3)
+
+**PR**: #114 at `c4c8171`
+**Sources**: 3 (Local Review @ `c7a10c3` (covers `c4c8171` via bookkeeping), GitHub reviews (none), CI rollup run 45233222210)
+**Cross-source confirmations**: 0
+**CI**: all-pass
+
+Since the Integrated Review at `97f93b9`: records only (`60a8838`, `9e1b4c3`, `c7a10c3`, `c4c8171`); the last commit outside `.agent/` is still `ed01bff`. Both earlier findings are closed: the `plan.md` wording is corrected by `60a8838` (checked: `plan.md:42-45`, `:158`, `:205-206`, `:271` now say same targets, duplicates dropped, PRIVATE `-I` copies gone on Jazzy, and give commit 8's narrower purpose, each marked "corrected 2026-11-23"); the `rclcpp_lifecycle` export gap is ticked as deferred to the follow-up issue (`9e1b4c3`, host decision). The `## Local Review` at `c7a10c3` approved with nothing open. The `sources` helper returns no open local findings at this head.
+
+GitHub: no reviews, no inline or conversation comments; no Copilot review or check-run (only the two `build-and-test` check-runs). No cross-model reviewers this round, under the owner's review-depth rule; Gemini and Codex ran in the pre-push round only.
+
+CI, run 45233222210 on `c4c8171`, same code as run 45231922301:
+- `build-and-test (rolling)` pass, 1m51s: "All required rosdeps installed successfully"; `ament_xmllint` "No problems found"; build "Summary: 3 packages finished [27.8s]"; test-result "Summary: 35 tests, 0 errors, 0 failures, 0 skipped".
+- `build-and-test (jazzy)` pass, 3m52s: strict first phase rosdep succeeded, "Summary: 3 packages finished [22.3s]" build, "Summary: 3 packages finished [0.49s]" test; existing phase "Summary: 11 packages finished [2min 1s]" build, "Summary: 9 packages finished [8.62s]" test, test-result "Summary: 262 tests, 0 errors, 0 failures, 0 skipped".
+
+### Findings
+No open findings; ready for the merge decision.
+
+### False positives
+None.
